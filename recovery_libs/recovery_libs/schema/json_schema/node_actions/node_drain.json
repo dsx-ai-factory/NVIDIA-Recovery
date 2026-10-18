@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NodeDrain",
+  "description": "set the status of a node (identified by its name), to DRAINED, it will no longer be used for scheduling",
+  "type": "object",
+  "properties": {
+    "name": {
+      "const": "NodeDrain"
+    },
+    "params": {
+      "required": ["nodeName"],
+      "properties": {
+        "nodeName": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "params"
+  ]
+}

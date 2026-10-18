@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.networkPolicy.enabled }}
+---
+# §12.5 — v1 security posture: the attribution-adapter HTTP API is cluster-internal only.
+# Restrict ingress on the HTTP API port to the Policy Engine (anomaly-detection-isolator) pods,
+# which are the only legitimate callers of POST /v1/attribution. The metrics port is left to the
+# default deny implied by this policy (Prometheus/Datadog scrape via annotations is out of band);
+# add it to ingress here if in-cluster scraping requires explicit allow.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ template "attribution-adapter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "attribution-adapter.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "attribution-adapter.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Values.networkPolicy.policyEngineName }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.port }}
+{{- end }}

@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Maintenance task
+description: Propose bounded maintenance or testing work in NVIDIA Recovery
+title: "[TASK]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Anyone may propose a bounded maintenance or testing task. Use the documentation
+        form for documentation improvements and the question form for help. Maintainers
+        confirm scope before substantial implementation. Do not include secrets,
+        private hostnames, customer data, or suspected security vulnerabilities.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What concrete repository or user outcome should this task deliver?
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this work needed now?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: List affected components and explicit non-goals.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: How will reviewers know the task is complete?
+    validations:
+      required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and found no duplicate.
+          required: true
+        - label: I removed sensitive information and this is not a security vulnerability.
+          required: true
+        - label: I agree to follow the project's Code of Conduct.
+          required: true

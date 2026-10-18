@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Documentation improvement
+description: Report missing, unclear, or incorrect NVIDIA Recovery documentation
+title: "[DOCS]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Anyone may propose a documentation improvement. Include the page or repository
+        path and what you were trying to accomplish. Remove secrets, private hostnames,
+        and customer data. Report suspected vulnerabilities privately through SECURITY.md.
+  - type: input
+    id: page
+    attributes:
+      label: Documentation page or missing topic
+      description: Link the page or repository file; describe the topic if no page exists.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Documentation version or revision
+      description: Include the selected docs version, release tag, or commit if known; otherwise write unknown.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What needs improvement?
+      description: Explain the confusing, incorrect, or missing guidance and its effect on your task.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should a reader be able to understand or accomplish after the change?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested correction or supporting evidence
+      description: Optionally include sanitized output, a proposed explanation, or source references.
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and found no duplicate.
+          required: true
+        - label: I removed sensitive information and this is not a security vulnerability.
+          required: true
+        - label: I agree to follow the project's Code of Conduct.
+          required: true

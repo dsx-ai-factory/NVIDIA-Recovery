@@ -1,0 +1,16 @@
+packages:
+  - '.'
+
+ignoredOptionalDependencies:
+  - '*-ia32'
+  - '*-loong64'
+  - '*-mips64el'
+  - '*-ppc64'
+  - '*-riscv64'
+  - '*-s390x'
+  - '*android-*'
+  - '*freebsd-*'
+  - '*linux*-arm'
+  - '*netbsd-*'
+  - '*openbsd-*'
+  - '*sunos-*'

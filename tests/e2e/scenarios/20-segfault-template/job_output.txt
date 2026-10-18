@@ -1,0 +1,26 @@
+[init] Heimdall e2e synthetic training job starting
+[init] world_size=8 rank=0 local_rank=0
+[init] loading dataset shard 0/8
+[init] building model (synthetic) ...
+[init] optimizer=AdamW lr=3.0e-4 warmup=200
+[train] step 1 loss=10.421 lr=1.5e-6 tokens/s=18234
+[train] step 2 loss=10.118 lr=3.0e-6 tokens/s=18540
+[train] step 3 loss=9.842 lr=4.5e-6 tokens/s=18602
+[train] step 4 loss=9.511 lr=6.0e-6 tokens/s=18555
+[train] step 5 loss=9.233 lr=7.5e-6 tokens/s=18610
+[train] step 6 loss=8.998 lr=9.0e-6 tokens/s=18587
+[train] step 7 loss=8.742 lr=1.05e-5 tokens/s=18599
+[train] step 8 loss=8.531 lr=1.20e-5 tokens/s=18544
+[train] step 9 loss=8.310 lr=1.35e-5 tokens/s=18620
+[train] step 10 loss=8.102 lr=1.50e-5 tokens/s=18601
+[ckpt] saved checkpoint at step 10
+[train] step 11 loss=7.945 lr=1.65e-5 tokens/s=18533
+[train] step 12 loss=7.788 lr=1.80e-5 tokens/s=18577
+[train] step 13 loss=7.602 lr=1.95e-5 tokens/s=18590
+[train] step 14 loss=7.471 lr=2.10e-5 tokens/s=18612
+[train] step 15 loss=7.339 lr=2.25e-5 tokens/s=18566
+[train] step 16 loss=7.201 lr=2.40e-5 tokens/s=18548
+[train] step 17 loss=7.080 lr=2.55e-5 tokens/s=18603
+[train] step 18 loss=6.967 lr=2.70e-5 tokens/s=18579
+[train] step 19 loss=6.841 lr=2.85e-5 tokens/s=18594
+[train] step 20 loss=6.730 lr=3.00e-5 tokens/s=18561

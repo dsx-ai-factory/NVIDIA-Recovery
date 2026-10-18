@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HttpGetResponse",
+  "description": "http get response",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "../response_base.json"
+    }
+  ],
+  "properties": {
+    "response": {
+      "type": "string"
+    }
+  }
+}

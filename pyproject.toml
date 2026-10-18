@@ -1,0 +1,120 @@
+[project]
+name = "nvidia-recovery"
+version = "0.0.0"
+description = "NVIDIA Recovery services and shared libraries."
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pre-commit==4.6.2",
+    "ruff==0.17.0",
+]
+e2e = [
+    "httpx==0.28.1",
+    "opentelemetry-api==1.40.0",
+    "opentelemetry-sdk==1.40.0",
+    "pytest==9.1.1",
+    "pytest-instafail==0.5.0",
+    "pytest-xdist==3.8.0",
+    "recovery-libs[testing]",
+]
+
+[tool.uv.sources]
+recovery-libs = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    "recovery_libs",
+    "job_manager",
+    "watcher",
+    "anomaly_detection_isolator",
+    "attribution_adapter",
+    "notifications",
+]
+
+# Overrides let the workspace resolver find a unified solution when services
+# pin conflicting versions. Each service's container build (uv sync --package)
+# still installs exactly what it declares — overrides only affect resolution.
+[tool.uv]
+override-dependencies = [
+    # security floors for transitive dependencies
+    "aiohttp>=3.14.3",
+    "anyio>=4.15.1",
+    "grpcio>=1.83.0rc1",
+    "pygments>=2.20.0",
+    # raise floor across services that pin different lower bounds
+    "cachetools>=4.2.1",
+    # transitive dep held back by resolver conservatism
+    "packaging>=26.0",
+    # keep workspace on modern pandas/numpy
+    "pandas>=3.0.0",
+    "numpy>=2.3.3",
+]
+
+# Constraints enforce security floors and cap versions to the next minor/patch
+# boundary above what Poetry had locked, preventing large jumps and downgrades.
+constraint-dependencies = [
+    "pyjwt>=2.15.1",
+    "urllib3>=2.8.0",
+    "aiohttp<3.15",
+    "grpcio<1.84",
+    "pygments<2.21",
+    "pydantic<2.13",
+    "uvicorn<0.42",
+    "fastapi<0.136",
+    "starlette<0.53",
+    "dynaconf<3.3",
+    "python-dotenv<1.3",
+    "sqlalchemy<2.1",
+    "taskiq<0.12",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [
+    "deploy/",
+    "docs/",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+extend-select = ["F", "I"]
+logger-objects = [
+    "anomaly_detection_isolator.utils.logger.logger",
+    "attribution_adapter.utils.logger.logger",
+    "job_manager.logger.logger",
+    "notifications.utils.logger.logger",
+    "watcher.lib.utils.logging.logger",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Body",
+    "fastapi.Query",
+    "recovery_libs.audit.NoOpAuditBuffer",
+    "recovery_libs.testing.http.retry.RetryPolicy",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"recovery_libs/recovery_libs/notifications_client/**" = [
+    "B009", "BLE001", "C405", "C409", "E721", "F841", "PERF102", "PIE790",
+    "RUF012", "RUF100", "S110", "SIM101", "TRY004", "TRY201", "TRY203",
+    "UP006", "UP007", "UP008", "UP009", "UP030", "UP031", "UP032", "UP035", "UP045", "UP046",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["tests"]
+markers = [
+    "nightly: tests excluded from pull requests and main pushes; included in nightly and tagged-release suites",
+    "exclusive: end-to-end scenario that changes shared stack state and must run with nothing concurrent",
+    "retry_policy(system_limit): Job Manager system retry limit a scenario's fixture applies for the test",
+    "run_first: execute before ordinary end-to-end scenario ordering",
+    "scenario(name): ordered end-to-end scenario identifier",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]

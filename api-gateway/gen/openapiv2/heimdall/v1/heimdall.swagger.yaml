@@ -1,0 +1,1601 @@
+swagger: "2.0"
+info:
+  title: Advanced Training Resiliency API
+  version: 0.2.0
+tags:
+  - name: HeimdallService
+  - name: ApiKeysService
+  - name: AuditService
+schemes:
+  - https
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /v1/jobs:
+    get:
+      summary: List jobs
+      description: Retrieve a list of jobs that the Advisor is aware of. Jobs are ordered by creation time ascending for synchronization purposes. Use the `page` parameter to get the next page of jobs.
+      operationId: HeimdallService_GetJobs
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetJobsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: pageToken
+          description: A decimal zero-based offset from the previous response's next_page_token field. Mutually exclusive with page_number.
+          in: query
+          required: false
+          type: string
+        - name: pageNumber
+          description: A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.
+          in: query
+          required: false
+          type: integer
+          format: int32
+        - name: limit
+          description: The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.
+          in: query
+          required: false
+          type: integer
+          format: int32
+        - name: workflowIds
+          description: The workflow IDs to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+            maxLength: 256
+            minLength: 1
+          collectionFormat: multi
+        - name: jobIds
+          description: The job IDs to filter by.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: jmState
+          description: Job manager / scheduler state filter (e.g. RUNNING, COMPLETED). Passed through to job manager.
+          in: query
+          required: false
+          type: string
+        - name: reconciliationEligibleJobs
+          description: |-
+            Return jobs that can seed scheduler reconciliation: all non-final jobs plus
+            failure-like terminal jobs. COMPLETED and REQUEUED jobs are excluded
+            because their recovery is driven by exact-attempt Advice. Passed through
+            to job manager and mutually exclusive with jm_state.
+          in: query
+          required: false
+          type: boolean
+        - name: completedJobs
+          description: |-
+            Filter by backend completion state: false returns non-final attempts,
+            true returns final attempts, and omission preserves historical listing.
+            Passed through to job manager; mutually exclusive with jm_state and
+            reconciliation_eligible_jobs=true.
+          in: query
+          required: false
+          type: boolean
+        - name: endTimeFrom
+          description: |-
+            Inclusive lower bound on persisted job end time, applied in job manager
+            before count and pagination. Attempts without an end time are excluded.
+          in: query
+          required: false
+          type: string
+          format: date-time
+      tags:
+        - HeimdallService
+    post:
+      summary: Create or update job
+      description: Create a new job or update an existing one. If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
+      operationId: HeimdallService_CreateOrUpdateJob
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CreateOrUpdateJobResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          description: |-
+            CreateOrUpdateJobRequest is used to create or update a job.
+            If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1CreateOrUpdateJobRequest'
+      tags:
+        - HeimdallService
+  /v1/jobs/{heimdallJobId}:
+    get:
+      summary: Get job by ID
+      description: Retrieve a specific job by its UUID.
+      operationId: HeimdallService_GetJob
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetJobResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: heimdallJobId
+          description: The job identifier.
+          in: path
+          required: true
+          type: string
+        - name: useHeimdallId
+          description: |-
+            If true, interpret heimdall_job_id as a UUID and query by heimdall_job_id directly.
+            If false or not set (default), parse as "{job_id}-{attempt_index}" format.
+          in: query
+          required: false
+          type: boolean
+      tags:
+        - HeimdallService
+  /v1/jobs/by-scheduler-id/{schedulerJobId}:
+    get:
+      summary: Get jobs by scheduler ID
+      description: Retrieve jobs by their scheduler ID. Multiple jobs may share the same scheduler_job_id, so this endpoint returns a paginated list of matching jobs.
+      operationId: HeimdallService_GetJobsBySchedulerId
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetJobsBySchedulerIdResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: schedulerJobId
+          description: The scheduler job ID to search for.
+          in: path
+          required: true
+          type: string
+        - name: page
+          description: A decimal zero-based offset from the previous response's next_page_token field.
+          in: query
+          required: false
+          type: string
+        - name: limit
+          description: The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.
+          in: query
+          required: false
+          type: integer
+          format: int32
+      tags:
+        - HeimdallService
+  /v1/workflows:
+    get:
+      summary: Returns the workflows.
+      description: Returns the workflows.
+      operationId: HeimdallService_GetWorkflows
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetWorkflowsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: pageToken
+          description: A decimal zero-based offset from the previous response's next_page_token field. Mutually exclusive with page_number.
+          in: query
+          required: false
+          type: string
+        - name: pageNumber
+          description: A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.
+          in: query
+          required: false
+          type: integer
+          format: int32
+        - name: limit
+          description: The maximum number of workflows to return. Defaults to 100 and cannot exceed 250.
+          in: query
+          required: false
+          type: integer
+          format: int32
+      tags:
+        - HeimdallService
+  /v1/workflows:lookup:
+    get:
+      summary: Returns the workflow with the given ID.
+      description: Returns the workflow with the given ID.
+      operationId: HeimdallService_GetWorkflow
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetWorkflowResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: workflowId
+          description: The opaque identifier of the workflow to get.
+          in: query
+          required: true
+          type: string
+      tags:
+        - HeimdallService
+  /v1/workflows/{workflowId}:
+    get:
+      summary: Returns the workflow with the given ID.
+      description: Returns the workflow with the given ID.
+      operationId: HeimdallService_GetWorkflow2
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetWorkflowResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: workflowId
+          description: The opaque identifier of the workflow to get.
+          in: path
+          required: true
+          type: string
+      tags:
+        - HeimdallService
+  /v1/advice:
+    get:
+      summary: List advice
+      description: Retrieve a list of advice for jobs. Advice includes only the desired state and node exclusions that the Advisor has computed for jobs. This is used by the NVIDIA Recovery Job Controller to synchronize job advice updates. Use the `page` parameter to get the next page of advice records.
+      operationId: HeimdallService_ListAdvice
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListAdviceResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: page
+          description: The opaque page token from the previous response's next_page_token field.
+          in: query
+          required: false
+          type: string
+        - name: limit
+          description: The maximum number of advice records to return. Defaults to 100 and cannot exceed 250.
+          in: query
+          required: false
+          type: integer
+          format: int32
+        - name: onlyActive
+          description: Return only Advice that can still require reconciliation.
+          in: query
+          required: false
+          type: boolean
+      tags:
+        - HeimdallService
+  /v1/advice/{heimdallJobId}/reconciliation-status:
+    put:
+      summary: Update Advice reconciliation status
+      description: Record an idempotent, generation-scoped reconciliation observation.
+      operationId: HeimdallService_UpdateAdviceReconciliationStatus
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1UpdateAdviceReconciliationStatusResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: heimdallJobId
+          description: UUID of the Advice record being observed.
+          in: path
+          required: true
+          type: string
+        - name: status
+          description: Generation-scoped reconciliation status.
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1AdviceReconciliationStatus'
+      tags:
+        - HeimdallService
+  /v1/recovery/sequences:
+    get:
+      summary: Get a recovery sequence
+      description: Read the canonical trace context for one exact scoped recovery operation. A missing sequence returns not found without creating state or authorizing scheduler actions.
+      operationId: HeimdallService_GetRecoverySequence
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetRecoverySequenceResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: schedulerSystem
+          description: Scheduler system name, for example "slurm".
+          in: query
+          required: true
+          type: string
+        - name: schedulerScope
+          description: Deployment or cluster scope that disambiguates scheduler job identifiers.
+          in: query
+          required: true
+          type: string
+        - name: jobId
+          description: Scheduler-specific job identifier.
+          in: query
+          required: true
+          type: string
+        - name: sourceAttemptIndex
+          description: Zero-based attempt index on which recovery was triggered.
+          in: query
+          required: true
+          type: integer
+          format: int32
+        - name: operation
+          description: |-
+            Scheduler-neutral recovery operation.
+
+             - RECOVERY_OPERATION_UNSPECIFIED: No recovery operation was specified.
+             - RECOVERY_OPERATION_RESTART: Restart the failed source attempt.
+             - RECOVERY_OPERATION_TERMINATE: Terminate the source attempt.
+             - RECOVERY_OPERATION_DAG_RELEASE: Release a held job after its DAG dependencies are satisfied.
+          in: query
+          required: true
+          type: string
+          enum:
+            - RECOVERY_OPERATION_UNSPECIFIED
+            - RECOVERY_OPERATION_RESTART
+            - RECOVERY_OPERATION_TERMINATE
+            - RECOVERY_OPERATION_DAG_RELEASE
+          default: RECOVERY_OPERATION_UNSPECIFIED
+      tags:
+        - HeimdallService
+  /v1/recovery/milestones:
+    post:
+      summary: Record a recovery milestone
+      description: Idempotently persist one scheduler-action completion occurrence for recovery tracing and latency measurement.
+      operationId: HeimdallService_RecordRecoveryMilestone
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1RecordRecoveryMilestoneResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          description: RecordRecoveryMilestoneRequest records one scheduler-action completion occurrence.
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1RecordRecoveryMilestoneRequest'
+      tags:
+        - HeimdallService
+  /v1/keys:
+    get:
+      summary: Disabled API-key listing compatibility endpoint.
+      description: API-key listing is disabled in this build. This compatibility endpoint always returns an internal error.
+      operationId: ApiKeysService_ListApiKeys
+      responses:
+        "200":
+          description: Legacy response shape retained for compatibility. This build returns an internal error instead.
+          schema:
+            $ref: '#/definitions/v1ListApiKeysResponse'
+        "500":
+          description: API key management is disabled.
+          schema: {}
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - ApiKeysService
+    post:
+      summary: Disabled API-key creation compatibility endpoint.
+      description: API-key creation is disabled in this build. This compatibility endpoint always returns an internal error.
+      operationId: ApiKeysService_CreateApiKey
+      responses:
+        "200":
+          description: Legacy response shape retained for compatibility. This build returns an internal error instead.
+          schema:
+            $ref: '#/definitions/v1CreateApiKeyResponse'
+        "500":
+          description: API key management is disabled.
+          schema: {}
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1CreateApiKeyRequest'
+      tags:
+        - ApiKeysService
+  /v1/keys/{keyId}:
+    get:
+      summary: Disabled API-key retrieval compatibility endpoint.
+      description: API-key retrieval is disabled in this build. This compatibility endpoint always returns an internal error.
+      operationId: ApiKeysService_RetrieveApiKey
+      responses:
+        "200":
+          description: Legacy response shape retained for compatibility. This build returns an internal error instead.
+          schema:
+            $ref: '#/definitions/v1RetrieveApiKeyResponse'
+        "500":
+          description: API key management is disabled.
+          schema: {}
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: keyId
+          description: Legacy key ID path parameter retained for compatibility.
+          in: path
+          required: true
+          type: string
+      tags:
+        - ApiKeysService
+    delete:
+      summary: Disabled API-key deletion compatibility endpoint.
+      description: API-key deletion is disabled in this build. This compatibility endpoint always returns an internal error.
+      operationId: ApiKeysService_DeleteApiKey
+      responses:
+        "200":
+          description: Legacy response shape retained for compatibility. This build returns an internal error instead.
+          schema:
+            $ref: '#/definitions/v1DeleteApiKeyResponse'
+        "500":
+          description: API key management is disabled.
+          schema: {}
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: keyId
+          description: Legacy key ID path parameter retained for compatibility.
+          in: path
+          required: true
+          type: string
+      tags:
+        - ApiKeysService
+  /v1/keys/{keyId}/authorizations:
+    put:
+      summary: Disabled API-key authorization update compatibility endpoint.
+      description: API-key authorization updates are disabled in this build. This compatibility endpoint always returns an internal error.
+      operationId: ApiKeysService_UpdateApiKeyAuthorizations
+      responses:
+        "200":
+          description: Legacy response shape retained for compatibility. This build returns an internal error instead.
+          schema:
+            $ref: '#/definitions/v1UpdateApiKeyAuthorizationsResponse'
+        "500":
+          description: API key management is disabled.
+          schema: {}
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: keyId
+          description: Legacy key ID path parameter retained for compatibility.
+          in: path
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/ApiKeysServiceUpdateApiKeyAuthorizationsBody'
+      tags:
+        - ApiKeysService
+  /v1/audit/events:
+    get:
+      summary: Query audit events
+      description: Read persisted audit events by internal job ID or scheduler job ID with an optional attempt. A job without an attempt includes all attempts. Event filters and inclusive producer-time bounds narrow results; page size defaults to and cannot exceed 100. Cursors are opaque and must be reused with the same query.
+      operationId: AuditService_GetAuditEvents
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetAuditEventsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: heimdallJobId
+          description: Exact internal job identifier; exclusive with scheduler job selectors.
+          in: query
+          required: false
+          type: string
+        - name: jobId
+          description: Scheduler job identifier; omitting attempt_index includes all attempts.
+          in: query
+          required: false
+          type: string
+        - name: attemptIndex
+          description: Exact non-negative attempt; requires job_id. Zero is a valid attempt.
+          in: query
+          required: false
+          type: integer
+          format: int32
+        - name: eventType
+          description: Stable event type to match exactly.
+          in: query
+          required: false
+          type: string
+        - name: eventLevel
+          description: Event level to match exactly.
+          in: query
+          required: false
+          type: string
+        - name: eventProducer
+          description: Producer component to match exactly.
+          in: query
+          required: false
+          type: string
+        - name: minEventProducedAt
+          description: Inclusive minimum producer timestamp in Unix microseconds.
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: maxEventProducedAt
+          description: Inclusive maximum producer timestamp in Unix microseconds.
+          in: query
+          required: false
+          type: string
+          format: int64
+        - name: sortBy
+          description: 'Timestamp ordering: event_produced_at:asc or event_produced_at:desc.'
+          in: query
+          required: false
+          type: string
+        - name: cursor
+          description: Opaque cursor returned for an adjacent page of the same query.
+          in: query
+          required: false
+          type: string
+        - name: limit
+          description: Page size from 1 through 100; defaults to 100 when omitted.
+          in: query
+          required: false
+          type: integer
+          format: int32
+      tags:
+        - AuditService
+    post:
+      summary: Ingest audit events
+      description: Submit a batch of producer audit events to Audit Trail. A successful response reports full or partial acceptance, not durable persistence. Do not retry partially accepted batches; retry an overloaded request using the same idempotency keys.
+      operationId: AuditService_CreateAuditEvents
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CreateAuditEventsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          description: CreateAuditEventsRequest is a batch of producer audit events to ingest.
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1CreateAuditEventsRequest'
+      tags:
+        - AuditService
+definitions:
+  ApiKeysServiceUpdateApiKeyAuthorizationsBody:
+    type: object
+    properties:
+      authorizations:
+        type: array
+        items:
+          type: string
+        description: Legacy authorization input ignored by the disabled compatibility endpoint.
+  JobDagDependencyTriggerCondition:
+    type: string
+    enum:
+      - TRIGGER_CONDITION_UNSPECIFIED
+      - TRIGGER_CONDITION_COMPLETED
+    default: TRIGGER_CONDITION_UNSPECIFIED
+    description: |-
+      TriggerCondition defines the parent state that satisfies this dependency.
+
+       - TRIGGER_CONDITION_UNSPECIFIED: No trigger condition was specified.
+       - TRIGGER_CONDITION_COMPLETED: The parent must complete successfully.
+  JobRecoveryConfigAutoResumeMode:
+    type: string
+    enum:
+      - AUTO_RESUME_MODE_UNSPECIFIED
+      - AUTO_RESUME_MODE_REQUEUE
+      - AUTO_RESUME_MODE_SINGLETON_DEPENDENCY
+    default: AUTO_RESUME_MODE_UNSPECIFIED
+    description: |-
+      AutoResumeMode defines how the system should resume a recoverable job.
+
+       - AUTO_RESUME_MODE_UNSPECIFIED: No job-level auto-resume mode was specified.
+       - AUTO_RESUME_MODE_REQUEUE: Requeue the same scheduler job to resume progress.
+       - AUTO_RESUME_MODE_SINGLETON_DEPENDENCY: Use singleton dependency jobs to resume progress.
+  JobRecoveryConfigDagAction:
+    type: string
+    enum:
+      - DAG_ACTION_UNSPECIFIED
+      - DAG_ACTION_RELEASE
+    default: DAG_ACTION_UNSPECIFIED
+    description: |-
+      DagAction defines what Job Manager should request after all dependencies are satisfied.
+
+       - DAG_ACTION_UNSPECIFIED: No DAG action was specified.
+       - DAG_ACTION_RELEASE: Release the held child so it becomes scheduler-eligible.
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  protobufNullValue:
+    type: string
+    enum:
+      - NULL_VALUE
+    default: NULL_VALUE
+    description: |-
+      `NullValue` is a singleton enumeration to represent the null value for the
+      `Value` type union.
+
+      The JSON representation for `NullValue` is JSON `null`.
+
+       - NULL_VALUE: Null value.
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1Advice:
+    type: object
+    properties:
+      heimdallJobId:
+        type: string
+        description: The UUID assigned by NVIDIA Recovery.
+      jobId:
+        type: string
+        description: Scheduler-specific job identifier.
+      schedulerMetadata:
+        type: object
+        description: Scheduler metadata that is specific to the scheduler such as kubernetes namespace or job kind.
+      attemptIndex:
+        type: integer
+        format: int32
+        description: The restart/attempt count for this job.
+      advice:
+        $ref: '#/definitions/v1AdviceRecommendation'
+        description: The advice recommendation (desired state and node constraints).
+      issues:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Issue'
+        description: Issues detected for this job.
+      createdAt:
+        type: string
+        format: date-time
+        description: When this advice was created.
+      updatedAt:
+        type: string
+        format: date-time
+        description: When this advice was last updated.
+      generation:
+        type: string
+        format: int64
+        description: Desired-state generation. Changes only when scheduler-affecting intent changes.
+      reconciliationStatus:
+        $ref: '#/definitions/v1AdviceReconciliationStatus'
+        description: Reconciliation status for the current generation, when one has been observed.
+      desiredStateChangedAt:
+        type: string
+        format: date-time
+        description: When the current scheduler-affecting desired-state generation began.
+      recoveryContext:
+        $ref: '#/definitions/v1RecoveryContext'
+        description: Durable per-item recovery correlation context, when available.
+    description: |-
+      Advice represents advice computed by the Advisor for a job.
+      This includes desired state, node constraints, and detected issues.
+  v1AdviceRecommendation:
+    type: object
+    properties:
+      state:
+        $ref: '#/definitions/v1AdviceState'
+        description: Desired state action for the job.
+      nodeConstraints:
+        $ref: '#/definitions/v1NodeConstraints'
+        description: Node constraints for the job.
+    description: AdviceRecommendation represents the recommended state and node constraints.
+  v1AdviceReconciliationDisposition:
+    type: string
+    enum:
+      - ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED
+      - ADVICE_RECONCILIATION_DISPOSITION_PENDING
+      - ADVICE_RECONCILIATION_DISPOSITION_CONVERGED
+      - ADVICE_RECONCILIATION_DISPOSITION_ABANDONED
+    default: ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED
+    description: |-
+      AdviceReconciliationDisposition describes whether one Advice generation
+      still needs work.
+
+       - ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED: The disposition is not specified.
+       - ADVICE_RECONCILIATION_DISPOSITION_PENDING: Reconciliation has not reached a terminal observation.
+       - ADVICE_RECONCILIATION_DISPOSITION_CONVERGED: Fresh scheduler state satisfies the desired state.
+       - ADVICE_RECONCILIATION_DISPOSITION_ABANDONED: The desired state can no longer be reached for this generation.
+  v1AdviceReconciliationReason:
+    type: string
+    enum:
+      - ADVICE_RECONCILIATION_REASON_UNSPECIFIED
+      - ADVICE_RECONCILIATION_REASON_DESIRED_STATE_OBSERVED
+      - ADVICE_RECONCILIATION_REASON_ALREADY_SATISFIED
+      - ADVICE_RECONCILIATION_REASON_ADVICE_EXPIRED
+      - ADVICE_RECONCILIATION_REASON_STALE_ATTEMPT
+      - ADVICE_RECONCILIATION_REASON_TARGET_STATE_FINAL
+      - ADVICE_RECONCILIATION_REASON_SUCCESSOR_ALREADY_RUNNING
+      - ADVICE_RECONCILIATION_REASON_INVALID_RECOMMENDATION
+      - ADVICE_RECONCILIATION_REASON_UNSUPPORTED_RECOMMENDATION
+    default: ADVICE_RECONCILIATION_REASON_UNSPECIFIED
+    description: |-
+      AdviceReconciliationReason is a bounded explanation for a reconciliation disposition.
+
+       - ADVICE_RECONCILIATION_REASON_UNSPECIFIED: The reason is not specified.
+       - ADVICE_RECONCILIATION_REASON_DESIRED_STATE_OBSERVED: Fresh scheduler state exactly matches the desired state.
+       - ADVICE_RECONCILIATION_REASON_ALREADY_SATISFIED: The target already satisfied the desired state before an action was needed.
+       - ADVICE_RECONCILIATION_REASON_ADVICE_EXPIRED: Ordinary Advice exceeded its configured maximum age.
+       - ADVICE_RECONCILIATION_REASON_STALE_ATTEMPT: A newer persisted attempt is beyond this recommendation's applicability window.
+       - ADVICE_RECONCILIATION_REASON_TARGET_STATE_FINAL: The target is final and cannot accept the recommendation.
+       - ADVICE_RECONCILIATION_REASON_SUCCESSOR_ALREADY_RUNNING: A live successor cannot safely receive the required constraints.
+       - ADVICE_RECONCILIATION_REASON_INVALID_RECOMMENDATION: The recommendation has no reconciliation path.
+       - ADVICE_RECONCILIATION_REASON_UNSUPPORTED_RECOMMENDATION: The controller cannot implement the recommendation.
+  v1AdviceReconciliationStatus:
+    type: object
+    properties:
+      observedGeneration:
+        type: string
+        format: int64
+        description: Advice generation observed by the controller.
+      disposition:
+        $ref: '#/definitions/v1AdviceReconciliationDisposition'
+        description: Current lifecycle disposition for the observed generation.
+      reason:
+        $ref: '#/definitions/v1AdviceReconciliationReason'
+        description: Stable machine-readable explanation for the disposition.
+      observedAt:
+        type: string
+        format: date-time
+        description: Time of the fresh scheduler or policy observation.
+      transitionedAt:
+        type: string
+        format: date-time
+        description: Time the disposition or reason last changed.
+      diagnosticMessage:
+        type: string
+        description: Optional bounded diagnostic text for operators.
+    description: AdviceReconciliationStatus records one generation-scoped reconciliation observation.
+  v1AdviceState:
+    type: string
+    enum:
+      - ADVICE_STATE_UNSPECIFIED
+      - ADVICE_STATE_RESTARTED
+      - ADVICE_STATE_TERMINATED
+      - ADVICE_STATE_RELEASED
+    default: ADVICE_STATE_UNSPECIFIED
+    description: |-
+      AdviceState represents the recommended state action for a job.
+
+       - ADVICE_STATE_UNSPECIFIED: The state is not specified.
+       - ADVICE_STATE_RESTARTED: The job should be restarted.
+       - ADVICE_STATE_TERMINATED: The job should be terminated.
+       - ADVICE_STATE_RELEASED: The exact job attempt should be scheduler-eligible.
+  v1ApiKey:
+    type: object
+    properties:
+      id:
+        type: string
+        description: Legacy key ID field retained for response shape compatibility.
+      value:
+        type: string
+        description: Legacy key value field. Disabled endpoints never return key material.
+      status:
+        $ref: '#/definitions/v1ApiKeyStatus'
+        description: Legacy key status field. Disabled endpoints do not return active key metadata.
+      description:
+        type: string
+        description: Legacy key description field retained for compatibility.
+      expiresAt:
+        type: string
+        format: date-time
+        description: Legacy key expiration field retained for compatibility.
+      createdAt:
+        type: string
+        format: date-time
+        description: Legacy key creation timestamp field retained for compatibility.
+      authorizations:
+        $ref: '#/definitions/v1ApiKeyAuthorizations'
+        description: Legacy authorization field retained for compatibility.
+    description: API-key metadata retained for disabled compatibility endpoints.
+  v1ApiKeyAuthorizations:
+    type: object
+    description: |-
+      Legacy authorization shape retained for disabled compatibility endpoints.
+      Disabled endpoints do not evaluate or mutate API-key authorizations.
+  v1ApiKeyStatus:
+    type: string
+    enum:
+      - API_KEY_STATUS_UNSPECIFIED
+      - API_KEY_STATUS_ACTIVE
+      - API_KEY_STATUS_EXPIRED
+      - API_KEY_STATUS_SUSPENDED
+    default: API_KEY_STATUS_UNSPECIFIED
+    description: |-
+      Legacy API-key status values retained for wire compatibility.
+
+       - API_KEY_STATUS_UNSPECIFIED: The status of the API key is unspecified.
+       - API_KEY_STATUS_ACTIVE: Legacy active status value. Disabled endpoints do not create active keys.
+       - API_KEY_STATUS_EXPIRED: Legacy expired status value.
+       - API_KEY_STATUS_SUSPENDED: Legacy suspended status value.
+  v1AuditEvent:
+    type: object
+    properties:
+      heimdallJobId:
+        type: string
+        description: Internal job identifier; distinct from the private storage row identifier.
+      eventProducer:
+        type: string
+        description: Component that produced the event.
+      eventType:
+        type: string
+        description: Stable event-type identifier.
+      eventLevel:
+        type: string
+        description: Stable audit event-level identifier.
+      payload:
+        type: object
+        description: Event-specific structured data.
+      eventProducedAt:
+        type: string
+        format: int64
+        description: Producer emission time as Unix microseconds.
+      summary:
+        $ref: '#/definitions/v1AuditEventHumanSummary'
+        description: Human-readable event details.
+    description: AuditEvent is the public projection of a persisted event.
+  v1AuditEventHumanSummary:
+    type: object
+    properties:
+      title:
+        type: string
+        description: Event title.
+      description:
+        type: string
+        description: Concise event description.
+      granularity:
+        type: integer
+        format: int32
+        description: Granularity used to group events in human-facing views.
+    description: AuditEventHumanSummary describes a persisted event for human readers.
+  v1AuditEventPageCursor:
+    type: object
+    properties:
+      prevCursor:
+        type: string
+        description: Previous page cursor; empty when no previous page exists.
+      nextCursor:
+        type: string
+        description: Next page cursor; empty when no next page exists.
+    description: AuditEventPageCursor identifies adjacent pages without exposing storage keys.
+  v1AuditEventPartialSuccess:
+    type: object
+    properties:
+      rejectedEvents:
+        type: integer
+        format: int32
+        description: Number of rejected events.
+      errorMessage:
+        type: string
+        description: Human-readable explanation of why events were rejected.
+    description: AuditEventPartialSuccess describes events rejected from an otherwise accepted batch.
+  v1CreateApiKeyRequest:
+    type: object
+    properties:
+      description:
+        type: string
+        description: Legacy key description input ignored by the disabled compatibility endpoint.
+      expiresAt:
+        type: string
+        format: date-time
+        description: Legacy expiration input ignored by the disabled compatibility endpoint.
+      authorizations:
+        $ref: '#/definitions/v1ApiKeyAuthorizations'
+        description: Legacy authorization input ignored by the disabled compatibility endpoint.
+  v1CreateApiKeyResponse:
+    type: object
+    properties:
+      key:
+        $ref: '#/definitions/v1ApiKey'
+        description: Legacy response field. Disabled endpoints always return an error instead.
+  v1CreateAuditEventsRequest:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ProducerAuditEvent'
+        description: Events in this ingestion batch.
+    description: CreateAuditEventsRequest is a batch of producer audit events to ingest.
+  v1CreateAuditEventsResponse:
+    type: object
+    properties:
+      partialSuccess:
+        $ref: '#/definitions/v1AuditEventPartialSuccess'
+        description: Present only when the downstream audit service rejected some events.
+    description: CreateAuditEventsResponse reports full or partial batch acceptance.
+  v1CreateOrUpdateJobRequest:
+    type: object
+    properties:
+      heimdallJobId:
+        type: string
+        description: The UUID for the job. If not provided, will be computed from job_id and attempt_index.
+      jobId:
+        type: string
+        description: Scheduler-specific job identifier.
+      workflowId:
+        type: string
+        description: The workflow ID this job belongs to.
+        maxLength: 256
+        minLength: 1
+      attemptIndex:
+        type: integer
+        format: int32
+        description: The attempt index for this job.
+      jobName:
+        type: string
+        description: The name of the job.
+      allocatedNodes:
+        type: array
+        items:
+          type: string
+        description: List of nodes allocated to the job.
+      gpuCountPerNode:
+        type: integer
+        format: int32
+        description: Number of GPUs per node.
+      nodeConstraints:
+        $ref: '#/definitions/v1NodeConstraints'
+        description: Node constraints for the job.
+      additionalProperties:
+        $ref: '#/definitions/v1JobAdditionalProperties'
+        description: Additional properties for the job.
+      state:
+        $ref: '#/definitions/v1JobStatus'
+        description: The state of the job.
+      schedulerMetadata:
+        type: object
+        description: Scheduler-specific metadata (e.g., CRD kind, namespace, labels, annotations).
+      recoveryConfig:
+        $ref: '#/definitions/v1JobRecoveryConfig'
+        description: Typed recovery policy for scheduler recovery behavior.
+    description: |-
+      CreateOrUpdateJobRequest is used to create or update a job.
+      If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
+    required:
+      - workflowId
+  v1CreateOrUpdateJobResponse:
+    type: object
+    properties:
+      job:
+        $ref: '#/definitions/v1Job'
+        description: The created or updated job.
+    description: CreateOrUpdateJobResponse is the response for creating or updating a job.
+  v1DeleteApiKeyResponse:
+    type: object
+  v1GetAuditEventsResponse:
+    type: object
+    properties:
+      cursor:
+        $ref: '#/definitions/v1AuditEventPageCursor'
+        description: Opaque adjacent-page cursors.
+      items:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1AuditEvent'
+        description: Events matching the requested filters and ordering.
+    description: GetAuditEventsResponse returns one page of persisted public audit events.
+  v1GetJobResponse:
+    type: object
+    example:
+      job:
+        attemptIndex: 0
+        heimdallJobId: test-job-0
+        jobId: test-job
+        nodes:
+          - node1
+          - node2
+          - node3
+        state: JOB_STATUS_COMPLETED
+        workflowId: test-workflow
+    properties:
+      job:
+        $ref: '#/definitions/v1Job'
+        description: The job.
+    description: GetJobResponse is the response for the GetJob method.
+  v1GetJobsBySchedulerIdResponse:
+    type: object
+    properties:
+      jobs:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Job'
+        description: The list of jobs.
+      count:
+        type: integer
+        format: int32
+        description: The total count of jobs returned.
+      nextPageToken:
+        type: string
+        description: The decimal zero-based offset to use for the next page of results.
+    description: GetJobsBySchedulerIdResponse is the response for getting jobs by scheduler ID.
+  v1GetJobsResponse:
+    type: object
+    properties:
+      jobs:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Job'
+        description: The list of jobs.
+      count:
+        type: integer
+        format: int32
+        description: The total count of jobs returned.
+      nextPageToken:
+        type: string
+        description: The decimal zero-based offset to use for the next page of results.
+    description: GetJobsResponse is the response for listing jobs.
+  v1GetRecoverySequenceResponse:
+    type: object
+    properties:
+      recoveryContext:
+        $ref: '#/definitions/v1RecoveryContext'
+        description: Canonical durable correlation context for this recovery operation.
+    description: GetRecoverySequenceResponse returns the sequence's canonical context.
+    required:
+      - recoveryContext
+  v1GetWorkflowResponse:
+    type: object
+    properties:
+      workflow:
+        $ref: '#/definitions/v1Workflow'
+        description: The workflow.
+    description: GetWorkflowResponse is the response for the GetWorkflow method.
+  v1GetWorkflowsResponse:
+    type: object
+    example:
+      count: 1
+      workflows:
+        - endTime: "2025-06-18T18:37:00.667816956Z"
+          name: workflow-0
+          startTime: "2025-06-18T18:17:50.667816956Z"
+          workflowId: workflow-0
+    properties:
+      workflows:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Workflow'
+        description: The workflows.
+      count:
+        type: integer
+        format: int32
+        description: The total count of workflows returned.
+      nextPageToken:
+        type: string
+        description: The decimal zero-based offset to use for the next page of results.
+    description: GetWorkflowsResponse is the response for the GetWorkflows method.
+  v1Issue:
+    type: object
+    properties:
+      issueType:
+        type: string
+        description: The type of issue detected.
+      timestamp:
+        type: string
+        format: date-time
+        description: When the issue was detected.
+      detectedBy:
+        type: string
+        description: What detected this issue (e.g., "watcher", "advisor").
+      relevantLogLines:
+        type: array
+        items:
+          type: string
+        description: Relevant log lines related to the issue.
+      remediationActions:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1RemediationAction'
+        description: Actions taken to remediate this issue.
+    description: Issue represents a detected issue with a job.
+  v1Job:
+    type: object
+    properties:
+      heimdallJobId:
+        type: string
+        description: The UUID assigned by NVIDIA Recovery.
+      jobRunId:
+        type: string
+        description: Legacy id for job for slurm systems.
+      jobId:
+        type: string
+        description: Scheduler-specific job identifier.
+      workflowId:
+        type: string
+        description: The workflow ID this job belongs to.
+        maxLength: 256
+        minLength: 1
+      attemptIndex:
+        type: integer
+        format: int32
+        description: The attempt index for this job.
+      nodes:
+        type: array
+        items:
+          type: string
+        description: List of nodes associated with the job.
+      gpuCountPerNode:
+        type: integer
+        format: int32
+        title: Number of GPUs per node. kill?
+      nodeConstraints:
+        $ref: '#/definitions/v1NodeConstraints'
+        description: Node constraints observed on the job.
+      additionalProperties:
+        $ref: '#/definitions/v1JobAdditionalProperties'
+        description: Additional properties for the job.
+      state:
+        $ref: '#/definitions/v1JobStatus'
+        description: The actual state of the job.
+      createdAt:
+        type: string
+        format: date-time
+        description: When the job was created.
+      lastSeen:
+        type: string
+        format: date-time
+        description: When the job was last seen.
+      updatedAt:
+        type: string
+        format: date-time
+        description: When the job was last updated.
+      jobName:
+        type: string
+        title: The name of the job
+      schedulerMetadata:
+        type: object
+        description: Scheduler metadata that is specific to the scheduler such as kubernetes namespace or job kind.
+      recoveryConfig:
+        $ref: '#/definitions/v1JobRecoveryConfig'
+        description: Typed recovery policy for scheduler recovery behavior.
+    description: |-
+      Job represents a job tracked by the Advisor, including both
+      actual (observed) and desired (advisor-set) states.
+    required:
+      - workflowId
+  v1JobAdditionalProperties:
+    type: object
+    properties:
+      maxRequeueTimes:
+        type: integer
+        format: int32
+        description: Maximum number of times a job can be requeued. -1 means unlimited.
+      enableNvrx:
+        type: boolean
+        description: Whether NVRX is enabled for this job.
+    description: JobAdditionalProperties contains additional configuration properties for jobs.
+  v1JobAnomalyDetectionConfig:
+    type: object
+    properties:
+      logBasedCrashEnabled:
+        type: boolean
+        description: Whether Watcher log-based crash detection is enabled.
+      logBasedTimeoutEnabled:
+        type: boolean
+        description: Whether Watcher no-output detection is enabled.
+      logBasedTimeoutThresholdPretraining:
+        type: integer
+        format: int32
+        description: No-output threshold during pre-training, in seconds. Must be positive when present.
+      logBasedTimeoutThresholdTrainingloop:
+        type: integer
+        format: int32
+        description: No-output threshold during the training loop, in seconds. Must be positive when present.
+    description: JobAnomalyDetectionConfig contains per-job log detection controls.
+  v1JobDagDependency:
+    type: object
+    properties:
+      jobId:
+        type: string
+        description: Scheduler job ID of the parent.
+      jobName:
+        type: string
+        description: Workflow-scoped job name of the parent.
+      trigger:
+        $ref: '#/definitions/JobDagDependencyTriggerCondition'
+        description: Condition that satisfies this dependency.
+    description: JobDagDependency identifies one parent gate for a DAG child.
+  v1JobRecoveryConfig:
+    type: object
+    properties:
+      autoResumeMode:
+        $ref: '#/definitions/JobRecoveryConfigAutoResumeMode'
+        description: Job-level auto-resume mode.
+      maxRequeueTimes:
+        type: integer
+        format: int32
+        description: Maximum number of times a job can be requeued. Must be positive when present.
+      requeueOnCompletion:
+        type: boolean
+        description: Whether normal completion should trigger requeue. Presence overrides the system default.
+      anomalyDetectionConfig:
+        $ref: '#/definitions/v1JobAnomalyDetectionConfig'
+        description: Job-level anomaly detection policy supplied by the scheduler adapter.
+      dagDependencies:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1JobDagDependency'
+        description: Parent gates that must be satisfied before this job becomes eligible.
+      dagAction:
+        $ref: '#/definitions/JobRecoveryConfigDagAction'
+        description: Action to apply after all DAG dependencies are satisfied.
+      environment:
+        type: string
+        description: Optional APS routing environment preserved exactly from the scheduler job.
+      logFilePathsSharedAcrossAttempts:
+        type: boolean
+        description: Whether requeued attempts intentionally write to the same log files.
+    description: JobRecoveryConfig contains typed recovery policy for scheduler jobs.
+  v1JobStatus:
+    type: string
+    enum:
+      - JOB_STATUS_UNSPECIFIED
+      - JOB_STATUS_PENDING
+      - JOB_STATUS_RUNNING
+      - JOB_STATUS_STOPPED
+      - JOB_STATUS_COMPLETED
+      - JOB_STATUS_FAILED
+      - JOB_STATUS_CANCELLED
+      - JOB_STATUS_DELETED
+    default: JOB_STATUS_UNSPECIFIED
+    description: |-
+      JobStatus represents the state of a job.
+
+       - JOB_STATUS_UNSPECIFIED: The status is not specified.
+       - JOB_STATUS_PENDING: The job has been created but is not started yet due to being queued, waiting for resources or
+      is pulling container images etc...
+       - JOB_STATUS_RUNNING: The job is scheduled and has started running.
+       - JOB_STATUS_STOPPED: A stopped job is no longer running or using resources.
+       - JOB_STATUS_COMPLETED: The job completed without reporting an error.
+       - JOB_STATUS_FAILED: The job exited with an error status.
+       - JOB_STATUS_CANCELLED: Job was cancelled by the user or system.
+       - JOB_STATUS_DELETED: The job is deleted.
+  v1ListAdviceResponse:
+    type: object
+    properties:
+      advice:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Advice'
+        description: The list of advice records.
+      count:
+        type: integer
+        format: int32
+        description: The total count of advice records returned.
+      nextPageToken:
+        type: string
+        description: The opaque token to use for the next page of results.
+    description: ListAdviceResponse is the response for listing advice.
+  v1ListApiKeysResponse:
+    type: object
+    properties:
+      keys:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ApiKey'
+        description: Legacy response field. Disabled endpoints always return an error instead.
+  v1NodeConstraints:
+    type: object
+    properties:
+      exclusions:
+        type: array
+        items:
+          type: string
+        description: List of nodes to exclude from job scheduling.
+      inclusions:
+        type: array
+        items:
+          type: string
+        description: List of nodes to explicitly include for job scheduling.
+    description: NodeConstraints defines node scheduling constraints for jobs.
+  v1ProducerAuditEvent:
+    type: object
+    properties:
+      heimdallJobId:
+        type: string
+        description: NVIDIA Recovery's internal identifier for the job.
+      eventProducer:
+        type: string
+        description: Component that produced the event.
+      eventType:
+        type: string
+        description: Stable event-type identifier.
+      eventLevel:
+        type: string
+        description: Stable audit event-level identifier.
+      payload:
+        type: object
+        description: Event-specific structured data.
+      eventProducedAt:
+        type: string
+        format: int64
+        description: Producer emission time as Unix microseconds.
+      idempotencyKey:
+        type: string
+        description: Producer-computed key used to discard duplicate events.
+    description: ProducerAuditEvent is one structured event emitted by an NVIDIA Recovery component.
+  v1RecordRecoveryMilestoneRequest:
+    type: object
+    properties:
+      sequenceId:
+        type: string
+        description: Durable recovery sequence UUID.
+      idempotencyKey:
+        type: string
+        description: Stable key that deduplicates reports of this action occurrence.
+      operation:
+        $ref: '#/definitions/v1RecoveryOperation'
+        description: Scheduler-neutral recovery operation.
+      action:
+        $ref: '#/definitions/v1RecoverySchedulerAction'
+        description: Scheduler action that was attempted or evaluated.
+      outcome:
+        $ref: '#/definitions/v1RecoverySchedulerActionOutcome'
+        description: Logical outcome of the action occurrence.
+      completedAt:
+        type: string
+        format: date-time
+        description: When the scheduler action returned or its logical outcome was determined.
+      completesSequence:
+        type: boolean
+        description: |-
+          Whether this occurrence completes the owning recovery sequence.
+          The scheduler adapter sets this from its workflow semantics; Job Manager
+          does not derive it from operation, action, or outcome.
+    description: RecordRecoveryMilestoneRequest records one scheduler-action completion occurrence.
+    required:
+      - sequenceId
+      - idempotencyKey
+      - operation
+      - action
+      - outcome
+      - completedAt
+      - completesSequence
+  v1RecordRecoveryMilestoneResponse:
+    type: object
+    properties:
+      duplicate:
+        type: boolean
+        description: Whether this idempotency key had already been recorded.
+      sequenceCompleted:
+        type: boolean
+        description: Whether the sequence is completed after accepting this report.
+      endToEndDurationSeconds:
+        type: number
+        format: double
+        description: Trigger-to-terminal-milestone duration when this report newly completed its sequence.
+    description: RecordRecoveryMilestoneResponse reports durable milestone acceptance.
+  v1RecoveryContext:
+    type: object
+    properties:
+      sequenceId:
+        type: string
+        description: The durable recovery sequence UUID assigned by Job Manager.
+      traceparent:
+        type: string
+        description: The canonical W3C traceparent for later recovery work.
+      tracestate:
+        type: string
+        description: The canonical W3C tracestate, when present.
+      triggeredAt:
+        type: string
+        format: date-time
+        description: When the triggering condition was observed.
+      operation:
+        $ref: '#/definitions/v1RecoveryOperation'
+        description: The scheduler-neutral recovery operation.
+    description: |-
+      RecoveryContext carries one durable recovery sequence's W3C trace context.
+      It is correlation data and does not authorize or otherwise change scheduler actions.
+    required:
+      - sequenceId
+      - traceparent
+      - triggeredAt
+      - operation
+  v1RecoveryOperation:
+    type: string
+    enum:
+      - RECOVERY_OPERATION_UNSPECIFIED
+      - RECOVERY_OPERATION_RESTART
+      - RECOVERY_OPERATION_TERMINATE
+      - RECOVERY_OPERATION_DAG_RELEASE
+    default: RECOVERY_OPERATION_UNSPECIFIED
+    description: |-
+      RecoveryOperation identifies the scheduler-neutral recovery intent.
+
+       - RECOVERY_OPERATION_UNSPECIFIED: No recovery operation was specified.
+       - RECOVERY_OPERATION_RESTART: Restart the failed source attempt.
+       - RECOVERY_OPERATION_TERMINATE: Terminate the source attempt.
+       - RECOVERY_OPERATION_DAG_RELEASE: Release a held job after its DAG dependencies are satisfied.
+  v1RecoverySchedulerAction:
+    type: string
+    enum:
+      - RECOVERY_SCHEDULER_ACTION_UNSPECIFIED
+      - RECOVERY_SCHEDULER_ACTION_SLURM_REQUEUE_HOLD
+      - RECOVERY_SCHEDULER_ACTION_SLURM_UPDATE_CONSTRAINTS
+      - RECOVERY_SCHEDULER_ACTION_SLURM_RELEASE
+      - RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL
+    default: RECOVERY_SCHEDULER_ACTION_UNSPECIFIED
+    description: |-
+      RecoverySchedulerAction identifies one scheduler command occurrence.
+
+       - RECOVERY_SCHEDULER_ACTION_UNSPECIFIED: No scheduler action was specified.
+       - RECOVERY_SCHEDULER_ACTION_SLURM_REQUEUE_HOLD: Ask Slurm to requeue the job and hold the target attempt.
+       - RECOVERY_SCHEDULER_ACTION_SLURM_UPDATE_CONSTRAINTS: Ask Slurm to update the target attempt's node constraints.
+       - RECOVERY_SCHEDULER_ACTION_SLURM_RELEASE: Ask Slurm to release the target attempt from its hold.
+       - RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL: Ask Slurm to cancel the job.
+  v1RecoverySchedulerActionOutcome:
+    type: string
+    enum:
+      - RECOVERY_SCHEDULER_ACTION_OUTCOME_UNSPECIFIED
+      - RECOVERY_SCHEDULER_ACTION_OUTCOME_PLANNED
+      - RECOVERY_SCHEDULER_ACTION_OUTCOME_SUCCESS
+      - RECOVERY_SCHEDULER_ACTION_OUTCOME_ERROR
+      - RECOVERY_SCHEDULER_ACTION_OUTCOME_ALREADY_SATISFIED
+    default: RECOVERY_SCHEDULER_ACTION_OUTCOME_UNSPECIFIED
+    description: |-
+      RecoverySchedulerActionOutcome classifies one scheduler action occurrence.
+
+       - RECOVERY_SCHEDULER_ACTION_OUTCOME_UNSPECIFIED: No scheduler action outcome was specified.
+       - RECOVERY_SCHEDULER_ACTION_OUTCOME_PLANNED: The action was planned in observe mode and no command ran.
+       - RECOVERY_SCHEDULER_ACTION_OUTCOME_SUCCESS: The scheduler command completed successfully.
+       - RECOVERY_SCHEDULER_ACTION_OUTCOME_ERROR: The scheduler command returned an error.
+       - RECOVERY_SCHEDULER_ACTION_OUTCOME_ALREADY_SATISFIED: Fresh scheduler state showed that the action was already satisfied.
+  v1RemediationAction:
+    type: object
+    properties:
+      actionType:
+        type: string
+        description: The type of action (e.g., "exclude_node", "restart_job").
+      timestamp:
+        type: string
+        format: date-time
+        description: When the action was taken.
+      reason:
+        type: string
+        description: The reason for taking this action.
+      resourceDetails:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1ResourceDetail'
+        description: Resources affected by this action.
+    description: RemediationAction represents an action taken to remediate an issue.
+  v1ResourceDetail:
+    type: object
+    properties:
+      resourceType:
+        type: string
+        description: The type of resource (e.g., "node", "gpu").
+      resourceId:
+        type: string
+        description: The unique identifier of the resource.
+      details:
+        type: string
+        description: Additional details about the resource.
+    description: ResourceDetail represents details about a specific resource.
+  v1RetrieveApiKeyResponse:
+    type: object
+    properties:
+      key:
+        $ref: '#/definitions/v1ApiKey'
+  v1UpdateAdviceReconciliationStatusResponse:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/v1AdviceReconciliationStatus'
+        description: Idempotently persisted reconciliation status.
+    description: UpdateAdviceReconciliationStatusResponse returns the persisted status.
+  v1UpdateApiKeyAuthorizationsResponse:
+    type: object
+    properties:
+      key:
+        $ref: '#/definitions/v1ApiKey'
+        description: Legacy response field. Disabled endpoints always return an error instead.
+  v1Workflow:
+    type: object
+    properties:
+      workflowId:
+        type: string
+        maxLength: 256
+        minLength: 1
+      schedulerWorkflowId:
+        type: string
+        description: The ID of the workflow.
+      name:
+        type: string
+        description: The name of the workflow.
+      startTime:
+        type: string
+        format: date-time
+        description: The start time of the workflow as utc unix timestamp.
+      endTime:
+        type: string
+        format: date-time
+        description: The end time of the workflow as utc unix timestamp.
+    description: Workflow is the workflow.
+    required:
+      - workflowId

@@ -1,0 +1,55 @@
+# Grafana Loki — single-binary mode with filesystem storage, sized down for a
+# single-node e2e cluster. No placeholders.
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+singleBinary:
+  replicas: 1
+  persistence:
+    size: 10Gi
+
+# Scale the microservice deployments to zero — single-binary serves everything.
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+gateway:
+  enabled: true
+  replicas: 1
+
+# Disable the memcached caches — unneeded for filesystem single-binary, and
+# their default memory requests (~9Gi) are unschedulable on a single Kind node.
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# Expose Loki's ServiceMonitor to the kube-prometheus-stack release.
+monitoring:
+  selfMonitoring:
+    enabled: false
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+
+test:
+  enabled: false

@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SlurmJobExecutionStatus",
+  "description": "the slurm execution status returned from job manager.",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "job_attempt_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "job_name": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "state_reason": {
+      "type": "string"
+    },
+
+    "submit_time": {
+      "type": "string"
+    },
+    "start_time": {
+      "type": "string",
+      "format": "datetime"
+    },
+    "end_time": {
+      "type": "string",
+      "format": "datetime"
+    },
+    "cluster": {
+      "type": "string"
+    },
+    "partition": {
+      "type": "string",
+      "description": "the partition of the job when running in a slurm cluster"
+    },
+    "reservation": {
+      "type": "string",
+      "description": "the reservation ID of the job when running in a slurm cluster"
+    },
+    "namespace": {
+      "type": "string",
+      "description": "the namespace of the job when running in a k8s/runai cluster"
+    },
+    "user": {
+      "type": "string"
+    },
+    "command": {
+      "type": "string"
+    },
+    "dependency": {
+      "type": "string"
+    },
+
+
+    "node_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "allocated_node_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "inclusion_node_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exclusion_node_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "anomalies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "title": "JobAnomaly",
+        "properties": {
+          "anomaly_type": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "title": "JobCheckpointInfo",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "datetime"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "retry_of": {
+      "type": "string"
+    }
+
+},
+  "required": [
+    "job_id", "job_attempt_index"
+  ]
+}

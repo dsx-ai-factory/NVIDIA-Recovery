@@ -1,0 +1,190 @@
+global:
+  # Query selection is independent from bundled Loki and collector/write
+  # configuration. The umbrella chart may replace this block for all consumers.
+  log_query:
+    backend: loki
+    providers:
+      loki:
+        queries:
+          attribution:
+            # Required: operator-supplied selectors for the deployment's log schema.
+            application: ""
+            system: ""
+            epilogue: ""
+        application:
+          url: ""
+          tenants: ""
+          org_id: ""
+        system:
+          url: ""
+          tenants: ""
+          org_id: ""
+      victorialogs:
+        # VictoriaLogs 1.39.0+ is required for query-window and tenant semantics.
+        queries:
+          attribution:
+            # Supply native LogsQL; no LogQL translation is attempted.
+            # Application and epilogue templates require literal {job_id}.
+            application: ""
+            system: ""
+            epilogue: ""
+        application:
+          url: ""
+          account_id: ""
+          project_id: ""
+          require_tenant: false
+        system:
+          url: ""
+          account_id: ""
+          project_id: ""
+          require_tenant: false
+# HTTP API port (POST /v1/attribution, GET /healthz) — served by uvicorn (main.py).
+port: 8000
+# Prometheus metrics port — served by prometheus_client.start_http_server (main.py).
+# The moved adi_* metrics emit here (design §12.4); keep this in sync with main.py.
+metrics_port: 8080
+resources:
+  limits:
+    memory: 10Gi
+  requests:
+    memory: 10Gi
+replicas: 1
+image:
+  repository: ""
+  name: attribution-adapter
+  tag: ""
+  pullPolicy: IfNotPresent
+service_type: ClusterIP
+command: ["attribution-adapter"]
+# Omit url to use the same-release Attribution Service on port 8000.
+# Set fact.url explicitly for an external provider or a custom Service name/port.
+fact: {}
+fact_http_timeout_seconds: 30
+credentials:
+  loki:
+    api_token_secret_name: ""
+    api_token_secret_key_name: token
+    app_api_token_secret_name: ""
+    app_ca_cert_secret_name: ""
+    app_ca_cert_secret_key_name: ca.crt
+    app_cert_secret_name: ""
+    app_cert_secret_key_name: tls.crt
+    app_key_secret_name: ""
+    app_key_secret_key_name: tls.key
+    sys_api_token_secret_name: ""
+    sys_ca_cert_secret_name: ""
+    sys_ca_cert_secret_key_name: ca.crt
+    sys_cert_secret_name: ""
+    sys_cert_secret_key_name: tls.crt
+    sys_key_secret_name: ""
+    sys_key_secret_key_name: tls.key
+  victorialogs:
+    # Shared or domain-specific bearer/Basic credentials for the VictoriaLogs
+    # auth proxy. Each effective domain must use only one authentication mode.
+    api_token_secret_name: ""
+    api_token_secret_key_name: token
+    username_secret_name: ""
+    username_secret_key_name: username
+    password_secret_name: ""
+    password_secret_key_name: password
+    app_api_token_secret_name: ""
+    app_api_token_secret_key_name: token
+    app_username_secret_name: ""
+    app_username_secret_key_name: username
+    app_password_secret_name: ""
+    app_password_secret_key_name: password
+    app_ca_cert_secret_name: ""
+    app_ca_cert_secret_key_name: ca.crt
+    app_cert_secret_name: ""
+    app_cert_secret_key_name: tls.crt
+    app_key_secret_name: ""
+    app_key_secret_key_name: tls.key
+    sys_api_token_secret_name: ""
+    sys_api_token_secret_key_name: token
+    sys_username_secret_name: ""
+    sys_username_secret_key_name: username
+    sys_password_secret_name: ""
+    sys_password_secret_key_name: password
+    sys_ca_cert_secret_name: ""
+    sys_ca_cert_secret_key_name: ca.crt
+    sys_cert_secret_name: ""
+    sys_cert_secret_key_name: tls.crt
+    sys_key_secret_name: ""
+    sys_key_secret_key_name: tls.key
+  prometheus:
+    api_token_secret_name: ""
+    ca_cert_secret_name: ""
+    ca_cert_secret_key_name: ca.crt
+    cert_secret_name: ""
+    cert_secret_key_name: tls.crt
+    key_secret_name: ""
+    key_secret_key_name: tls.key
+loki:
+  loki_cluster: ""
+prometheus:
+  prometheus_url: ""
+  prometheus_cluster: ""
+  prometheus_checks_enabled: true
+  prometheus_hostname_label: "net_host_name"
+  prometheus_tenants: ""
+syslog_formatter: "logqlsyslogcw"
+kernel_logs_only: true
+ib_metrics_query: >-
+  sum by (net_host_name, device) (increase(node_infiniband_link_downed_total{{cluster='{}'}}[10m]) > 0)
+eth_metrics_query: >-
+  sum by (net_host_name, device) (increase(node_network_carrier_changes_total{{cluster='{}', device=~'en.*'}}[10m]) > 0)
+health_check_query: >-
+  sum by (net_host_name, device) (increase(node_network_carrier_changes_total{{cluster='{}', device=~'en.*'}}[10m]) > 0)
+victorialogs_http_timeout_seconds: 30
+logql_lookback_timewindow_duration_minutes:  30
+logql_applog_grace_time_seconds:  60
+syslogindex_enabled: false
+# Log fetch optimization (feature flag, disabled by default)
+log_fetch_optimization_enabled: false
+# log_fetch_direction: "backward"
+# log_fetch_timeout_syslogs_seconds: 60
+# log_fetch_timeout_applogs_seconds: 60
+# log_fetch_timeout_slow_signals_seconds: 60
+loki_http_timeout_seconds: 30
+is_lepton_enabled: false
+lepton_worker_cluster_name: ""
+lepton_base_url: "http://lepton-cluster-api-server-service.cluster-api-server.svc.cluster.local:20864/api/v2/admin"
+
+# Straggler detection params (consumed by the moved fact_client on the NV side).
+# nvrx_straggler_threshold: 0.7
+# nvrx_straggler_score_types: "[0, 1]"
+# megatron_straggler_threshold: 0.85
+# megatron_straggler_score_types: "[0]"
+# megatron_straggler_infer_threshold_from_data: true
+
+grafana_dashboard:
+  enabled: false
+
+# §12.5 — cluster-internal-only posture for the Policy Engine -> NV HTTP hop.
+networkPolicy:
+  enabled: true
+  # Pod selector value (app.kubernetes.io/name) of the Policy Engine that may call /v1/attribution.
+  policyEngineName: anomaly-detection-isolator
+
+imagePullSecrets: []
+
+# Default Attribution builds target amd64 until arm64 qualification completes.
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+tolerations: []
+
+volumes: []
+
+volumeMounts: []
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  name: ""
+
+# Look at the README.md at ./deploy/helm/README.md
+enableExtendedLabelSelectors: false

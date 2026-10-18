@@ -1,0 +1,55 @@
+// Node-local syslog only. Shared application files have one separate reader.
+
+local.file_match "system_logs" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/var/log/syslog",
+		cluster     = "slurm",
+		component   = "journal",
+		host_node   = sys.env("K8S_NODE_NAME"),
+	}]
+}
+
+// The disposable topology pins e2e-a-0 to Kind's first worker and e2e-b-0 to
+// its second. Keep the mapping fail-closed: an unknown collector target is not
+// allowed to emit a guessed scheduler node identity.
+discovery.relabel "system_logs" {
+	targets = local.file_match.system_logs.targets
+
+	rule {
+		source_labels = ["host_node"]
+		regex         = ".*-worker"
+		target_label  = "node_name"
+		replacement   = "e2e-a-0"
+	}
+
+	rule {
+		source_labels = ["host_node"]
+		regex         = ".*-worker2"
+		target_label  = "node_name"
+		replacement   = "e2e-b-0"
+	}
+
+	rule {
+		source_labels = ["node_name"]
+		regex         = ".+"
+		action        = "keep"
+	}
+
+	rule {
+		regex  = "host_node"
+		action = "labeldrop"
+	}
+}
+
+loki.source.file "system_logs" {
+	targets               = discovery.relabel.system_logs.output
+	forward_to            = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+	endpoint {
+		url = "__LOG_PUSH_URL__"
+	}
+	external_labels = {}
+}

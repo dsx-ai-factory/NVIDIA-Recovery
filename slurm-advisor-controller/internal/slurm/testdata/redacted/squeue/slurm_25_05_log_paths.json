@@ -1,0 +1,105 @@
+{
+  "jobs": [
+    {
+      "account": "account-redacted",
+      "array_job_id": {
+        "set": true,
+        "infinite": false,
+        "number": 0
+      },
+      "array_task_id": {
+        "set": false,
+        "infinite": false,
+        "number": 0
+      },
+      "cluster": "cluster-redacted",
+      "command": "/redacted/command",
+      "comment": "{\"APS\":{}}",
+      "dependency": "",
+      "end_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1722927660
+      },
+      "excluded_nodes": "",
+      "failed_node": "",
+      "hold": false,
+      "job_id": 9401,
+      "job_state": [
+        "RUNNING"
+      ],
+      "name": "workflow-redacted",
+      "node_count": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "nodes": "node001",
+      "partition": "partition-redacted",
+      "required_nodes": "",
+      "restart_cnt": 0,
+      "resv_name": "",
+      "start_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1722927600
+      },
+      "state_reason": "None",
+      "standard_input": "/dev/null",
+      "standard_output": "/redacted/logs/parent-%j.out",
+      "standard_error": "",
+      "stdin_expanded": "/dev/null",
+      "stdout_expanded": "/redacted/logs/parent-9401.out",
+      "stderr_expanded": "",
+      "submit_time": {
+        "set": true,
+        "infinite": false,
+        "number": 1722927590
+      },
+      "tasks": {
+        "set": true,
+        "infinite": false,
+        "number": 1
+      },
+      "tres_req_str": "cpu=1,mem=500M,node=1,billing=1",
+      "user_name": "user-redacted"
+    }
+  ],
+  "last_backfill": {
+    "set": true,
+    "infinite": false,
+    "number": 1722927600
+  },
+  "last_update": {
+    "set": true,
+    "infinite": false,
+    "number": 1722927605
+  },
+  "meta": {
+    "plugin": {
+      "type": "",
+      "name": "",
+      "data_parser": "data_parser/v0.0.43",
+      "accounting_storage": "accounting_storage/slurmdbd"
+    },
+    "client": {
+      "source": "",
+      "user": "user-redacted",
+      "group": "group-redacted"
+    },
+    "command": [
+      "squeue"
+    ],
+    "slurm": {
+      "version": {
+        "major": "25",
+        "micro": "8",
+        "minor": "05"
+      },
+      "release": "25.05.8",
+      "cluster": "cluster-redacted"
+    }
+  },
+  "errors": [],
+  "warnings": []
+}

@@ -1,0 +1,48 @@
+# Local values for the standalone Slurm Advisor Controller chart in the
+# e2e-dev Kind stack. Installed into the same slurm namespace as the Slinky
+# cluster and the local Heimdall umbrella release.
+#
+# Keep these values separate from stack-local.yaml. The advisor chart has a
+# restrictive values schema, so Helm rejects the umbrella chart's unrelated
+# values when both releases share one file.
+
+image:
+  repository: slurm-advisor-controller
+  tag: latest
+  pullPolicy: Never
+
+imagePullSecrets: []
+
+controller:
+  auditTrail:
+    destination: gateway
+    flushInterval: 5s
+  heimdallEndpoint: nvidia-recovery-api-gateway-internal:9090
+  mode: observe
+  acknowledgeSchedulerActions: false
+  logLevel: debug
+  pollInterval: 5s
+
+watchdog:
+  auditTrail:
+    destination: gateway
+    flushInterval: 5s
+  enabled: true
+  image:
+    repository: slurm-watchdog
+    tag: latest
+    pullPolicy: Never
+  mode: observe
+  acknowledgeSchedulerActions: false
+  logLevel: debug
+  pollInterval: 5s
+  # Leave time for real attribution advice while keeping fail-open recovery
+  # inside the scheduler oracle's seven-minute budget.
+  releaseTimeout: 2m
+
+sackd:
+  image:
+    repository: ghcr.io/slinkyproject/sackd
+    tag: 25.05-ubuntu24.04
+    pullPolicy: IfNotPresent
+  confServer: slurm-controller:6817

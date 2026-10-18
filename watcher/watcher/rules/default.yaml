@@ -1,0 +1,191 @@
+- name: default
+  workflow:
+  - name: straggler
+    type: log_query
+    bucket_by:
+    - job_id
+    - log_file_name
+    attributes:
+      query:
+        regex:
+        - event.name=training_iterations.*event.metrics.tflops
+    children:
+    - name: get_tflop
+      type: regex_parser
+      attributes:
+        regex: 'throughput per GPU \(TFLOP/s/GPU\): (\d+\.\d+)'
+    - name: detect_straggler
+      type: moving_avg
+      attributes:
+        cache_key: tflop_straggler
+        window_size: 100
+        base_percentile_threshold: 35
+        anomaly_percent_threshold: 10
+        alert_smoothing_count: 5
+        warmup_grace_period_secs: 600
+        min_window_size_for_detection: 10
+        min_interval_between_datapoints_secs: 30
+        skip_too_close_datapoints: false
+        reset_after_good_values: 5
+        notify_once: true
+        action:
+          send_message_eventbus: STRAGGLER
+          unique: true
+    - name: emit_tflop
+      type: emit_metric
+      attributes:
+        metric_name: WORKFLOW_JOB_THROUGHPUT
+        metric_type: gauge
+        enable_metric_cleanup: true
+  - name: noprogress
+    type: nooutput
+    bucket_by:
+    - job_id
+    - log_file_name
+    attributes:
+      cache_key: hang_nooutput
+      query:
+        regex:
+        - PRE_TRAINING: type=(start|event).*name=main_function.*event.metrics.world_size
+        - PRE_TRAINING: type=complete.*stop_event.name=span_stop.*name=distributed_code_initialization
+        - PRE_TRAINING: (Cycle:.*Event:.*rendezvous_started)
+        - PRE_TRAINING: (Executing the training task)|(Running TrainingRunner on device)|(JobTracker initialized.*job_id)
+        - TRAINING_LOOP: event.name=training_iterations.*event.metrics.tflops
+        - TRAINING_LOOP: event.name=training_metrics_update.*event.attributes.total_flops
+        - TRAINING_LOOP: event.name=training_iterations.*event.metrics.average_iteration_time
+        - TRAINING_LOOP: type=complete.*stop_event.name=span_stop.*name=checkpoint_load
+        - TRAINING_LOOP: type=complete.*stop_event.name=span_stop.*name=checkpoint_save_
+      interval:
+        PRE_TRAINING: 960
+        TRAINING_LOOP: 840
+      last_iteration_enabled: true
+      last_iteration_regex: iteration\s*(\d+)\s*\/\s*(\d+)\s*\|
+      last_iteration_operation_schema: '{current} > 0.99 * {total}'
+      false_positive_scan_cache_key: false_positive
+      false_positive_scan_timer: 600
+      action:
+        send_message_eventbus: HANGNOOUTPUT
+  - name: hangpushrecv
+    type: log_query
+    bucket_by:
+    - job_id
+    - log_file_name
+    attributes:
+      filter_events_by_jobid_before_processing: true
+      query:
+        regex:
+        - 'pushrecv: expected'
+        - ']: expecting'
+    children:
+    - name: hangpushrecv_action
+      type: simple_action
+      attributes:
+        action:
+          send_message_eventbus: HANGPUSHRECV
+          unique: true
+  - name: hang_app
+    type: log_query
+    bucket_by:
+    - job_id
+    - log_file_name
+    attributes:
+      filter_events_by_jobid_before_processing: true
+      query:
+        regex:
+        - botocore.*exceptions
+        - Disk quota exceeded
+        - with error 5
+        - NCCL WARN.*status=5
+        - NCCL WARN.*with error 5
+        - with error 12
+        - NCCL WARN.*status=12
+        - NCCL WARN.*with error 12
+    children:
+    - name: hang_app_action
+      type: simple_action
+      attributes:
+        action:
+          send_message_eventbus: HANGAPP
+          unique: true
+  - name: crash
+    type: log_query
+    bucket_by:
+    - job_id
+    - log_file_name
+    attributes:
+      filter_events_by_jobid_before_processing: true
+      query:
+        regex:
+        - segmentation fault
+        - illegal memory access was encountered
+        - illegal instruction was encountered
+        - Exited with exit code 1
+        - 'Watchdog caught collective operation timeout: WorkNCCL'
+        - 'RuntimeError: '
+        - 'CUDA error: '
+        - 'NCCL error: '
+        - 'torch.distributed..*Error: '
+        - 'error: Prolog hung on node'
+        - 'Signal: Aborted [(]6[)]'
+        - NCCL WARN Cuda failure 2.*out of memory
+        - AssertionError.*found NaN
+        - 'lm_loss: NAN'
+        - 'slurmstepd: error: pyxis: child.*failed with error code: 1'
+        - nvidia_resiliency_ext.*InjectedException$
+        - CUDA error.*uncorrectable
+        - NVLink error.*uncorrectable
+        - uncorrectable.*NVLink error
+        - uncorrectable.*CUDA error
+    children:
+    - name: crash_action
+      type: simple_action
+      attributes:
+        action:
+          send_message_eventbus: CRASH
+          unique: true
+  - name: chkpt_load
+    type: log_query
+    bucket_by:
+    - job_id
+    - log_file_name
+    attributes:
+      query:
+        regex:
+        - type=complete.*stop_event.name=span_stop.*name=checkpoint_load
+        - Done restoring checkpoint
+    children:
+    - name: chkpt_load_action
+      type: simple_action
+      attributes:
+        action:
+          send_message_eventbus: CHECKPOINTLOAD
+          unique: false
+  - name: chkpt_save
+    type: log_query
+    bucket_by:
+    - job_id
+    - log_file_name
+    attributes:
+      query:
+        regex:
+        - type=complete.*stop_event.name=span_stop.*name=checkpoint_save_
+        - Done saving distributed checkpoint
+    children:
+    - name: chkpt_save_action
+      type: simple_action
+      attributes:
+        action:
+          send_message_eventbus: CHECKPOINTSAVE
+          unique: false
+  - name: synthetic_application_log_events
+    type: log_query
+    attributes:
+      query:
+        regex:
+        - heartbeat_application_logs
+    children:
+    - name: emit_synthetic_application_log_metric
+      type: emit_metric
+      attributes:
+        metric_name: E2E_SYNTHETIC_APPLICATION_LOG_RCVD
+        metric_type: counter

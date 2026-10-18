@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.metrics.controller.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "slurm-advisor-controller.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slurm-advisor-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "slurm-advisor-controller.controllerSelectorLabels" . | nindent 4 }}
+  ports:
+    - name: ctrl-metrics
+      port: {{ .Values.metrics.controller.port }}
+      targetPort: ctrl-metrics
+      protocol: TCP
+{{- end }}
+{{- if and .Values.watchdog.enabled .Values.metrics.watchdog.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "slurm-advisor-controller.watchdogFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slurm-advisor-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: watchdog
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "slurm-advisor-controller.watchdogSelectorLabels" . | nindent 4 }}
+  ports:
+    - name: watch-metrics
+      port: {{ .Values.metrics.watchdog.port }}
+      targetPort: watch-metrics
+      protocol: TCP
+{{- end }}

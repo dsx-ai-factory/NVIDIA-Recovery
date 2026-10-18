@@ -1,0 +1,104 @@
+service:
+  log_level: info
+  stale_job_scan_frequency_seconds: 300
+  stale_job_threshold_seconds: 300
+  stale_job_cleanup_enabled: false
+  advice_enabled: false
+  advice_management_enabled: false
+  # ADI-trigger re-home: JM emits AttributionRequest to ADI once ARM is removed (default off until cutover).
+  adi_attribution_request_emit_enabled: false
+  adi_straggler_emit_enabled: false
+  recovery_notifications_enabled: false
+  exclusion_node_stickiness_enabled: true
+  job_end_event_generation_enabled: true
+  environment: "prod"
+  notification_service_url: "http://nvidia-recovery-notifications:8080"
+  audit_trail:
+    max_batch_size: 100
+    max_buffer_size: 1000
+    flush_interval_seconds: 30
+  system_max_requeue_times: 75
+  checkpoint_based_requeue_stop_threshold: 3
+  requeue_early_stop_scan_frequency_seconds: 60
+  requeue_early_stop_threshold_seconds: 600
+  requeue_on_completion: false
+  guardrail_rules: []
+
+  job_state_based_auto_resume_time_window_secs: 300
+  job_state_based_auto_resume_threshold_secs: 150
+  job_state_based_auto_resume_scan_interval_secs: 30
+
+  # DAG dependency support configuration
+  dag_support:
+    enabled: true  # Disabled by default; when enabled, job manager will register and evaluate DAG dependencies
+    action_timeout_seconds: 120  # Timeout before a stuck IN_PROGRESS DAG action is reconciled
+    retry_scan_frequency_seconds: 60  # How often the periodic task scans for timed-out DAG actions
+
+  attribution_insight_config:
+    confirmed:
+      insight: "No action is needed. Heimdall has already requeued the job for you, excluding the bad node and reallocating a healthy one for the new run."
+    temporary:
+      insight: "No action is needed at this time. Heimdall has already requeued the job for you, excluding the potentially bad node, and is actively verifying the root cause for your job."
+    none:
+      insight: "Heimdall has already requeued the job for you. But manual intervention may be required to resolve the issue."
+
+  attribution_summary_config:
+    infra:
+      summary: "Job failed due to infrastructure issues."
+    potential_infra:
+      summary: "Job failed due to a potential infrastructure issue."
+    not_infra:
+      summary: "Job failed but not due to infrastructure issues."
+
+  # Kubernetes leader election configuration
+  # This enables leader election among multiple job-manager instances
+  # to ensure only one instance performs leader-specific tasks at a time
+  # If this section is omitted, leader election is disabled and all instances act as leaders
+  # kubernetes_leader_election:
+  #   lease_name: "job-manager-leader-lease"
+    # lease_duration_seconds: 5  # Default: 5
+    # renew_deadline_seconds: 3  # Default: 3
+    # retry_period_seconds: 1     # Default: 1
+    # in_cluster: true            # Default: true - Use in-cluster config when running in K8s
+    # kubeconfig_path: "~/.kube/config"  # Only used if in_cluster is false
+
+  # Storage configuration
+  storage:
+    mode: MYSQL
+
+    sql:
+      host: localhost
+      port: 3306
+      username: aps_test
+      password: aps_test
+      database_name: aps_workflow_db
+
+  # HTTP endpoint configuration
+  http:
+    host: "0.0.0.0"
+    port: 8080
+
+  # Message bus configuration
+  event_bus:
+    host: localhost
+    username: "guest"
+    password: "guest"
+    vhost: "/"
+
+    workflow_controller_exchange: "test_wc_eventbus_exchange"
+    job_queue: "test_job_queue"
+    job_routing_key: "test.job.updates"
+
+    anomaly_exchange: "anomaly_exchange"
+    anomaly_queue: "test_anomaly_queue"
+    anomaly_routing_key: "job.anomaly.*"
+    anomaly_queue_delivery_retry_delay_secs: 10
+    anomaly_dead_letter_routing_key: "dead_letter.job.anomaly"
+    anomaly_dead_letter_redelivery_routing_key: "job.redeliver"
+
+    anomaly_isolator_exchange: "aie_eventbus_exchange"
+    anomaly_attribution_queue: "anomaly_attribution_queue"
+    anomaly_attribution_routing_key: "anomaly.isolation.bad_nodes"
+
+    adi_attribution_request_exchange: "attribution_request_exchange"
+    adi_attribution_request_routing_key: "job.updates.attribution_request"

@@ -1,0 +1,28 @@
+# NVIDIA copy-pr-bot; dsx-ai-factory CODEOWNERS team roster verified 2026-10-14.
+# Refresh both lists when membership changes. Never leave either override empty.
+# See docs/governance/ci-approval.md for deployment verification requirements.
+enabled: true
+auto_sync_draft: false
+auto_sync_ready: true
+additional_trustees: []
+additional_vetters: []
+trustees_override:
+  - ajaymh
+  - alwnv
+  - DorrinPk
+  - erbriones
+  - ian-gibbs
+  - jasonsewall
+  - rlizzo
+  - shamisp
+  - vpunuqv
+vetters_override:
+  - ajaymh
+  - alwnv
+  - DorrinPk
+  - erbriones
+  - ian-gibbs
+  - jasonsewall
+  - rlizzo
+  - shamisp
+  - vpunuqv

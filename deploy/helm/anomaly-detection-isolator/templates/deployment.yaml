@@ -1,0 +1,87 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "anomaly-detection-isolator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection-isolator.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "anomaly-detection-isolator.selectorLabels" . | nindent 6 }}
+  replicas: {{ .Values.replicas }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        prometheus.io/port: "{{ .Values.port }}"
+        prometheus.io/scrape: "true"
+        ad.datadoghq.com/{{ template "anomaly-detection-isolator.name" . }}.check_names: '["openmetrics"]'
+        ad.datadoghq.com/{{ template "anomaly-detection-isolator.name" . }}.init_configs: '[{}]'
+        ad.datadoghq.com/{{ template "anomaly-detection-isolator.name" . }}.instances: '[{"prometheus_url": "http://%%host%%:{{ .Values.port }}/metrics",
+          "namespace": "nvidia_recovery.{{ .Release.Namespace }}.{{ template "anomaly-detection-isolator.name" . }}", "metrics": ["adi_*", "http_requests_*"]}]'
+      labels:
+        {{- include "anomaly-detection-isolator.labels" . | nindent 8 }}
+    spec:
+      {{- with (default .Values.global.imagePullSecrets .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ template "anomaly-detection-isolator.serviceAccountName" . }}
+      automountServiceAccountToken: {{- if eq (include "anomaly-detection-isolator.serviceAccountName" . | trim) "default" }} false{{- else }} true{{- end }}
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: {{ template "anomaly-detection-isolator.name" . }}
+        env:
+        - name: CONFIG_FILE_PATH
+          value: /config/settings.env
+        {{- if and .Values.credentials.rabbitmq.secret_name .Values.credentials.rabbitmq.secret_key_name }}
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.rabbitmq.secret_name }}
+              key: {{ .Values.credentials.rabbitmq.secret_key_name }}
+        {{- end }}
+        {{- if (((.Values.global).otelcollector).enabled) }}
+        {{- include "heimdall.otelEnv" . | nindent 8 }}
+        {{- end }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          privileged: false
+        command:
+{{ .Values.command | toYaml | indent 12 }}
+        image: {{ include "anomaly-detection-isolator.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.port }}
+          name: metrics
+        resources:
+{{ .Values.resources | toYaml | indent 12 }}
+        volumeMounts:
+            - mountPath: "/config"
+              name: config
+            {{- with .Values.volumeMounts }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ template "anomaly-detection-isolator.fullname" . }}-config
+        {{- with .Values.volumes }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with (default .Values.global.nodeSelector .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.global.tolerations .Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

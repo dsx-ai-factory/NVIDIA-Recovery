@@ -1,0 +1,56 @@
+name: Publish Test Summary
+description: Render JUnit reports and post a pull request comment for this run.
+
+inputs:
+  reports-path:
+    description: Directory containing downloaded artifacts with junit.xml files.
+    required: true
+  github-token:
+    description: GitHub token with pull requests write permission.
+    required: true
+  pull-request-number:
+    description: Pull request number that receives the summary comment.
+    required: true
+  source-head-sha:
+    description: Commit tested by the workflow.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Render JUnit summary
+      id: render
+      shell: bash
+      env:
+        REPORTS_PATH: ${{ inputs.reports-path }}
+      run: |
+        set -euo pipefail
+        summary_path="${RUNNER_TEMP}/e2e-junit-summary.md"
+        python3 "${GITHUB_WORKSPACE}/scripts/ci/render-junit-summary.py" \
+          "$REPORTS_PATH" \
+          --output "$summary_path"
+        echo "summary-path=$summary_path" >> "$GITHUB_OUTPUT"
+
+    - name: Post pull request comment
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        JUNIT_SUMMARY_PATH: ${{ steps.render.outputs.summary-path }}
+        PULL_REQUEST_NUMBER: ${{ inputs.pull-request-number }}
+        SOURCE_HEAD_SHA: ${{ inputs.source-head-sha }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$PULL_REQUEST_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error::Invalid pull request number"
+          exit 1
+        fi
+
+        repository_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+        workflow_run_url="${repository_url}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}"
+        printf '\nCommit [%s](%s/commit/%s) · [Open E2E workflow run](%s)\n' \
+          "${SOURCE_HEAD_SHA:0:7}" "$repository_url" "$SOURCE_HEAD_SHA" "$workflow_run_url" \
+          >> "$JUNIT_SUMMARY_PATH"
+
+        gh pr comment "$PULL_REQUEST_NUMBER" \
+          --repo "$GITHUB_REPOSITORY" \
+          --body-file "$JUNIT_SUMMARY_PATH"

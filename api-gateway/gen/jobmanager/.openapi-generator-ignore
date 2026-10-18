@@ -1,0 +1,5 @@
+.gitignore
+.travis.yml
+git_push.sh
+docs/
+test/

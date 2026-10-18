@@ -1,0 +1,18 @@
+# Opt-in overlay for the Kubernetes ServiceAccount authentication smoke.
+#
+# This replaces the local stack's insecure gateway mode only when
+# E2E_KUBERNETES_SERVICE_AUTH_SMOKE is enabled. It intentionally uses the
+# same namespace and controller identity as the Slinky advisor-observe stack.
+api-gateway:
+  # TokenReview authenticates the internal listener; this smoke has no OIDC/JWT provider.
+  externalService:
+    enabled: false
+  auth:
+    insecure: false
+    kubernetes:
+      enabled: true
+      audience: nvidia-recovery-api-gateway
+      expectedServiceAccount: system:serviceaccount:slurm:slurm-advisor-controller
+  serviceAccount:
+    create: true
+    name: nvidia-recovery-api-gateway-tokenreviewer

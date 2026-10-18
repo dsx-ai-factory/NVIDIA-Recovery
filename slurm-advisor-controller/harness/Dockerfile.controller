@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+ARG BASE_IMAGE=slurm-advisor-controller-slurm-base:dev
+
+FROM golang:1.27.1@sha256:f44f6e88636cfb311f9ebace870ded69d943f227bb3cb27d32ffd84ea18c43ea AS controller-build
+
+WORKDIR /src
+COPY api-gateway ./api-gateway
+COPY slurm-advisor-controller ./slurm-advisor-controller
+
+RUN cd slurm-advisor-controller \
+    && go build -o /out/slurm-advisor-controller ./cmd/slurm-advisor-controller \
+    && go build -o /out/mock-heimdall-gateway ./cmd/mock-heimdall-gateway
+
+FROM ${BASE_IMAGE}
+
+LABEL org.opencontainers.image.title="slurm-advisor-controller-harness" \
+      org.opencontainers.image.description="Controller and mock Heimdall image for the Slurm advisor controller harness"
+
+COPY --from=controller-build --chmod=0755 /out/slurm-advisor-controller /usr/local/bin/slurm-advisor-controller
+COPY --from=controller-build --chmod=0755 /out/mock-heimdall-gateway /usr/local/bin/mock-heimdall-gateway

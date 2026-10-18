@@ -1,0 +1,48 @@
+controller:
+  # Exercise Advice-driven recovery throughout the default E2E deployment.
+  enableEagerRequeue: false
+  auditTrail:
+    destination: gateway
+    flushInterval: 5s
+  pollInterval: 5s
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+watchdog:
+  auditTrail:
+    destination: gateway
+    flushInterval: 5s
+  pollInterval: 5s
+  # Leave enough time for the real Watcher -> FACT -> Advisor path to publish
+  # node constraints before the local fail-open watchdog releases the job.
+  releaseTimeout: 2m
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+sackd:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+initContainer:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      cpu: 20m
+      memory: 32Mi

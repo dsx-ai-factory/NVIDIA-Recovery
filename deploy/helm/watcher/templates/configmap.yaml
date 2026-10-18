@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.config -}}
+{{- include "watcher.validateLogQueryConnection" . -}}
+{{- $service := deepCopy .Values.config.service -}}
+{{- $auditTrail := $service.audit_trail -}}
+{{- if not (hasKey $auditTrail "destination") -}}
+{{- /* Match the sibling Notifications chart's default fullname; custom names
+     and ports require an explicit audit destination. */ -}}
+{{- $notificationsName := .Release.Name -}}
+{{- if not (contains "notifications" .Release.Name) -}}
+{{- $notificationsName = printf "%s-notifications" .Release.Name -}}
+{{- end -}}
+{{- $_ := set $auditTrail "destination" (printf "http://%s:8080/v1/audit/events" ($notificationsName | trunc 63 | trimSuffix "-")) -}}
+{{- else if not $auditTrail.destination -}}
+{{- $_ := unset $auditTrail "destination" -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "watcher.fullname" . }}-config
+  labels:
+    {{- include "watcher.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    metrics_cleanup_threshold_secs: {{ .Values.config.metrics_cleanup_threshold_secs | toYaml | nindent 4 | trim }}
+    event_source: {{ .Values.config.event_source | toYaml | nindent 4 | trim }}
+    service:
+      {{ $service | toYaml | nindent 6 | trim }}
+    datasources:
+      {{- /* Global provider blocks own connection identity and native queries.
+           Legacy policy aliases may still supply polling settings only. */}}
+      {{- $datasources := deepCopy .Values.config.datasources }}
+      {{- if hasKey $datasources "loki" }}
+      {{- $policy := get $datasources "log_query_policy" | default dict }}
+      {{- $_ := set $datasources "log_query_policy" (mergeOverwrite (deepCopy $policy) $datasources.loki) }}
+      {{- $_ := unset $datasources "loki" }}
+      {{- end }}
+      {{- if hasKey $datasources "rabbitmq" }}
+      {{- $_ := set $datasources.rabbitmq.publisher "host" (include "watcher.rabbitmqHost" .) }}
+      {{- end }}
+      {{- $logQuery := get $datasources "log_query" | default dict }}
+      {{- $_ := set $logQuery "backend" (include "watcher.logQueryBackend" .) }}
+      {{- $providers := get $logQuery "providers" | default dict }}
+      {{- $globalLogQuery := ((.Values.global).log_query) | default dict }}
+      {{- $globalProviders := $globalLogQuery.providers | default dict }}
+      {{- range $backend := list "loki" "victorialogs" }}
+      {{- $provider := get $providers $backend | default dict }}
+      {{- $globalProvider := get $globalProviders $backend | default dict }}
+      {{- $application := $globalProvider.application | default dict }}
+      {{- if $application.url }}
+      {{- $_ := set $provider "queries" (($globalProvider.queries | default dict).watcher | default dict) }}
+      {{- range $key := list "url" "tenants" "org_id" "account_id" "project_id" "require_tenant" }}
+      {{- if hasKey $application $key }}
+      {{- $value := get $application $key }}
+      {{- if or (not (kindIs "string" $value)) $value }}
+      {{- $_ := set $provider $key $value }}
+      {{- end }}
+      {{- end }}
+      {{- end }}
+      {{- $_ := set $providers $backend $provider }}
+      {{- end }}
+      {{- end }}
+      {{- $_ := set $logQuery "providers" $providers }}
+      {{- $_ := set $datasources "log_query" $logQuery }}
+      {{- $selectedProvider := get $globalProviders (include "watcher.logQueryBackend" .) | default dict }}
+      {{- if and (eq .Values.config.event_source "rabbitmq") (not ($selectedProvider.application | default dict).url) }}
+      {{- $_ := unset $datasources "log_query" }}
+      {{- end }}
+      {{ $datasources | toYaml | nindent 6 | trim }}
+{{- end -}}

@@ -1,0 +1,81 @@
+[project]
+name = "watcher"
+version = "0.1.0"
+description = "A tool to query log events and forward anomalies to Eventbus"
+requires-python = ">=3.12"
+dependencies = [
+    "annotated-types",
+    "asyncio",
+    "cachetools",
+    "fastapi",
+    "h11",
+    "httpcore>=1.0.6",
+    "httpx>=0.28.1",
+    "httpx-retries>=0.4",
+    "numpy",
+    "opentelemetry-api>=1.30.0,<2.0.0",
+    "opentelemetry-exporter-otlp>=1.30.0,<2.0.0",
+    "opentelemetry-proto",
+    "opentelemetry-sdk>=1.30.0,<2.0.0",
+    "pika>=1.4.4",
+    "prometheus-client>=0.20.0",
+    "prometheus-fastapi-instrumentator",
+    "pydantic",
+    "pydantic-core",
+    "pydantic-settings>=2.7.1",
+    "pytest-asyncio",
+    "pytz",
+    "pyyaml",
+    "requests",
+    "uuid6>=2024.1.12",
+    "uvicorn",
+    "recovery-libs",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-mock",
+    "mypy",
+    "types-pyyaml",
+    "types-requests",
+    "types-cachetools",
+    "types-pytz",
+]
+
+[project.scripts]
+watcher = "watcher.main:main"
+validate-config = "watcher.validate_config:main"
+
+[tool.uv.sources]
+recovery-libs = { workspace = true }
+
+[tool.mypy]
+explicit_package_bases = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+plugins = ["pydantic.mypy"]
+exclude = [
+    "tests/",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["tests"]
+markers = [
+    "nightly: tests excluded from pull requests and main pushes; included in nightly and tagged-release suites",
+    "unit: marks tests as unit tests",
+    "json: marks tests related to JSON serialization/deserialization",
+    "validation: marks tests that validate input/configuration values",
+    "regression: tests that reproduce a specific fixed bug, guarding against reintroduction",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

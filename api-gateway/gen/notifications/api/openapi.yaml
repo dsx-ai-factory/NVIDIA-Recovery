@@ -1,0 +1,1882 @@
+openapi: 3.1.0
+info:
+  description: NVIDIA Recovery Notifications
+  title: Notifications
+  version: 1.0.0
+servers:
+- url: /
+paths:
+  /metrics:
+    get:
+      description: Endpoint that serves Prometheus metrics.
+      operationId: metrics
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: Metrics
+  /notification:
+    post:
+      operationId: notificationCreate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationCreate"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPublic"
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Create a new notification
+      tags:
+      - notifications
+  /notifications:
+    get:
+      operationId: notificationsGet
+      parameters:
+      - description: The id of the notification.
+        explode: true
+        in: query
+        name: id
+        required: false
+        schema:
+          nullable: true
+          type: string
+        style: form
+      - description: The recipient the notifications were sent to.
+        explode: true
+        in: query
+        name: recipient
+        required: false
+        schema:
+          nullable: true
+          type: string
+        style: form
+      - description: The job_id associated with the job.
+        explode: true
+        in: query
+        name: job_id
+        required: false
+        schema:
+          nullable: true
+          type: string
+        style: form
+      - description: The maximum number of records to return.
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          description: The maximum number of records to return.
+          title: Limit
+          type: integer
+        style: form
+      - description: The offset to start the records from.
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          description: The offset to start the records from.
+          title: Offset
+          type: integer
+        style: form
+      - description: Only show notifications created after this time.
+        explode: true
+        in: query
+        name: created_after
+        required: false
+        schema:
+          format: date-time
+          nullable: true
+          type: string
+        style: form
+      - description: Only show notifications created before this time.
+        explode: true
+        in: query
+        name: created_before
+        required: false
+        schema:
+          format: date-time
+          nullable: true
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Items_NotificationPublic_"
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Get notifications
+      tags:
+      - notifications
+  /user-preferences/{username}:
+    get:
+      operationId: userPreferencesGet
+      parameters:
+      - explode: false
+        in: path
+        name: username
+        required: true
+        schema:
+          title: Username
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferencesPublic"
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Retrieve a user's notification preferences.
+      tags:
+      - preferences
+    put:
+      operationId: userPreferencesPut
+      parameters:
+      - explode: false
+        in: path
+        name: username
+        required: true
+        schema:
+          title: Username
+          type: string
+        style: simple
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPreferencesPut"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferencesPublic"
+          description: Successful Response
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferencesPublic"
+          description: Successfully created.
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Create or update a user's notification preferences.
+      tags:
+      - preferences
+  /v1/audit/events:
+    get:
+      operationId: auditEventsGet
+      parameters:
+      - description: Audit event level to match exactly.
+        explode: true
+        in: query
+        name: event_level
+        required: false
+        schema:
+          $ref: "#/components/schemas/AuditEventLevel"
+        style: form
+      - description: Producer service to match.
+        explode: true
+        in: query
+        name: event_producer
+        required: false
+        schema:
+          nullable: true
+          type: string
+        style: form
+      - description: Event type to match exactly.
+        explode: true
+        in: query
+        name: event_type
+        required: false
+        schema:
+          nullable: true
+          type: string
+        style: form
+      - description: "Minimum Unix-microsecond event timestamp, inclusive."
+        explode: true
+        in: query
+        name: min_event_produced_at
+        required: false
+        schema:
+          format: int64
+          nullable: true
+          type: integer
+        style: form
+      - description: "Maximum Unix-microsecond event timestamp, inclusive."
+        explode: true
+        in: query
+        name: max_event_produced_at
+        required: false
+        schema:
+          format: int64
+          nullable: true
+          type: integer
+        style: form
+      - description: Maximum number of events to return.
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 100
+          description: Maximum number of events to return.
+          maximum: 100
+          minimum: 1
+          title: Limit
+          type: integer
+        style: form
+      - description: "Producer time order: asc or desc."
+        explode: true
+        in: query
+        name: sort_by
+        required: false
+        schema:
+          default: event_produced_at:desc
+          description: "Producer time order: asc or desc."
+          title: Sort By
+          type: string
+        style: form
+      - description: Opaque cursor returned for an adjacent page.
+        explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          nullable: true
+          type: string
+        style: form
+      - description: NVIDIA Recovery job ID; exclusive with job_id.
+        explode: true
+        in: query
+        name: heimdall_job_id
+        required: false
+        schema:
+          nullable: true
+          type: string
+        style: form
+      - description: Scheduler job ID; omit attempt_index for all attempts.
+        explode: true
+        in: query
+        name: job_id
+        required: false
+        schema:
+          minLength: 1
+          nullable: true
+          pattern: \S
+          type: string
+        style: form
+      - description: Scheduler job attempt; requires job_id.
+        explode: true
+        in: query
+        name: attempt_index
+        required: false
+        schema:
+          minimum: 0
+          nullable: true
+          type: integer
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEventPage"
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Query audit events
+      tags:
+      - audit
+    post:
+      operationId: auditEventsCreate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProducerAuditEventBatch"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEventIngestionResponse"
+          description: The batch acceptance result.
+        "413":
+          description: The batch contains too many events.
+        "429":
+          description: The overloaded audit event store rejected the batch.
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Ingest a batch of audit events
+      tags:
+      - audit
+components:
+  schemas:
+    AnomalyAttributionResult:
+      description: |-
+        Anomaly attribution result for job attempt.
+
+        Examples:
+            If `summary` and `insight` are provided, skip the detailed error attribution:
+
+                >>> message = AnomalyAttributionResult(
+                ...     job_id="12345",
+                ...     job_attempt_index=0,
+                ...     summary="A summary from job manager.",
+                ...     insight="Some insights from job manager.",
+                ...     anomaly_type="CRASH",
+                ...     error_attributions=[
+                ...         ErrorAttribution(
+                ...             job_execution_error=JobExecutionError(
+                ...                 error_message="random error message",
+                ...                 error_signature="random error signature",
+                ...             ),
+                ...             node_events=[
+                ...                 NodeEvent(
+                ...                     node="node_0",
+                ...                     exclusion_type="temporary",
+                ...                     error_attribution="system",
+                ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+                ...                 ),
+                ...                 NodeEvent(
+                ...                     node="node_1",
+                ...                     exclusion_type="confirmed",
+                ...                     error_attribution="hardware",
+                ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+                ...                 ),
+                ...             ],
+                ...         ),
+                ...     ],
+                ...     user="some-user",
+                ... )
+                >>> expected_message = '''\
+                ... Attribution for the anomaly of type 'CRASH' for job 12345(0).
+                ...
+                ... Summary:
+                ...   A summary from job manager.
+                ...
+                ... Insight:
+                ...   Some insights from job manager.
+                ... '''
+                >>> assert_equal(message.render_message(), expected_message)
+
+            If `summary` and `insight` are omitted, should display all the attribution info:
+
+                >>> message = AnomalyAttributionResult(
+                ...     job_id="12345",
+                ...     job_attempt_index=0,
+                ...     anomaly_type="CRASH",
+                ...     error_attributions=[
+                ...         ErrorAttribution(
+                ...             job_execution_error=JobExecutionError(
+                ...                 error_message="random error message",
+                ...                 error_signature="random error signature",
+                ...             ),
+                ...             node_events=[
+                ...                 NodeEvent(
+                ...                     node="node_0",
+                ...                     exclusion_type="temporary",
+                ...                     error_attribution="system",
+                ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+                ...                 ),
+                ...                 NodeEvent(
+                ...                     node="node_1",
+                ...                     exclusion_type="confirmed",
+                ...                     error_attribution="hardware",
+                ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+                ...                 ),
+                ...             ],
+                ...         ),
+                ...     ],
+                ...     user="some-user",
+                ... )
+                >>> expected_message = '''\
+                ... Attribution for the anomaly of type 'CRASH' for job 12345(0).
+                ...
+                ... Job execution error:
+                ...   Error message: random error message
+                ...   Error signature: random error signature
+                ...
+                ... Node attributions:
+                ...   node_0:
+                ...     exclusion type 'temporary'
+                ...     error attribution 'system'
+                ...     error attribution sources: ['APPLICATION_LOG', 'SYSLOG']
+                ...   node_1:
+                ...     exclusion type 'confirmed'
+                ...     error attribution 'hardware'
+                ...     error attribution sources: ['APPLICATION_LOG', 'SYSLOG']
+                ... '''
+                >>> assert_equal(message.render_message(), expected_message)
+
+            The `error_message` can be `None`:
+
+                >>> message_with_none = AnomalyAttributionResult(
+                ...     job_id="12345",
+                ...     job_attempt_index=0,
+                ...     anomaly_type="CRASH",
+                ...     error_attributions=[
+                ...         ErrorAttribution(
+                ...             job_execution_error=JobExecutionError(
+                ...                 error_message=None,
+                ...                 error_signature="random error signature",
+                ...             ),
+                ...             node_events=[
+                ...                 NodeEvent(
+                ...                     node="node_0",
+                ...                     exclusion_type="temporary",
+                ...                     error_attribution="system",
+                ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+                ...                 ),
+                ...                 NodeEvent(
+                ...                     node="node_1",
+                ...                     exclusion_type="confirmed",
+                ...                     error_attribution="hardware",
+                ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+                ...                 ),
+                ...             ],
+                ...         ),
+                ...     ],
+                ...     user="some-user",
+                ... )
+                >>> expected_message_with_none = '''\
+                ... Attribution for the anomaly of type 'CRASH' for job 12345(0).
+                ...
+                ... Job execution error:
+                ...   Error message:
+                ...   Error signature: random error signature
+                ...
+                ... Node attributions:
+                ...   node_0:
+                ...     exclusion type 'temporary'
+                ...     error attribution 'system'
+                ...     error attribution sources: ['APPLICATION_LOG', 'SYSLOG']
+                ...   node_1:
+                ...     exclusion type 'confirmed'
+                ...     error attribution 'hardware'
+                ...     error attribution sources: ['APPLICATION_LOG', 'SYSLOG']
+                ... '''
+                >>> assert_equal(message_with_none.render_message(), expected_message_with_none)
+      properties:
+        template_id:
+          default: /templates/AnomalyAttributionResult
+          enum:
+          - /templates/AnomalyAttributionResult
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        anomaly_type:
+          title: Anomaly Type
+          type: string
+        error_attributions:
+          items:
+            $ref: "#/components/schemas/ErrorAttribution"
+          type: array
+        user:
+          title: User
+          type: string
+        summary:
+          nullable: true
+          type: string
+        insight:
+          nullable: true
+          type: string
+      required:
+      - anomaly_type
+      - error_attributions
+      - job_attempt_index
+      - job_id
+      - user
+      title: AnomalyAttributionResult
+    AuditEvent:
+      description: An audit event visible through the query API.
+      example:
+        summary:
+          granularity: 6
+          description: description
+          title: title
+        event_type: event_type
+        payload:
+          key: ""
+        heimdall_job_id: heimdall_job_id
+        event_level: recovery
+        event_produced_at: 0
+        event_producer: event_producer
+      properties:
+        heimdall_job_id:
+          description: NVIDIA Recovery's internal identifier for the job.
+          title: Heimdall Job Id
+          type: string
+        event_producer:
+          description: The component that produced the event.
+          title: Event Producer
+          type: string
+        event_type:
+          description: The type of event.
+          title: Event Type
+          type: string
+        event_level:
+          $ref: "#/components/schemas/AuditEventLevel"
+        payload:
+          additionalProperties: {}
+          description: Event-specific structured data.
+          title: Payload
+        event_produced_at:
+          description: Producer emission time as Unix microseconds.
+          format: int64
+          title: Event Produced At
+          type: integer
+        summary:
+          $ref: "#/components/schemas/AuditEventHumanSummary"
+      required:
+      - event_level
+      - event_produced_at
+      - event_producer
+      - event_type
+      - heimdall_job_id
+      - payload
+      - summary
+      title: AuditEvent
+    AuditEventHumanSummary:
+      description: Human-readable descriptions of the audit event.
+      example:
+        granularity: 6
+        description: description
+        title: title
+      properties:
+        title:
+          description: Event title -- should be similar to the audit event type.
+          title: Title
+          type: string
+        description:
+          description: Concise description of the event.
+          title: Description
+          type: string
+        granularity:
+          $ref: "#/components/schemas/AuditEventHumanSummaryGranularityClass"
+      required:
+      - description
+      - granularity
+      - title
+      title: AuditEventHumanSummary
+    AuditEventHumanSummaryGranularityClass:
+      description: Supported granularity levels for an audit-event summary.
+      enum:
+      - 1
+      - 11
+      title: AuditEventHumanSummaryGranularityClass
+      type: integer
+    AuditEventIngestionResponse:
+      description: Result of accepting an audit-event batch.
+      example:
+        partial_success:
+          error_message: error_message
+          rejected_events: 1
+      properties:
+        partial_success:
+          $ref: "#/components/schemas/AuditEventPartialSuccess"
+      title: AuditEventIngestionResponse
+    AuditEventLevel:
+      description: Supported audit event levels.
+      enum:
+      - recovery
+      - operational
+      title: AuditEventLevel
+      type: string
+    AuditEventPage:
+      description: One page of audit events.
+      example:
+        cursor:
+          prev_cursor: prev_cursor
+          next_cursor: next_cursor
+        items:
+        - summary:
+            granularity: 6
+            description: description
+            title: title
+          event_type: event_type
+          payload:
+            key: ""
+          heimdall_job_id: heimdall_job_id
+          event_level: recovery
+          event_produced_at: 0
+          event_producer: event_producer
+        - summary:
+            granularity: 6
+            description: description
+            title: title
+          event_type: event_type
+          payload:
+            key: ""
+          heimdall_job_id: heimdall_job_id
+          event_level: recovery
+          event_produced_at: 0
+          event_producer: event_producer
+      properties:
+        cursor:
+          $ref: "#/components/schemas/AuditEventPageCursor"
+        items:
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+          type: array
+      required:
+      - cursor
+      - items
+      title: AuditEventPage
+    AuditEventPageCursor:
+      description: Opaque cursors for navigating between audit event pages.
+      example:
+        prev_cursor: prev_cursor
+        next_cursor: next_cursor
+      properties:
+        prev_cursor:
+          description: Cursor for the previous page; empty on the first page.
+          title: Prev Cursor
+          type: string
+        next_cursor:
+          description: "Cursor for the next page, or an empty string at the end."
+          title: Next Cursor
+          type: string
+      required:
+      - next_cursor
+      - prev_cursor
+      title: AuditEventPageCursor
+    AuditEventPartialSuccess:
+      description: Partial result; accepted equals submitted minus rejected.
+      example:
+        error_message: error_message
+        rejected_events: 1
+      properties:
+        rejected_events:
+          description: Number of rejected events.
+          minimum: 1.0
+          title: Rejected Events
+          type: integer
+        error_message:
+          description: Human-readable explanation of why events were rejected.
+          title: Error Message
+          type: string
+      required:
+      - error_message
+      - rejected_events
+      title: AuditEventPartialSuccess
+    BadNodesIsolated:
+      description: |-
+        Advice to exclude nodes from a job attempt has been issued.
+
+        Examples:
+            >>> message = BadNodesIsolated(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     bad_nodes={"aaa": ["a1", "a2"], "bbb": ["b1"]},
+            ...     non_isolated_nodes={"ccc": ["c1"], "ddd": ["d1", "d2"]},
+            ...     user="some-user",
+            ... )
+            >>> expected_message = '''\
+            ... Advice to exclude nodes {'aaa': ['a1', 'a2'], 'bbb': ['b1']} from job 456(7) (job name: some-job) issued.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Advice to isolate nodes for job 456 issued"
+            >>> assert_equal(message.render_title(), expected_title)
+      properties:
+        template_id:
+          default: /templates/BadNodesIsolated
+          enum:
+          - /templates/BadNodesIsolated
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        bad_nodes:
+          additionalProperties:
+            items:
+              type: string
+          title: Bad Nodes
+        non_isolated_nodes:
+          additionalProperties:
+            items:
+              type: string
+          title: Non Isolated Nodes
+        user:
+          title: User
+          type: string
+      required:
+      - bad_nodes
+      - job_attempt_index
+      - job_id
+      - job_name
+      - non_isolated_nodes
+      - user
+      title: BadNodesIsolated
+    ErrorAttribution:
+      description: A representation of an error attribution that's made of a JobExecutionError
+        and a list of NodeEvent and GlobalEvent.
+      properties:
+        template_id:
+          default: /partials/ErrorAttribution
+          enum:
+          - /partials/ErrorAttribution
+          title: Template Id
+          type: string
+        job_execution_error:
+          $ref: "#/components/schemas/JobExecutionError"
+        node_events:
+          items:
+            $ref: "#/components/schemas/NodeEvent"
+          type: array
+        global_events:
+          items:
+            $ref: "#/components/schemas/GlobalEvent"
+          nullable: true
+          type: array
+      required:
+      - job_execution_error
+      - node_events
+      title: ErrorAttribution
+    GlobalEvent:
+      description: "A representation of a global attribution event (job-level, not\
+        \ tied to specific nodes)."
+      properties:
+        template_id:
+          default: /partials/GlobalEvent
+          enum:
+          - /partials/GlobalEvent
+          title: Template Id
+          type: string
+        error_attribution:
+          title: Error Attribution
+          type: string
+        error_attribution_sources:
+          items:
+            type: string
+          type: array
+      required:
+      - error_attribution
+      - error_attribution_sources
+      title: GlobalEvent
+    GpuThroughputDropped:
+      description: |-
+        Show that autonomous recovery engine has found a straggler.
+
+        Examples:
+            >>> message = GpuThroughputDropped(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     event_type="SILLY",
+            ...     event_body="this is the event body",
+            ...     user="some-user",
+            ... )
+            >>> expected_message = '''\
+            ... Job 456(7) (some-job) `GPU throughput dropped`: `SILLY`.
+            ... Log: `this is the event body`
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Performance alert: GPU throughput dropped for job 456"
+            >>> assert_equal(message.render_title(), expected_title)
+
+            The `event_body` is optional:
+
+            >>> message = GpuThroughputDropped(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     event_type="SILLY",
+            ...     user="some-user",
+            ... )
+            >>> expected_message = '''\
+            ... Job 456(7) (some-job) `GPU throughput dropped`: `SILLY`.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+      properties:
+        template_id:
+          default: /templates/GpuThroughputDropped
+          enum:
+          - /templates/GpuThroughputDropped
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        event_type:
+          title: Event Type
+          type: string
+        event_body:
+          nullable: true
+          type: string
+        user:
+          title: User
+          type: string
+      required:
+      - event_type
+      - job_attempt_index
+      - job_id
+      - job_name
+      - user
+      title: GpuThroughputDropped
+    HTTPValidationError:
+      example:
+        detail:
+        - msg: msg
+          loc:
+          - ValidationError_loc_inner
+          - ValidationError_loc_inner
+          input: ""
+          ctx: "{}"
+          type: type
+        - msg: msg
+          loc:
+          - ValidationError_loc_inner
+          - ValidationError_loc_inner
+          input: ""
+          ctx: "{}"
+          type: type
+      properties:
+        detail:
+          items:
+            $ref: "#/components/schemas/ValidationError"
+          type: array
+      title: HTTPValidationError
+    InvalidJobConfig:
+      description: |-
+        Notify user that the job config is not compatible with NVIDIA Recovery's requirements.
+
+        Examples:
+            >>> message = InvalidJobConfig(
+            ...     job_id="456",
+            ...     job_attempt_index=0,
+            ...     job_name="some-job",
+            ...     reason="Invalid job log file name",
+            ...     user="some-person",
+            ... )
+            >>> expected_message = '''\
+            ... Job 456(0) (job name: some-job) has invalid configuration that's not compatible with NVIDIA Recovery's requirements.
+            ... Reason: Invalid job log file name.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Invalid configuration for job 456"
+            >>> assert_equal(message.render_title(), expected_title)
+      properties:
+        template_id:
+          default: /templates/InvalidJobConfig
+          enum:
+          - /templates/InvalidJobConfig
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        reason:
+          title: Reason
+          type: string
+        user:
+          title: User
+          type: string
+      required:
+      - job_attempt_index
+      - job_id
+      - job_name
+      - reason
+      - user
+      title: InvalidJobConfig
+    Items_NotificationPublic_:
+      example:
+        items:
+        - created_time: 2000-01-23T04:56:07.000+00:00
+          template_data:
+            job_id: job_id
+            template_id: /partials/JobRepr
+            job_attempt_index: 0
+          via_callback: PENDING
+          job_id: job_id
+          recipient: recipient
+          id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+          title: title
+          message: message
+          type: optional
+        - created_time: 2000-01-23T04:56:07.000+00:00
+          template_data:
+            job_id: job_id
+            template_id: /partials/JobRepr
+            job_attempt_index: 0
+          via_callback: PENDING
+          job_id: job_id
+          recipient: recipient
+          id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+          title: title
+          message: message
+          type: optional
+        total_items: 0
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/NotificationPublic"
+          type: array
+        total_items:
+          title: Total Items
+          type: integer
+      required:
+      - items
+      - total_items
+      title: "Items[NotificationPublic]"
+    JobExecutionError:
+      description: A representation of a job execution error.
+      properties:
+        template_id:
+          default: /partials/JobExecutionError
+          enum:
+          - /partials/JobExecutionError
+          title: Template Id
+          type: string
+        error_message:
+          nullable: true
+          type: string
+        error_signature:
+          nullable: true
+          type: string
+      title: JobExecutionError
+    JobName:
+      description: |-
+        A representation of the job name.
+
+        The default template just shows the job name, but it can be overridden to show more interesting representations.
+      properties:
+        template_id:
+          default: /partials/JobName
+          enum:
+          - /partials/JobName
+          title: Template Id
+          type: string
+        job_name:
+          title: Job Name
+          type: string
+      required:
+      - job_name
+      title: JobName
+    JobRepr:
+      description: |-
+        A representation of a job, including id and attempt index.
+
+        Examples:
+            >>> JobRepr(job_id="456", job_attempt_index=7).render_message()
+            '456(7)'
+      example:
+        job_id: job_id
+        template_id: /partials/JobRepr
+        job_attempt_index: 0
+      properties:
+        template_id:
+          default: /partials/JobRepr
+          enum:
+          - /partials/JobRepr
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+      required:
+      - job_attempt_index
+      - job_id
+      title: JobRepr
+    JobRequeued:
+      description: |-
+        Advice to requeue a job attempt has been issued.
+
+        Examples:
+            >>> message = JobRequeued(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     event_type="SILLY",
+            ...     event_body="this is the event body",
+            ...     user="some-user",
+            ... )
+            >>> expected_message = '''\
+            ... Advice to requeue job 456(7) (job name: some-job) issued.
+            ... Reason: `SILLY`.
+            ... Log: `this is the event body`.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Advice to requeue job 456 issued"
+            >>> assert_equal(message.render_title(), expected_title)
+
+            The `event_body` is optional:
+
+            >>> message = JobRequeued(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     event_type="SILLY",
+            ...     user="some-user",
+            ... )
+            >>> expected_message = '''\
+            ... Advice to requeue job 456(7) (job name: some-job) issued.
+            ... Reason: `SILLY`.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+      properties:
+        template_id:
+          default: /templates/JobRequeued
+          enum:
+          - /templates/JobRequeued
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        event_type:
+          title: Event Type
+          type: string
+        event_body:
+          nullable: true
+          type: string
+        user:
+          title: User
+          type: string
+      required:
+      - event_type
+      - job_attempt_index
+      - job_id
+      - job_name
+      - user
+      title: JobRequeued
+    JobStopped:
+      description: |-
+        Advice to stop a job attempt has been issued.
+
+        Examples:
+            >>> message = JobStopped(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     event_type="SILLY",
+            ...     event_body="this is the event body",
+            ...     user="some-user",
+            ... )
+            >>> expected_message = '''\
+            ... Advice to stop job 456(7) (job name: some-job) issued.
+            ... Reason: `SILLY`.
+            ... Log: `this is the event body`.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Advice to stop job 456 issued"
+            >>> assert_equal(message.render_title(), expected_title)
+
+            The `event_body` is optional:
+
+            >>> message = JobStopped(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     event_type="SILLY",
+            ...     user="some-user",
+            ... )
+            >>> expected_message = '''\
+            ... Advice to stop job 456(7) (job name: some-job) issued.
+            ... Reason: `SILLY`.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+      properties:
+        template_id:
+          default: /templates/JobStopped
+          enum:
+          - /templates/JobStopped
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        event_type:
+          title: Event Type
+          type: string
+        event_body:
+          nullable: true
+          type: string
+        user:
+          title: User
+          type: string
+      required:
+      - event_type
+      - job_attempt_index
+      - job_id
+      - job_name
+      - user
+      title: JobStopped
+    ManualJobPaused:
+      description: |-
+        A user has manually paused a job via cockpit.
+
+        Examples:
+            >>> message = ManualJobPaused(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     triggerer=User(user="job-killer-guy"),
+            ...     user="some-person",
+            ... )
+            >>> expected_message = '''\
+            ... Job 456(7) (job name: some-job) has been `PAUSED` manually via Cockpit by job-killer-guy.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Manually paused job 456"
+            >>> assert_equal(message.render_title(), expected_title)
+      properties:
+        template_id:
+          default: /templates/ManualJobPaused
+          enum:
+          - /templates/ManualJobPaused
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        triggerer:
+          $ref: "#/components/schemas/User"
+        user:
+          title: User
+          type: string
+      required:
+      - job_attempt_index
+      - job_id
+      - job_name
+      - triggerer
+      - user
+      title: ManualJobPaused
+    ManualJobRequeued:
+      description: |-
+        A user has manually requeued a job via cockpit.
+
+        Examples:
+            >>> message = ManualJobRequeued(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     triggerer=User(user="job-killer-guy"),
+            ...     user="some-person",
+            ... )
+            >>> expected_message = '''\
+            ... Job 456(7) (job name: some-job) has been `REQUEUED` manually via Cockpit by job-killer-guy.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Manually requeued job 456"
+            >>> assert_equal(message.render_title(), expected_title)
+      properties:
+        template_id:
+          default: /templates/ManualJobRequeued
+          enum:
+          - /templates/ManualJobRequeued
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        triggerer:
+          $ref: "#/components/schemas/User"
+        user:
+          title: User
+          type: string
+      required:
+      - job_attempt_index
+      - job_id
+      - job_name
+      - triggerer
+      - user
+      title: ManualJobRequeued
+    ManualJobStarted:
+      description: |-
+        A user has manually requeued a job via cockpit.
+
+        Examples:
+            >>> message = ManualJobStarted(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     triggerer=User(user="job-killer-guy"),
+            ...     user="some-person",
+            ... )
+            >>> expected_message = '''\
+            ... Job 456(7) (job name: some-job) has been `STARTED` manually via Cockpit by job-killer-guy.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Manually started job 456"
+            >>> assert_equal(message.render_title(), expected_title)
+      properties:
+        template_id:
+          default: /templates/ManualJobStarted
+          enum:
+          - /templates/ManualJobStarted
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        triggerer:
+          $ref: "#/components/schemas/User"
+        user:
+          title: User
+          type: string
+      required:
+      - job_attempt_index
+      - job_id
+      - job_name
+      - triggerer
+      - user
+      title: ManualJobStarted
+    ManualJobStopped:
+      description: |-
+        A user has manually stopped a job via cockpit.
+
+        Examples:
+            >>> message = ManualJobStopped(
+            ...     job_id="456",
+            ...     job_attempt_index=7,
+            ...     job_name="some-job",
+            ...     triggerer=User(user="job-killer-guy"),
+            ...     user="some-person",
+            ... )
+            >>> expected_message = '''\
+            ... Job 456(7) (job name: some-job) has been `STOPPED` manually via Cockpit by job-killer-guy.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Manually stopped job 456"
+            >>> assert_equal(message.render_title(), expected_title)
+      properties:
+        template_id:
+          default: /templates/ManualJobStopped
+          enum:
+          - /templates/ManualJobStopped
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        triggerer:
+          $ref: "#/components/schemas/User"
+        user:
+          title: User
+          type: string
+      required:
+      - job_attempt_index
+      - job_id
+      - job_name
+      - triggerer
+      - user
+      title: ManualJobStopped
+    NoMoreReleasingJobs:
+      description: |-
+        autonomous recovery engine can't release any more jobs.
+
+        Examples:
+            >>> message = NoMoreReleasingJobs(job_name="some-job", user="some-user")
+            >>> expected_message = '''\
+            ... No more jobs in `PENDING(JobHeldUser)` state for job name: some-job - won't release any new jobs.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "No more pending jobs for some-job"
+            >>> assert_equal(message.render_title(), expected_title)
+      properties:
+        template_id:
+          default: /templates/NoMoreReleasingJobs
+          enum:
+          - /templates/NoMoreReleasingJobs
+          title: Template Id
+          type: string
+        job_name:
+          title: Job Name
+          type: string
+        user:
+          title: User
+          type: string
+      required:
+      - job_name
+      - user
+      title: NoMoreReleasingJobs
+    NodeEvent:
+      description: A representation of a node attribution event.
+      properties:
+        template_id:
+          default: /partials/NodeEvent
+          enum:
+          - /partials/NodeEvent
+          title: Template Id
+          type: string
+        node:
+          title: Node
+          type: string
+        exclusion_type:
+          title: Exclusion Type
+          type: string
+        error_attribution:
+          title: Error Attribution
+          type: string
+        error_attribution_sources:
+          items:
+            type: string
+          type: array
+      required:
+      - error_attribution
+      - error_attribution_sources
+      - exclusion_type
+      - node
+      title: NodeEvent
+    NotificationCreate:
+      description: Payload for creating a schema.
+      example:
+        template_data:
+          job_id: job_id
+          template_id: /partials/JobRepr
+          job_attempt_index: 0
+        job_id: job_id
+        recipient: recipient
+        title: title
+        message: message
+        type: optional
+      properties:
+        recipient:
+          description: The recipient of the notification.
+          title: Recipient
+          type: string
+        job_id:
+          nullable: true
+          type: string
+        title:
+          nullable: true
+          type: string
+        message:
+          nullable: true
+          type: string
+        template_data:
+          $ref: "#/components/schemas/TemplateData"
+        type:
+          $ref: "#/components/schemas/NotificationType"
+      required:
+      - recipient
+      title: NotificationCreate
+    NotificationPublic:
+      description: A fully formed notification object.
+      example:
+        created_time: 2000-01-23T04:56:07.000+00:00
+        template_data:
+          job_id: job_id
+          template_id: /partials/JobRepr
+          job_attempt_index: 0
+        via_callback: PENDING
+        job_id: job_id
+        recipient: recipient
+        id: 046b6c7f-0b8a-43b9-b35d-6489e6daee91
+        title: title
+        message: message
+        type: optional
+      properties:
+        recipient:
+          description: The recipient of the notification.
+          title: Recipient
+          type: string
+        job_id:
+          nullable: true
+          type: string
+        id:
+          description: The unique id of the notification.
+          format: uuid
+          title: Id
+          type: string
+        title:
+          description: The title of the notification.
+          title: Title
+          type: string
+        message:
+          description: The notification's message body.
+          title: Message
+          type: string
+        template_data:
+          $ref: "#/components/schemas/TemplateData"
+        type:
+          $ref: "#/components/schemas/NotificationType"
+        created_time:
+          description: When was the notification created.
+          format: date-time
+          title: Created Time
+          type: string
+        via_callback:
+          $ref: "#/components/schemas/NotificationStatus"
+      required:
+      - message
+      - recipient
+      - title
+      - type
+      title: NotificationPublic
+    NotificationStatus:
+      enum:
+      - PENDING
+      - SENT
+      - FAILTOSEND
+      - DISABLED
+      title: NotificationStatus
+      type: string
+    NotificationType:
+      enum:
+      - optional
+      - info
+      - performance_alert
+      - warning
+      title: NotificationType
+      type: string
+    NotificationTypePreferences:
+      example:
+        performance_alert: true
+        warning: true
+        optional: false
+        info: true
+      properties:
+        optional:
+          default: false
+          title: Optional
+          type: boolean
+        info:
+          default: true
+          title: Info
+          type: boolean
+        performance_alert:
+          default: true
+          title: Performance Alert
+          type: boolean
+        warning:
+          default: true
+          title: Warning
+          type: boolean
+      title: NotificationTypePreferences
+    ProducerAuditEvent:
+      description: An audit event submitted by an NVIDIA Recovery component.
+      example:
+        event_type: event_type
+        payload:
+          key: ""
+        heimdall_job_id: heimdall_job_id
+        event_level: recovery
+        idempotency_key: idempotency_key
+        event_produced_at: 0
+        event_producer: event_producer
+      properties:
+        heimdall_job_id:
+          description: NVIDIA Recovery's internal identifier for the job.
+          title: Heimdall Job Id
+          type: string
+        event_producer:
+          description: The component that produced the event.
+          title: Event Producer
+          type: string
+        event_type:
+          description: The type of event.
+          title: Event Type
+          type: string
+        event_level:
+          $ref: "#/components/schemas/AuditEventLevel"
+        payload:
+          additionalProperties: {}
+          description: Event-specific structured data.
+          title: Payload
+        event_produced_at:
+          description: Producer emission time as Unix microseconds.
+          format: int64
+          title: Event Produced At
+          type: integer
+        idempotency_key:
+          description: Producer key used to discard duplicate events.
+          title: Idempotency Key
+          type: string
+      required:
+      - event_level
+      - event_produced_at
+      - event_producer
+      - event_type
+      - heimdall_job_id
+      - idempotency_key
+      - payload
+      title: ProducerAuditEvent
+    ProducerAuditEventBatch:
+      description: A batch of audit events to ingest.
+      example:
+        items:
+        - event_type: event_type
+          payload:
+            key: ""
+          heimdall_job_id: heimdall_job_id
+          event_level: recovery
+          idempotency_key: idempotency_key
+          event_produced_at: 0
+          event_producer: event_producer
+        - event_type: event_type
+          payload:
+            key: ""
+          heimdall_job_id: heimdall_job_id
+          event_level: recovery
+          idempotency_key: idempotency_key
+          event_produced_at: 0
+          event_producer: event_producer
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/ProducerAuditEvent"
+          type: array
+      required:
+      - items
+      title: ProducerAuditEventBatch
+    ReachedMaxRequeueTime:
+      description: |-
+        The job has reached the maximum requeue time.
+
+        Examples:
+            >>> message = ReachedMaxRequeueTime(
+            ...     job_id="123", job_attempt_index=7, job_name="some-job", message="hello message"
+            ... )
+            >>> expected_message = (
+            ...     "The job 123(7) job name some-job has reached the max requeue time, reason: hello message."
+            ... )
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> assert_equal(message.render_title(), "Max requeue limit reached for job 123")
+      properties:
+        template_id:
+          default: /templates/ReachedMaxRequeueTime
+          enum:
+          - /templates/ReachedMaxRequeueTime
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        message:
+          title: Message
+          type: string
+      required:
+      - job_attempt_index
+      - job_id
+      - job_name
+      - message
+      title: ReachedMaxRequeueTime
+    ReleasedJob:
+      description: |-
+        Advice to release a job attempt has been issued.
+
+        Examples:
+            >>> message = ReleasedJob(
+            ...     job_id="123",
+            ...     job_attempt_index=4,
+            ...     job_name="some-job",
+            ...     user="some-user",
+            ... )
+            >>> expected_message = '''\
+            ... Advice to release job 123(4) (job name: some-job) issued.
+            ... '''
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Advice to release job 123 issued"
+            >>> assert_equal(message.render_title(), expected_title)
+      properties:
+        template_id:
+          default: /templates/ReleasedJob
+          enum:
+          - /templates/ReleasedJob
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+        user:
+          title: User
+          type: string
+      required:
+      - job_attempt_index
+      - job_id
+      - job_name
+      - user
+      title: ReleasedJob
+    SuccessfullyFinished:
+      description: |-
+        The job successfully finished.
+
+        Examples:
+            >>> message = SuccessfullyFinished(job_id="123", job_attempt_index=7, job_name="some-job")
+            >>> expected_message = "Job 123(7) (some-job) finished."
+            >>> assert_equal(message.render_message(), expected_message)
+
+            >>> expected_title = "Job 123 finished successfully"
+            >>> assert_equal(message.render_title(), expected_title)
+      properties:
+        template_id:
+          default: /templates/SuccessfullyFinished
+          enum:
+          - /templates/SuccessfullyFinished
+          title: Template Id
+          type: string
+        job_id:
+          title: Job Id
+          type: string
+        job_attempt_index:
+          title: Job Attempt Index
+          type: integer
+        job_name:
+          title: Job Name
+          type: string
+      required:
+      - job_attempt_index
+      - job_id
+      - job_name
+      title: SuccessfullyFinished
+    TemplateData:
+      description: A template_id and the data associated with it.
+      discriminator:
+        mapping:
+          /partials/ErrorAttribution: "#/components/schemas/ErrorAttribution"
+          /partials/GlobalEvent: "#/components/schemas/GlobalEvent"
+          /partials/JobExecutionError: "#/components/schemas/JobExecutionError"
+          /partials/JobName: "#/components/schemas/JobName"
+          /partials/JobRepr: "#/components/schemas/JobRepr"
+          /partials/NodeEvent: "#/components/schemas/NodeEvent"
+          /partials/User: "#/components/schemas/User"
+          /templates/AnomalyAttributionResult: "#/components/schemas/AnomalyAttributionResult"
+          /templates/BadNodesIsolated: "#/components/schemas/BadNodesIsolated"
+          /templates/GpuThroughputDropped: "#/components/schemas/GpuThroughputDropped"
+          /templates/InvalidJobConfig: "#/components/schemas/InvalidJobConfig"
+          /templates/JobRequeued: "#/components/schemas/JobRequeued"
+          /templates/JobStopped: "#/components/schemas/JobStopped"
+          /templates/ManualJobPaused: "#/components/schemas/ManualJobPaused"
+          /templates/ManualJobRequeued: "#/components/schemas/ManualJobRequeued"
+          /templates/ManualJobStarted: "#/components/schemas/ManualJobStarted"
+          /templates/ManualJobStopped: "#/components/schemas/ManualJobStopped"
+          /templates/NoMoreReleasingJobs: "#/components/schemas/NoMoreReleasingJobs"
+          /templates/ReachedMaxRequeueTime: "#/components/schemas/ReachedMaxRequeueTime"
+          /templates/ReleasedJob: "#/components/schemas/ReleasedJob"
+          /templates/SuccessfullyFinished: "#/components/schemas/SuccessfullyFinished"
+        propertyName: template_id
+      oneOf:
+      - $ref: "#/components/schemas/JobRepr"
+      - $ref: "#/components/schemas/JobName"
+      - $ref: "#/components/schemas/User"
+      - $ref: "#/components/schemas/JobExecutionError"
+      - $ref: "#/components/schemas/NodeEvent"
+      - $ref: "#/components/schemas/GlobalEvent"
+      - $ref: "#/components/schemas/ErrorAttribution"
+      - $ref: "#/components/schemas/ReachedMaxRequeueTime"
+      - $ref: "#/components/schemas/InvalidJobConfig"
+      - $ref: "#/components/schemas/JobStopped"
+      - $ref: "#/components/schemas/JobRequeued"
+      - $ref: "#/components/schemas/SuccessfullyFinished"
+      - $ref: "#/components/schemas/GpuThroughputDropped"
+      - $ref: "#/components/schemas/BadNodesIsolated"
+      - $ref: "#/components/schemas/AnomalyAttributionResult"
+      - $ref: "#/components/schemas/ReleasedJob"
+      - $ref: "#/components/schemas/NoMoreReleasingJobs"
+      - $ref: "#/components/schemas/ManualJobStopped"
+      - $ref: "#/components/schemas/ManualJobRequeued"
+      - $ref: "#/components/schemas/ManualJobPaused"
+      - $ref: "#/components/schemas/ManualJobStarted"
+      title: TemplateData
+    User:
+      description: |-
+        A representation of a user.
+
+        The default template just shows the user, but it can be overridden to show more interesting representations.
+      properties:
+        template_id:
+          default: /partials/User
+          enum:
+          - /partials/User
+          title: Template Id
+          type: string
+        user:
+          title: User
+          type: string
+      required:
+      - user
+      title: User
+    UserPreferencesPublic:
+      description: A user's notification preferences.
+      example:
+        notification_types:
+          performance_alert: true
+          warning: true
+          optional: false
+          info: true
+      properties:
+        notification_types:
+          $ref: "#/components/schemas/NotificationTypePreferences"
+      required:
+      - notification_types
+      title: UserPreferencesPublic
+    UserPreferencesPut:
+      description: Payload for creating/updating user preferences.
+      example:
+        notification_types:
+          performance_alert: true
+          warning: true
+          optional: false
+          info: true
+      properties:
+        notification_types:
+          $ref: "#/components/schemas/NotificationTypePreferences"
+      title: UserPreferencesPut
+    ValidationError:
+      example:
+        msg: msg
+        loc:
+        - ValidationError_loc_inner
+        - ValidationError_loc_inner
+        input: ""
+        ctx: "{}"
+        type: type
+      properties:
+        loc:
+          items:
+            $ref: "#/components/schemas/ValidationError_loc_inner"
+          type: array
+        msg:
+          title: Message
+          type: string
+        type:
+          title: Error Type
+          type: string
+        input: {}
+        ctx:
+          title: Context
+          type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    ValidationError_loc_inner:
+      anyOf:
+      - type: string
+      - type: integer

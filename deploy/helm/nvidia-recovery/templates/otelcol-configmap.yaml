@@ -1,0 +1,179 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if (index .Values "opentelemetry-collector").enabled }}
+{{- $image := (index .Values "opentelemetry-collector").image -}}
+{{- $_ := required "opentelemetry-collector.image.repository is required when the bundled collector is enabled" $image.repository -}}
+{{- $_ := required "opentelemetry-collector.image.tag is required when the bundled collector is enabled" $image.tag -}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name:  heimdall-otelcol-config
+data:
+  heimdall-otelcol-config.yaml: |
+    receivers:
+      {{ if (index .Values "opentelemetry-collector").config.receivers.filelog.enabled }}
+      filelog:
+        include: [ {{ (index .Values "opentelemetry-collector").config.receivers.filelog.monitoring_path }} ]
+        include_file_name: true
+        include_file_path: true
+        include_file_path_resolved: true
+        exclude_older_than: 6h
+        start_at: end
+        storage: file_storage/filelogreceiver
+      {{ end }}
+    
+      {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.enabled }}
+      otlp:
+        protocols:
+          {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.grpc}}
+          grpc:
+            endpoint: {{ (index .Values "opentelemetry-collector").config.receivers.otlp.grpc.endpoint }}
+            auth:
+              authenticator: bearertokenauth
+          {{ end }}
+          {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.http }}
+          http:
+            endpoint: {{ (index .Values "opentelemetry-collector").config.receivers.otlp.http.endpoint }}
+            {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.http.auth }}
+            auth:
+              authenticator: bearertokenauth
+            {{ end }}
+          {{ end }}
+      {{ end }}
+      
+    processors:
+      batch:
+        send_batch_size: 8192  
+        timeout: 0.5s 
+
+      filter/rank_0_events:
+        error_mode: ignore
+        logs:
+          log_record:
+            # Only keep logs where the rank is completely missing (we want an error downstream) or it is zero in at least one of the
+            # two sets of attributes: either at the top resource level (as it's the case when receiving events from OTLP) or at the log level
+            # (as is the case when receiving events from file logs and extracting the rank in extract_job_attributes)
+            # Recall that with the OTel collector filters, if any of the conditions is true, then the log is dropped
+            - 'Int(attributes["rank"]) > 0 or Int(resource.attributes["rank"]) > 0'
+
+      {{ if (index .Values "opentelemetry-collector").config.receivers.filelog.enabled }}
+      transform/extract_job_attributes:
+        log_statements:
+          - context: log
+            statements:
+              # Extract job_id and rank from the filename if log.file.name exists and add them to the attributes
+              - merge_maps(
+                  attributes,
+                  ExtractPatterns(
+                    attributes["log.file.name"],
+                    "^.*_(?P<job_id>[\\w\\-]+)_date_\\d{2}-\\d{2}-\\d{2}_time_\\d{2}-\\d{2}-\\d{2}(?:\\.(?P<rank>\\d+))?\\.log$"
+                  ),
+                  "upsert"
+                ) where attributes["log.file.name"] != nil
+                # If the rank was not captured, set it to 0
+              - set(attributes["rank"], "0") where attributes["rank"] == ""
+      
+      filter/training_telemetry_file_log:
+        error_mode: ignore
+        logs:
+          log_record:
+            # Only keep the logs from the training telemetry library or nv-one-logger,
+            # Recall that with the OTel collector filters, if any of the conditions is true, then the log is dropped
+            - 'not ( IsMatch(body, ".*training.telemetry.*") or IsMatch(body, ".*nv.one.logger.*") )'
+      
+      filter/training_telemetry_errors_file_log:
+        error_mode: ignore
+        logs:
+          log_record:
+            - 'not ( IsMatch(body, ".*training.telemetry.rank0.*") or
+                    IsMatch(body, ".*NestedRestarter.*state.*") or
+                    IsMatch(body, "\b([A-Z][a-zA-Z0-9_]*(Error|Exception)|KeyboardInterrupt|SystemExit|StopIteration|GeneratorExit)\b") or
+                    IsMatch(body, ".*(pushrecv|NVONLY.RSBAR|userbuffers.*\\.(cpp|cu|h)).*") or
+                    IsMatch(body, ".*libtorch_cuda\\.so.*") or
+                    IsMatch(body, "(?i).*(CUDA|NCCL).*(error|warn).*") or
+                    IsMatch(body, "(?i).*(slurmstepd|srun|segmentation.fault|out.of.memory|illegal.*(memory|instruction)|core.dumped).*") or
+                    IsMatch(body, ".*found.(NaN|inf|nan).*") or
+                    IsMatch(body, ".*(?i)(Signal.Aborted|Exited.with.exit.code.1|Abort.complete).*") or
+                    IsMatch(body, ".*Watchdog.caught.collective.operation.timeout.*") or
+                    IsMatch(body, ".*(?i)botocore.*exceptions|with error 5|Disk quota exceeded.*")
+                  )'
+      {{ end }}
+
+      {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.enabled }}
+      filter/environment_events:
+        error_mode: ignore
+        logs:
+          log_record:
+          {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.environment }}
+            # Only keep the logs coming from the target environment
+            - 'resource.attributes["environment"] != "{{ (index .Values "opentelemetry-collector").config.receivers.otlp.environment }}"'
+          {{else}}
+            # Environment is not set, keep all logs (never drop)
+            - 'false'
+          {{end}}
+      {{ end }}
+
+    exporters:
+      debug:
+        verbosity: detailed
+
+      {{ if (index .Values "opentelemetry-collector").config.event_bus.watcher.enabled }}
+      rabbitmq/watcher:
+        connection:
+          endpoint: amqp://{{ (index .Values "opentelemetry-collector").config.event_bus.host }}:{{ (index .Values "opentelemetry-collector").config.event_bus.port }}
+          vhost: {{ (index .Values "opentelemetry-collector").config.event_bus.vhost }}
+          auth:
+            plain:
+              username: {{ (index .Values "opentelemetry-collector").config.event_bus.username }}
+              password: ${env:RABBITMQ_PASSWORD}
+        routing:
+          routing_key: {{ (index .Values "opentelemetry-collector").config.event_bus.watcher.queue }}
+          exchange: {{ (index .Values "opentelemetry-collector").config.event_bus.watcher.exchange }}
+        retry_on_failure:
+          enabled: true
+      {{ end }}
+
+    extensions:
+      {{ if (index .Values "opentelemetry-collector").config.receivers.filelog.enabled }}
+      file_storage/filelogreceiver:
+        directory: {{ (index .Values "opentelemetry-collector").config.receivers.filelog.file_offsets_path }}
+        create_directory: true
+      {{ end }}
+
+      health_check:
+        endpoint: ${env:MY_POD_IP}:13133
+        path: "/health"
+
+      {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.auth }}
+      bearertokenauth:
+        token: ${env:BASIC_AUTH_TOKEN}
+      {{ end }}
+
+    service:
+      {{ if (index .Values "opentelemetry-collector").config.receivers.filelog.enabled }}
+      extensions: [file_storage/filelogreceiver, health_check]
+      pipelines:
+        {{ if (index .Values "opentelemetry-collector").config.event_bus.watcher.enabled }}
+        otlp/watcher:
+          receivers: [filelog]
+          processors: [filter/training_telemetry_errors_file_log, transform/extract_job_attributes, batch]
+          exporters: [rabbitmq/watcher]
+        {{ end }}
+      {{ end }}
+
+      {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.enabled }}
+      extensions: [health_check{{ if (index .Values "opentelemetry-collector").config.receivers.otlp.auth }},bearertokenauth{{ end }}]
+      pipelines:
+        {{ if (index .Values "opentelemetry-collector").config.event_bus.watcher.enabled }}
+        logs/otlp-watcher:
+          receivers: [otlp]
+          processors: [filter/rank_0_events, filter/environment_events, batch]
+          exporters: [rabbitmq/watcher]
+        {{ end }}
+      {{ end }}
+      telemetry:
+        logs:
+          level: "info"
+{{- end }}

@@ -1,0 +1,48 @@
+services:
+  database:
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ijUIy8mFkJlP1v7i
+      MYSQL_DATABASE: dashboard
+    expose:
+      - 3306
+    ports:
+      - "3306:3306"
+
+  service:
+    depends_on:
+      rabbit:
+        condition: service_healthy
+      database:
+        condition: service_started
+    build:
+      context: ..
+      dockerfile: notifications/Dockerfile
+    environment:
+      DYNACONF_DATABASE_HOST: database
+    volumes:
+    - .:/app
+    ports:
+      - "8080:8080"
+
+  rabbit:
+    image: rabbitmq
+    restart: always
+    hostname: "rabbit"
+    # env_file:
+    #   - .env.dev
+    environment:
+      RABBITMQ_DEFAULT_PASS: rabbitmq
+      RABBITMQ_DEFAULT_USER: rabbitmq
+      RABBITMQ_DEFAULT_VHOST: '/'
+    expose:
+      - 5672
+      - 15672
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    healthcheck:
+      test: [ "CMD", "rabbitmqctl", "status" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5

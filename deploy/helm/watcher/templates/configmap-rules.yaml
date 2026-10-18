@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if not .Values.ruleConfig.existingConfigMap -}}
+{{- include "watcher.validateWorkflowQueryLocations" (.Values.config.anomaly_workflow_definitions | default list) -}}
+{{- include "watcher.validateWorkflowQueryLocations" (.Values.config.application_workflows | default list) -}}
+{{- if kindIs "slice" .Values.config.anomaly_workflows -}}
+{{- include "watcher.validateWorkflowQueryLocations" .Values.config.anomaly_workflows -}}
+{{- end -}}
+{{- $backend := include "watcher.logQueryBackend" . -}}
+{{- $globalProvider := get (((.Values.global).log_query).providers | default dict) $backend | default dict -}}
+{{- $watcherQueries := ($globalProvider.queries | default dict).watcher | default dict -}}
+{{- $nativeTemplates := $watcherQueries.workflows | default dict -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "watcher.fullname" . }}-rules
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "watcher.labels" . | nindent 4 }}
+data:
+  {{ base .Values.ruleConfig.rulePath }}: |
+    - name: {{ .Values.config.environment }}
+      workflow:
+      {{- $anomalyWorkflows := .Values.config.anomaly_workflows }}
+      {{- if kindIs "slice" $anomalyWorkflows }}
+      {{- if ne .Values.config.event_source "rabbitmq" }}
+      {{- include "watcher.validateWorkflowNativeQueries" (dict "workflows" $anomalyWorkflows "templates" $nativeTemplates "backend" $backend) }}
+      {{- end }}
+      {{ $anomalyWorkflows | toYaml | nindent 6 | trim }}
+      {{- else }}
+      {{- $anomalyWorkflowDefaults := .Values.config.anomaly_workflow_options_defaults | default dict }}
+      {{- $anomalyWorkflowOverrides := $anomalyWorkflows | default dict }}
+      {{- $renderedAnomalyWorkflows := list }}
+      {{- range $workflow := (.Values.config.anomaly_workflow_definitions | default list) }}
+      {{- $workflowName := $workflow.name }}
+      {{- $workflowOptions := mergeOverwrite (deepCopy (get $anomalyWorkflowDefaults $workflowName | default dict)) (get $anomalyWorkflowOverrides $workflowName | default dict) }}
+      {{- $workflowEnabled := true }}
+      {{- if and (kindIs "map" $workflowOptions) (hasKey $workflowOptions "enabled") }}
+      {{- $workflowEnabled = $workflowOptions.enabled }}
+      {{- end }}
+      {{- if $workflowEnabled }}
+      {{- $renderedWorkflow := deepCopy $workflow }}
+      {{- if eq $workflowName "noprogress" }}
+      {{- $attributes := get $renderedWorkflow "attributes" }}
+      {{- $interval := get $attributes "interval" }}
+      {{- if hasKey $workflowOptions "preTrainingTimeoutSecs" }}
+      {{- $_ := set $interval "PRE_TRAINING" $workflowOptions.preTrainingTimeoutSecs }}
+      {{- end }}
+      {{- if hasKey $workflowOptions "trainingLoopTimeoutSecs" }}
+      {{- $_ := set $interval "TRAINING_LOOP" $workflowOptions.trainingLoopTimeoutSecs }}
+      {{- end }}
+      {{- if hasKey $workflowOptions "false_positive_scan_timer" }}
+      {{- $_ := set $attributes "false_positive_scan_timer" $workflowOptions.false_positive_scan_timer }}
+      {{- end }}
+      {{- end }}
+      {{- $renderedAnomalyWorkflows = append $renderedAnomalyWorkflows $renderedWorkflow }}
+      {{- end }}
+      {{- end }}
+      {{- if ne .Values.config.event_source "rabbitmq" }}
+      {{- include "watcher.validateWorkflowNativeQueries" (dict "workflows" $renderedAnomalyWorkflows "templates" $nativeTemplates "backend" $backend) }}
+      {{- end }}
+      {{ $renderedAnomalyWorkflows | toYaml | nindent 6 | trim }}
+      {{- end }}
+      {{- if .Values.config.application_workflows }}
+      {{- if ne .Values.config.event_source "rabbitmq" }}
+      {{- include "watcher.validateWorkflowNativeQueries" (dict "workflows" .Values.config.application_workflows "templates" $nativeTemplates "backend" $backend) }}
+      {{- end }}
+      {{ .Values.config.application_workflows | toYaml | nindent 6 | trim }}
+      {{- end }}
+{{- end -}}

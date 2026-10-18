@@ -1,0 +1,48 @@
+name: Main E2E
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/e2e-base.yml
+    secrets:
+      BITNAMI_OCI_REGISTRY_MIRROR: ${{ secrets.BITNAMI_OCI_REGISTRY_MIRROR }}
+      DOCKER_HUB_REGISTRY_MIRROR: ${{ secrets.DOCKER_HUB_REGISTRY_MIRROR }}
+    with:
+      skip_nightly: true
+
+  notify-failure:
+    name: Notify Slack of E2E failure
+    needs:
+      - e2e
+    if: ${{ always() && needs.e2e.result != 'success' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Post E2E failure to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          E2E_PROVIDER=GitHub \
+          E2E_OUTCOME=failed \
+          E2E_REPOSITORY="$GITHUB_REPOSITORY" \
+          E2E_SHA="${GITHUB_SHA:0:8}" \
+          E2E_REF="$GITHUB_REF_NAME" \
+          E2E_EVENT="$GITHUB_EVENT_NAME" \
+          E2E_RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            sh scripts/ci/notify-e2e-slack.sh

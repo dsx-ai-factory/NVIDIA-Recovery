@@ -1,0 +1,157 @@
+name: Tagged Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  e2e:
+    name: E2E
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/e2e-base.yml
+    secrets:
+      BITNAMI_OCI_REGISTRY_MIRROR: ${{ secrets.BITNAMI_OCI_REGISTRY_MIRROR }}
+      DOCKER_HUB_REGISTRY_MIRROR: ${{ secrets.DOCKER_HUB_REGISTRY_MIRROR }}
+
+  qualify:
+    name: Qualify source and Helm archives
+    if: ${{ github.ref_protected }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require source reachable from reviewed main
+        run: git merge-base --is-ancestor HEAD origin/main
+      - name: Require successful public CI for this exact main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/check-public-ci.sh
+      - name: Set up Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: v3.17.3
+      - name: Test release packaging contracts
+        run: python3 -m unittest discover -s scripts/release -p 'test_*.py'
+      - name: Package and validate exact committed source and chart
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          python3 scripts/release/package.py package "$RELEASE_VERSION" dist/release
+          python3 scripts/release/package.py package "$RELEASE_VERSION" dist/reproduce
+          diff -r dist/release dist/reproduce
+      - name: Retain qualified assets
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: source-helm-release
+          path: dist/release/
+          if-no-files-found: error
+
+  publish-chart:
+    name: Publish source and Helm release
+    # E2E runs independently and reports its result without gating publication.
+    needs: [qualify]
+    if: ${{ github.ref_protected }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: helm-release
+    concurrency:
+      group: helm-release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+    steps:
+      - name: Checkout publication scripts
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download qualified assets
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: source-helm-release
+          path: dist/release
+      - name: Verify identity and checksums before publication
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          python3 scripts/release/package.py verify dist/release \
+            --sha "$(git rev-parse HEAD)" --version "$RELEASE_VERSION"
+      - name: Recheck release tag and exact-commit public CI after approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          remote_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/refs/tags/$RELEASE_VERSION" --jq .sha)
+          if [[ "$remote_sha" != "$(git rev-parse HEAD)" ]]; then
+            echo "Release tag no longer points to the qualified source" >&2
+            exit 1
+          fi
+          scripts/release/check-public-ci.sh
+      - name: Publish qualified chart to GHCR
+        uses: ./.github/actions/helm-release
+        with:
+          package: "false"
+          directory: dist/release
+      - name: Publish versioned source and chart assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          flags=()
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_VERSION" --verify-tag \
+            "${flags[@]}" \
+            --title "NVIDIA Recovery $RELEASE_VERSION" \
+            --notes-file dist/release/RELEASE_NOTES.md \
+            dist/release/*-source.tar.gz dist/release/*.tgz \
+            dist/release/SHA256SUMS dist/release/release.json \
+            dist/release/RELEASE_NOTES.md dist/release/version
+
+  notify:
+    name: Notify Slack of E2E result
+    needs:
+      - e2e
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      E2E_RESULT: ${{ needs.e2e.result }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Post E2E result to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ "$E2E_RESULT" = "success" ]; then
+            outcome=passed
+          else
+            outcome=failed
+          fi
+          E2E_PROVIDER=GitHub \
+          E2E_OUTCOME="$outcome" \
+          E2E_REPOSITORY="$GITHUB_REPOSITORY" \
+          E2E_SHA="${GITHUB_SHA:0:8}" \
+          E2E_REF="$GITHUB_REF_NAME" \
+          E2E_EVENT="$GITHUB_EVENT_NAME" \
+          E2E_RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            sh scripts/ci/notify-e2e-slack.sh

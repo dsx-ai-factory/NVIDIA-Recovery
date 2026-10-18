@@ -1,0 +1,504 @@
+[
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "@img/sharp-libvips-darwin-arm64",
+    "version": "1.2.4",
+    "ecosystem": "npm",
+    "licenses": [
+      "LGPL-3.0-or-later"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "@img/sharp-libvips-darwin-x64",
+    "version": "1.2.4",
+    "ecosystem": "npm",
+    "licenses": [
+      "LGPL-3.0-or-later"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "@img/sharp-libvips-linux-arm64",
+    "version": "1.2.4",
+    "ecosystem": "npm",
+    "licenses": [
+      "LGPL-3.0-or-later"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "@img/sharp-libvips-linux-x64",
+    "version": "1.2.4",
+    "ecosystem": "npm",
+    "licenses": [
+      "LGPL-3.0-or-later"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "@img/sharp-libvips-linuxmusl-arm64",
+    "version": "1.2.4",
+    "ecosystem": "npm",
+    "licenses": [
+      "LGPL-3.0-or-later"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "@img/sharp-libvips-linuxmusl-x64",
+    "version": "1.2.4",
+    "ecosystem": "npm",
+    "licenses": [
+      "LGPL-3.0-or-later"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "@img/sharp-wasm32",
+    "version": "0.34.5",
+    "ecosystem": "npm",
+    "licenses": [
+      "Apache-2.0 AND LGPL-3.0-or-later AND MIT"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "@img/sharp-win32-arm64",
+    "version": "0.34.5",
+    "ecosystem": "npm",
+    "licenses": [
+      "Apache-2.0 AND LGPL-3.0-or-later"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "@img/sharp-win32-x64",
+    "version": "0.34.5",
+    "ecosystem": "npm",
+    "licenses": [
+      "Apache-2.0 AND LGPL-3.0-or-later"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "compute-gcd",
+    "version": "1.2.1",
+    "ecosystem": "npm",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "compute-lcm",
+    "version": "1.1.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "dompurify",
+    "version": "3.4.13",
+    "ecosystem": "npm",
+    "licenses": [
+      "Apache-2.0 OR MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-darwin-arm64",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-darwin-arm64",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-darwin-x64",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-darwin-x64",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-arm-gnueabihf",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-arm-gnueabihf",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-arm64-gnu",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-arm64-gnu",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-arm64-musl",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-arm64-musl",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-x64-gnu",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-x64-gnu",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-x64-musl",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-linux-x64-musl",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-win32-arm64-msvc",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-win32-arm64-msvc",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-win32-x64-msvc",
+    "version": "1.30.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "lightningcss-win32-x64-msvc",
+    "version": "1.33.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "precond",
+    "version": "0.2.3",
+    "ecosystem": "npm",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "validate.io-function",
+    "version": "1.0.2",
+    "ecosystem": "npm",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "validate.io-integer",
+    "version": "1.0.5",
+    "ecosystem": "npm",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "validate.io-integer-array",
+    "version": "1.0.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "dashboard/pnpm-lock.yaml",
+    "name": "validate.io-number",
+    "version": "1.0.3",
+    "ecosystem": "npm",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "scripts/docs/package-lock.json",
+    "name": "fern-api",
+    "version": "5.119.0",
+    "ecosystem": "npm",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "slurm-advisor-controller/go.mod",
+    "name": "../api-gateway",
+    "version": "",
+    "ecosystem": "Go",
+    "licenses": []
+  },
+  {
+    "source": "uv.lock",
+    "name": "anomaly-detection-isolator",
+    "version": "0.1.0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "attribution-adapter",
+    "version": "0.1.0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "certifi",
+    "version": "2026.2.25",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "colorama",
+    "version": "0.4.6",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "non-standard"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "fastapi-mcp",
+    "version": "0.4.0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "non-standard"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "izulu",
+    "version": "0.50.0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "non-standard"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "job-manager",
+    "version": "0.1.0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "nodeenv",
+    "version": "1.10.0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "non-standard"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "pathspec",
+    "version": "1.0.4",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "MPL-2.0"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "python-dateutil",
+    "version": "2.9.0.post0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "non-standard"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "python-discovery",
+    "version": "1.5.0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "non-standard"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "pywin32",
+    "version": "311",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "shellingham",
+    "version": "1.5.4",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "non-standard"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "taskiq",
+    "version": "0.11.20",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "non-standard"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "taskiq-dependencies",
+    "version": "1.5.7",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "recovery-libs",
+    "version": "0.1.0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "UNKNOWN"
+    ]
+  },
+  {
+    "source": "uv.lock",
+    "name": "watcher",
+    "version": "0.1.0",
+    "ecosystem": "PyPI",
+    "licenses": [
+      "non-standard"
+    ]
+  }
+]

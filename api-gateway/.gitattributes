@@ -1,0 +1,2 @@
+# Collapse all generated files in the api-gateway/gen directory
+api-gateway/gen/** gitlab-generated

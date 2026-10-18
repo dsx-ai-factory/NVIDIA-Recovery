@@ -1,0 +1,14 @@
+{{/*
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+*/ -}}
+{{- if .Values.mysql.enabled }}
+============================== IMPORTANT ==============================
+This release includes the bundled MySQL database (mysql.enabled=true).
+
+This database is provided for QUICK-START AND EXPERIMENTATION ONLY. It is
+not sized, secured, or backed up for production use. For a production
+deployment, disable mysql.enabled and point Heimdall's services at your
+own managed MySQL-compatible database.
+=========================================================================
+{{- end }}

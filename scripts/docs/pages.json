@@ -1,0 +1,21 @@
+[
+  {"source":"README.md","slug":"overview","marker":"Restarting an allocation, restoring training progress, and completing training are distinct milestones."},
+  {"source":"docs/README.md","slug":"documentation","marker":"These explain how recovery decisions stay separate from scheduler commands."},
+  {"source":"docs/getting-started.md","slug":"getting-started","marker":"You will see a simulated failure produce Advice and a restarted Slurm attempt."},
+  {"source":"docs/users/running-jobs.md","slug":"running-jobs","marker":"Cluster deployment and log collection are operator responsibilities."},
+  {"source":"docs/faq.md","slug":"faq","marker":"The documented recovery loop manages workloads."},
+  {"source":"ARCHITECTURE.md","slug":"architecture","marker":"Job Manager owns the durable recovery intent."},
+  {"source":"docs/concepts/jobs-and-workflows.md","slug":"jobs-and-workflows","marker":"Recovery adds a new attempt to the history; it does not erase the failed one."},
+  {"source":"docs/concepts/advice.md","slug":"advice","marker":"It can resume from what actually happened rather than blindly replaying a sequence of commands."},
+  {"source":"docs/concepts/scheduler-integration.md","slug":"scheduler-integration","marker":"Checkpoint creation and restoration stay with the training application, not the adapter."},
+  {"source":"docs/operators/installation.md","slug":"installation","marker":"The default installation includes NVIDIA Attribution"},
+  {"source":"docs/operators/slurm.md","slug":"slurm","marker":"This guide starts the controller in observe mode and leaves the watchdog stopped."},
+  {"source":"docs/operators/slinky.md","slug":"slinky","marker":"The result is an observing controller and watchdog in the Slinky namespace."},
+  {"source":"docs/operators/operations.md","slug":"operations","marker":"A successful canary proves that tested path and configuration"},
+  {"source":"docs/operators/troubleshooting.md","slug":"troubleshooting","marker":"These checks locate the missing stage; they do not authorize scheduler actions."},
+  {"source":"docs/development/getting-started.md","slug":"development","marker":"You do not need a Slurm or Kubernetes cluster for ordinary component unit tests."},
+  {"source":"docs/development/testing.md","slug":"testing","marker":"A package unit-test pass does not establish integration coverage."},
+  {"source":"docs/public-api/api-gateway.md","slug":"api-gateway","marker":"All RPCs are unary"},
+  {"source":"docs/public-api/optional-attribution.md","slug":"optional-attribution","marker":"NVIDIA Attribution is enabled by default"},
+  {"source":"docs/public-api/attribution-adapter.md","slug":"attribution-adapter","marker":"Each request runs one phase synchronously"}
+]

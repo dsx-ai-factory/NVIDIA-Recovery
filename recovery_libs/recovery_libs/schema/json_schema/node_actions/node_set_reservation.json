@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NodeSetReservation",
+  "description": "update the reservation of a node, specified by name, to be exactly what is specified",
+  "type": "object",
+  "properties": {
+    "name": {
+      "const": "NodeSetReservation"
+    },
+    "params": {
+      "type": "object",
+      "required": ["nodeName", "reservation"],
+      "properties": {
+        "nodeName": {
+          "type": "string"
+        },
+        "reservation": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "params"
+  ]
+}

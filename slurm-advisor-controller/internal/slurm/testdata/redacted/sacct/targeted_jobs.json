@@ -1,0 +1,79 @@
+{
+  "jobs": [
+    {
+      "allocation_nodes": 2,
+      "array": {
+        "job_id": 9200,
+        "task_id": {
+          "infinite": false,
+          "number": 4,
+          "set": true
+        }
+      },
+      "cluster": "cluster-redacted",
+      "comment": {
+        "job": "{\"HEIMDALL\":{\"auto_resume_mode\":\"singleton_dependency\",\"requeue_on_completion\":true,\"workflow_id\":\"workflow-redacted\"}}"
+      },
+      "failed_node": "node010",
+      "job_id": 9204,
+      "name": "workflow-redacted",
+      "nodes": "node[010-011]",
+      "partition": "partition-redacted",
+      "state": {
+        "current": [
+          "FAILED",
+          "NODE_FAIL"
+        ],
+        "reason": "NonZeroExitCode"
+      },
+      "time": {
+        "end": 1722495880,
+        "start": 1722495660,
+        "submission": 1722495600
+      },
+      "user": "user-redacted"
+    },
+    {
+      "allocation_nodes": 1,
+      "array": {
+        "job_id": 0,
+        "task_id": {
+          "infinite": false,
+          "number": 0,
+          "set": false
+        }
+      },
+      "cluster": "cluster-redacted",
+      "comment": {
+        "job": "{\"APS\":{\"auto_resume_mode\":\"requeue\",\"max_requeue_times\":2,\"workflow_name\":\"workflow-redacted\"}}"
+      },
+      "failed_node": "",
+      "job_id": 9301,
+      "name": "workflow-redacted",
+      "nodes": "node012",
+      "partition": "partition-redacted",
+      "state": {
+        "current": "COMPLETED",
+        "reason": "None"
+      },
+      "time": {
+        "end": 1722495900,
+        "start": 1722495700,
+        "submission": 1722495600
+      },
+      "user": "user-redacted"
+    }
+  ],
+  "meta": {
+    "Slurm": {
+      "release": "24.11.0"
+    },
+    "command": [
+      "sacct",
+      "-Xj",
+      "9204,9301",
+      "--duplicates",
+      "--json"
+    ]
+  }
+}

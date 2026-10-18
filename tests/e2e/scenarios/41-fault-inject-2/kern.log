@@ -1,0 +1,34 @@
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0018:01:00): 149, NETIR_LINK_EVT  Fatal   XC0 i0 Link 00 (0x025405c6 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 24 11:37:22 heimdall-e2e-node kernel:
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0018:01:00): 149, NETIR_LINK_EVT  Fatal   XC0 i0 Link 01 (0x025425c6 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 24 11:37:22 heimdall-e2e-node kernel:
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0018:01:00): 154, GPU recovery action changed from 0x0 (None) to 0x4 (Drain and Reset)
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: GPU at PCI:0009:01:00: GPU-00000000-0000-0000-0000-000000000000
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: GPU Board Serial Number: 0000000000000
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 149, NETIR_LINK_EVT  Fatal   XC0 i0 Link 01 (0x025425c6 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 24 11:37:22 heimdall-e2e-node kernel:
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 154, GPU recovery action changed from 0x0 (None) to 0x4 (Drain and Reset)
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 149, NETIR_LINK_EVT  Fatal   XC0 i0 Link 00 (0x025405c6 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 24 11:37:22 heimdall-e2e-node kernel:
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: GPU at PCI:0008:01:00: GPU-00000000-0000-0000-0000-000000000000
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: GPU Board Serial Number: 0000000000000
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0008:01:00): 149, NETIR_LINK_EVT  Fatal   XC0 i0 Link 01 (0x025425c6 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 24 11:37:22 heimdall-e2e-node kernel:
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0008:01:00): 154, GPU recovery action changed from 0x0 (None) to 0x4 (Drain and Reset)
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0008:01:00): 149, NETIR_LINK_EVT  Fatal   XC0 i0 Link 00 (0x025405c6 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 24 11:37:22 heimdall-e2e-node kernel:
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: GPU at PCI:0019:01:00: GPU-00000000-0000-0000-0000-000000000000
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: GPU Board Serial Number: 0000000000000
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0019:01:00): 149, NETIR_LINK_EVT  Fatal   XC0 i0 Link 00 (0x025405c6 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 24 11:37:22 heimdall-e2e-node kernel:
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0019:01:00): 149, NETIR_LINK_EVT  Fatal   XC0 i0 Link 01 (0x025425c6 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 24 11:37:22 heimdall-e2e-node kernel:
+Sep 24 11:37:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0019:01:00): 154, GPU recovery action changed from 0x0 (None) to 0x4 (Drain and Reset)
+Sep 24 11:37:23 heimdall-e2e-node kernel: NVRM: knvlinkSetDegradedMode_IMPL: GPU2 marked Degraded. Error originated on linkId 0!
+Sep 24 11:37:23 heimdall-e2e-node kernel: NVRM: Xid (PCI:0018:01:00): 154, GPU recovery action changed from 0x4 (Drain and Reset) to 0x1 (GPU Reset Required)
+Sep 24 11:37:23 heimdall-e2e-node kernel: NVRM: knvlinkSetDegradedMode_IMPL: GPU0 marked Degraded. Error originated on linkId 1!
+Sep 24 11:37:23 heimdall-e2e-node kernel: NVRM: Xid (PCI:0008:01:00): 154, GPU recovery action changed from 0x4 (Drain and Reset) to 0x1 (GPU Reset Required)
+Sep 24 11:37:23 heimdall-e2e-node kernel: NVRM: knvlinkSetDegradedMode_IMPL: GPU3 marked Degraded. Error originated on linkId 0!
+Sep 24 11:37:23 heimdall-e2e-node kernel: NVRM: Xid (PCI:0019:01:00): 154, GPU recovery action changed from 0x4 (Drain and Reset) to 0x1 (GPU Reset Required)
+Sep 24 11:37:23 heimdall-e2e-node kernel: NVRM: knvlinkSetDegradedMode_IMPL: GPU1 marked Degraded. Error originated on linkId 1!
+Sep 24 11:37:23 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 154, GPU recovery action changed from 0x4 (Drain and Reset) to 0x1 (GPU Reset Required)

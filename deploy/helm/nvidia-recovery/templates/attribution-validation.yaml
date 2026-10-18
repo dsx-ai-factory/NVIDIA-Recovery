@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ $adi := index .Values "anomaly-detection-isolator" -}}
+{{- $adapter := index .Values "attribution-adapter" -}}
+{{- $provider := index .Values "attribution-service" -}}
+{{- if and $adi.enabled $adi.attribution_enabled (not $adapter.enabled) (not ($adi.attribution_service_url | default "" | trim)) -}}
+{{- fail "anomaly-detection-isolator.attribution_enabled=true requires attribution-adapter.enabled=true or an explicit anomaly-detection-isolator.attribution_service_url" -}}
+{{- end -}}
+{{- if and $adapter.enabled (not $provider.enabled) (not (dig "fact" "url" "" $adapter | trim)) -}}
+{{- fail "attribution-adapter.enabled=true requires attribution-service.enabled=true or an explicit attribution-adapter.fact.url" -}}
+{{- end -}}

@@ -1,0 +1,201 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+package heimdall.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/dsx-ai-factory/nvidia-recovery/api/gen/go/heimdall/v1";
+
+// Legacy authorization shape retained for disabled compatibility endpoints.
+// Disabled endpoints do not evaluate or mutate API-key authorizations.
+message ApiKeyAuthorizations {
+
+}
+
+// Legacy API-key status values retained for wire compatibility.
+enum ApiKeyStatus {
+    // The status of the API key is unspecified.
+    API_KEY_STATUS_UNSPECIFIED = 0;
+    // Legacy active status value. Disabled endpoints do not create active keys.
+    API_KEY_STATUS_ACTIVE = 1;
+    // Legacy expired status value.
+    API_KEY_STATUS_EXPIRED = 2;
+    // Legacy suspended status value.
+    API_KEY_STATUS_SUSPENDED = 3;
+}
+
+// API-key metadata retained for disabled compatibility endpoints.
+message ApiKey {
+    // Legacy key ID field retained for response shape compatibility.
+    string id = 1;
+    // Legacy key value field. Disabled endpoints never return key material.
+    string value = 2;
+    // Legacy key status field. Disabled endpoints do not return active key metadata.
+    ApiKeyStatus status = 3;
+    // Legacy key description field retained for compatibility.
+    string description = 4;
+    // Legacy key expiration field retained for compatibility.
+    google.protobuf.Timestamp expires_at = 5;
+    // Legacy key creation timestamp field retained for compatibility.
+    google.protobuf.Timestamp created_at = 6;
+    // Legacy authorization field retained for compatibility.
+    ApiKeyAuthorizations authorizations = 7;
+}
+
+message CreateApiKeyRequest {
+    // Legacy key description input ignored by the disabled compatibility endpoint.
+    string description = 1;
+    // Legacy expiration input ignored by the disabled compatibility endpoint.
+    google.protobuf.Timestamp expires_at = 2;
+    // Legacy authorization input ignored by the disabled compatibility endpoint.
+    ApiKeyAuthorizations authorizations = 3;
+}
+
+message CreateApiKeyResponse {
+    // Legacy response field. Disabled endpoints always return an error instead.
+    ApiKey key = 1;
+}
+
+message RetrieveApiKeyRequest {
+    // Legacy key ID path parameter retained for compatibility.
+    string key_id = 1;
+}
+
+message RetrieveApiKeyResponse {
+    ApiKey key = 1;
+}
+
+message UpdateApiKeyAuthorizationsRequest {
+    // Legacy key ID path parameter retained for compatibility.
+    string key_id = 1;
+    // Legacy authorization input ignored by the disabled compatibility endpoint.
+    repeated string authorizations = 2;
+}
+
+message UpdateApiKeyAuthorizationsResponse {
+    // Legacy response field. Disabled endpoints always return an error instead.
+    ApiKey key = 1;
+}
+
+message DeleteApiKeyRequest {
+    // Legacy key ID path parameter retained for compatibility.
+    string key_id = 1;
+}
+
+message DeleteApiKeyResponse {
+}
+
+message ListApiKeysRequest {
+
+}
+
+message ListApiKeysResponse {
+    // Legacy response field. Disabled endpoints always return an error instead.
+    repeated ApiKey keys = 1;
+}
+
+service ApiKeysService {
+  rpc CreateApiKey(CreateApiKeyRequest) returns (CreateApiKeyResponse) {
+    option (google.api.http) = {post: "/v1/keys", body: "*"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Disabled API-key creation compatibility endpoint."
+      description: "API-key creation is disabled in this build. This compatibility endpoint always returns an internal error."
+      responses: {
+        key: "200"
+        value: {
+          description: "Legacy response shape retained for compatibility. This build returns an internal error instead."
+        }
+      }
+      responses: {
+        key: "500"
+        value: {
+          description: "API key management is disabled."
+        }
+      }
+    };
+  }
+
+  rpc RetrieveApiKey(RetrieveApiKeyRequest) returns (RetrieveApiKeyResponse) {
+    option (google.api.http) = {get: "/v1/keys/{key_id}"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Disabled API-key retrieval compatibility endpoint."
+      description: "API-key retrieval is disabled in this build. This compatibility endpoint always returns an internal error."
+      responses: {
+        key: "200"
+        value: {
+          description: "Legacy response shape retained for compatibility. This build returns an internal error instead."
+        }
+      }
+      responses: {
+        key: "500"
+        value: {
+          description: "API key management is disabled."
+        }
+      }
+    };
+  }
+
+  rpc UpdateApiKeyAuthorizations(UpdateApiKeyAuthorizationsRequest) returns (UpdateApiKeyAuthorizationsResponse) {
+    option (google.api.http) = {put: "/v1/keys/{key_id}/authorizations", body: "*"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Disabled API-key authorization update compatibility endpoint."
+      description: "API-key authorization updates are disabled in this build. This compatibility endpoint always returns an internal error."
+      responses: {
+        key: "200"
+        value: {
+          description: "Legacy response shape retained for compatibility. This build returns an internal error instead."
+        }
+      }
+      responses: {
+        key: "500"
+        value: {
+          description: "API key management is disabled."
+        }
+      }
+    };
+  }
+
+  rpc DeleteApiKey(DeleteApiKeyRequest) returns (DeleteApiKeyResponse) {
+    option (google.api.http) = {delete: "/v1/keys/{key_id}"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Disabled API-key deletion compatibility endpoint."
+      description: "API-key deletion is disabled in this build. This compatibility endpoint always returns an internal error."
+      responses: {
+        key: "200"
+        value: {
+          description: "Legacy response shape retained for compatibility. This build returns an internal error instead."
+        }
+      }
+      responses: {
+        key: "500"
+        value: {
+          description: "API key management is disabled."
+        }
+      }
+    };
+  }
+
+  rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse) {
+    option (google.api.http) = {get: "/v1/keys"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Disabled API-key listing compatibility endpoint."
+      description: "API-key listing is disabled in this build. This compatibility endpoint always returns an internal error."
+      responses: {
+        key: "200"
+        value: {
+          description: "Legacy response shape retained for compatibility. This build returns an internal error instead."
+        }
+      }
+      responses: {
+        key: "500"
+        value: {
+          description: "API key management is disabled."
+        }
+      }
+    };
+  }
+}

@@ -1,0 +1,151 @@
+{
+  "errors": [],
+  "jobs": [
+    {
+      "account": "account-redacted",
+      "array_job_id": {
+        "infinite": false,
+        "number": 8100,
+        "set": true
+      },
+      "array_task_id": {
+        "infinite": false,
+        "number": 3,
+        "set": true
+      },
+      "cluster": "cluster-redacted",
+      "command": "/redacted/command",
+      "comment": "{\"APS\":{\"auto_resume_mode\":\"requeue\",\"checkpoint_path\":\"/redacted/path\",\"max_requeue_times\":3,\"workflow_id\":\"workflow-redacted\"}}",
+      "dependency": "singleton",
+      "end_time": 0,
+      "excluded_nodes": "node009,node[011-012]",
+      "failed_node": "",
+      "job_id": 8123,
+      "job_state": "PENDING",
+      "name": "workflow-redacted",
+      "node_count": {
+        "infinite": false,
+        "number": 2,
+        "set": true
+      },
+      "nodes": "None assigned",
+      "partition": "partition-redacted",
+      "required_nodes": "node[001-002]",
+      "restart_cnt": 1,
+      "resv_name": "reservation-redacted",
+      "start_time": 0,
+      "state_reason": "Dependency",
+      "submit_time": 1722495600,
+      "tasks": {
+        "infinite": false,
+        "number": 16,
+        "set": true
+      },
+      "tres_req_str": "cpu=16,mem=64000M,node=2,billing=16,gres/gpu=8",
+      "unknown_future_field": {
+        "host": "node021",
+        "state": "CONFIGURING"
+      },
+      "user_name": "user-redacted"
+    },
+    {
+      "account": "account-redacted",
+      "array_job_id": {
+        "infinite": false,
+        "number": 0,
+        "set": false
+      },
+      "array_task_id": {
+        "infinite": false,
+        "number": 0,
+        "set": false
+      },
+      "cluster": "cluster-redacted",
+      "command": "/redacted/command",
+      "comment": "{\"HEIMDALL\":{\"auto_resume_mode\":\"singleton_dependency\",\"requeue_on_completion\":true,\"workflow_name\":\"workflow-redacted\"}}",
+      "dependency": "",
+      "end_time": 0,
+      "excluded_nodes": "",
+      "failed_node": "",
+      "job_id": 9001,
+      "job_state": "RUNNING",
+      "name": "workflow-redacted",
+      "node_count": {
+        "infinite": false,
+        "number": 2,
+        "set": true
+      },
+      "nodes": "node[001-002]",
+      "partition": "partition-redacted",
+      "required_nodes": "",
+      "restart_cnt": 0,
+      "resv_name": "",
+      "start_time": 1722495660,
+      "state_reason": "None",
+      "submit_time": 1722495600,
+      "tasks": {
+        "infinite": false,
+        "number": 8,
+        "set": true
+      },
+      "tres_req_str": "cpu=8,mem=32000M,node=2,billing=8,gres/gpu=4",
+      "user_name": "user-redacted"
+    },
+    {
+      "array_job_id": {
+        "infinite": false,
+        "number": 8100,
+        "set": true
+      },
+      "array_task_id": {
+        "infinite": false,
+        "number": 0,
+        "set": false
+      },
+      "cluster": "cluster-redacted",
+      "command": "/redacted/command",
+      "comment": "",
+      "end_time": 0,
+      "job_id": 8100,
+      "job_state": "PENDING",
+      "name": "workflow-redacted",
+      "node_count": {
+        "infinite": false,
+        "number": 0,
+        "set": false
+      },
+      "nodes": "None assigned",
+      "partition": "partition-redacted",
+      "restart_cnt": 0,
+      "start_time": 0,
+      "state_reason": "JobArrayTaskLimit",
+      "submit_time": 1722495580,
+      "tasks": {
+        "infinite": false,
+        "number": 0,
+        "set": false
+      },
+      "tres_req_str": "",
+      "user_name": "user-redacted"
+    }
+  ],
+  "meta": {
+    "Slurm": {
+      "release": "24.11.0",
+      "version": {
+        "major": 24,
+        "micro": 0,
+        "minor": 11
+      }
+    },
+    "command": [
+      "squeue",
+      "--json"
+    ],
+    "plugins": {
+      "accounting_storage": "slurmdbd",
+      "data_parser": "data_parser/v0.0.43"
+    }
+  },
+  "warnings": []
+}

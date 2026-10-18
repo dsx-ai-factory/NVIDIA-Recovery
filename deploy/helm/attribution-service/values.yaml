@@ -1,0 +1,17 @@
+global: {}
+replicas: 1
+image:
+  repository: ""
+  name: attribution-service
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+port: 8000
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+# Restrict the provider to amd64 until arm64 is qualified.
+nodeSelector:
+  kubernetes.io/arch: amd64
+tolerations: []

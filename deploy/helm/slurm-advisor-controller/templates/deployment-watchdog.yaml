@@ -1,0 +1,178 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.watchdog.enabled }}
+{{- $gatewayAudit := eq .Values.watchdog.auditTrail.destination "gateway" }}
+{{- $gatewayAuth := and $gatewayAudit .Values.controller.kubernetesAuth.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "slurm-advisor-controller.watchdogFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slurm-advisor-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: watchdog
+spec:
+  replicas: {{ .Values.watchdog.replicas }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "slurm-advisor-controller.watchdogSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "slurm-advisor-controller.watchdogSelectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "slurm-advisor-controller.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      dnsConfig:
+        searches:
+          - {{ printf "%s.%s.svc.cluster.local" (first (splitList ":" .Values.sackd.confServer)) .Release.Namespace | quote }}
+      initContainers:
+        {{- include "slurm-advisor-controller.slurmInitContainer" . | nindent 8 }}
+      containers:
+        - name: slurm-watchdog
+          image: {{ include "slurm-advisor-controller.image" .Values.watchdog.image | quote }}
+          imagePullPolicy: {{ .Values.watchdog.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          env:
+            - name: SLURM_WATCHDOG_MODE
+              value: {{ .Values.watchdog.mode | quote }}
+            - name: SLURM_WATCHDOG_ACKNOWLEDGE_SCHEDULER_ACTIONS
+              value: {{ .Values.watchdog.acknowledgeSchedulerActions | quote }}
+            - name: SLURM_WATCHDOG_ENVIRONMENT_PATTERN
+              value: {{ default .Values.controller.environment .Values.watchdog.environmentPattern | quote }}
+            - name: SLURM_WATCHDOG_POLL_INTERVAL
+              value: {{ .Values.watchdog.pollInterval | quote }}
+            - name: SLURM_WATCHDOG_RELEASE_TIMEOUT
+              value: {{ .Values.watchdog.releaseTimeout | quote }}
+            - name: SLURM_WATCHDOG_CLEANUP_GRACE_PERIOD
+              value: {{ .Values.watchdog.cleanupGracePeriod | quote }}
+            - name: SLURM_WATCHDOG_SLURM_EXEC_TIMEOUT
+              value: {{ .Values.watchdog.slurmExecTimeout | quote }}
+            - name: SLURM_WATCHDOG_JOB_DEFAULT_MODE
+              value: {{ .Values.controller.mode | quote }}
+            - name: SLURM_WATCHDOG_JOB_ACTIONS_ACKNOWLEDGED
+              value: {{ .Values.controller.acknowledgeSchedulerActions | quote }}
+            - name: SLURM_WATCHDOG_USER_ALLOWLIST
+              value: {{ join "," .Values.controller.userAllowlist | quote }}
+            - name: SLURM_WATCHDOG_PARTITION_ALLOWLIST
+              value: {{ join "," .Values.watchdog.partitionAllowlist | quote }}
+            - name: SLURM_WATCHDOG_VERSIONED_SQUEUE_JSON
+              value: {{ .Values.watchdog.versionedSqueueJSON | quote }}
+            - name: SLURM_WATCHDOG_LOG_LEVEL
+              value: {{ .Values.watchdog.logLevel | quote }}
+            - name: SLURM_WATCHDOG_METRICS_ENABLED
+              value: {{ .Values.metrics.watchdog.enabled | quote }}
+            - name: SLURM_WATCHDOG_METRICS_ADDR
+              value: {{ printf "%s:%v" .Values.metrics.watchdog.bindAddress .Values.metrics.watchdog.port | quote }}
+            {{- if .Values.watchdog.auditTrail.destination }}
+            - name: SLURM_WATCHDOG_AUDIT_TRAIL_DESTINATION
+              value: {{ .Values.watchdog.auditTrail.destination | quote }}
+            {{- end }}
+            {{- if $gatewayAudit }}
+            - name: SLURM_WATCHDOG_AUDIT_GATEWAY_ENDPOINT
+              value: {{ default .Values.controller.heimdallEndpoint .Values.watchdog.auditGatewayEndpoint | quote }}
+            - name: SLURM_WATCHDOG_TLS_ENABLED
+              value: {{ .Values.controller.gatewayTLS.enabled | quote }}
+            {{- if .Values.controller.gatewayTLS.enabled }}
+            - name: SLURM_WATCHDOG_TLS_SERVER_NAME
+              value: {{ .Values.controller.gatewayTLS.serverName | quote }}
+            {{- if .Values.controller.gatewayTLS.caConfigMap.name }}
+            - name: SLURM_WATCHDOG_TLS_CA_FILE
+              value: /var/run/config/heimdall-tls/ca.crt
+            {{- end }}
+            {{- end }}
+            {{- if $gatewayAuth }}
+            - name: SLURM_WATCHDOG_SERVICE_ACCOUNT_TOKEN_PATH
+              value: /var/run/secrets/heimdall/service-account-token
+            {{- end }}
+            {{- end }}
+            - name: SLURM_WATCHDOG_AUDIT_TRAIL_MAX_BATCH_SIZE
+              value: {{ .Values.watchdog.auditTrail.maxBatchSize | quote }}
+            - name: SLURM_WATCHDOG_AUDIT_TRAIL_BUFFER_SIZE
+              value: {{ .Values.watchdog.auditTrail.bufferSize | quote }}
+            - name: SLURM_WATCHDOG_AUDIT_TRAIL_FLUSH_INTERVAL
+              value: {{ .Values.watchdog.auditTrail.flushInterval | quote }}
+            {{- if (((.Values.global).otelcollector).enabled) }}
+            {{- include "heimdall.otelEnv" . | nindent 12 }}
+            {{- end }}
+          {{- if .Values.metrics.watchdog.enabled }}
+          ports:
+            - name: watch-metrics
+              containerPort: {{ .Values.metrics.watchdog.port }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: watch-metrics
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          {{- end }}
+          resources:
+            {{- toYaml .Values.watchdog.resources | nindent 12 }}
+          volumeMounts:
+            {{- if and $gatewayAudit .Values.controller.gatewayTLS.caConfigMap.name }}
+            - name: heimdall-tls-ca
+              mountPath: /var/run/config/heimdall-tls
+              readOnly: true
+            {{- end }}
+            - name: slurm-config
+              mountPath: /etc/slurm
+              readOnly: true
+            - name: slurm-runtime
+              mountPath: /run/slurm
+            {{- if $gatewayAuth }}
+            - name: heimdall-service-account-token
+              mountPath: /var/run/secrets/heimdall
+              readOnly: true
+            {{- end }}
+        {{- include "slurm-advisor-controller.sackdContainer" . | nindent 8 }}
+      volumes:
+        {{- if and $gatewayAudit .Values.controller.gatewayTLS.caConfigMap.name }}
+        - name: heimdall-tls-ca
+          configMap:
+            name: {{ .Values.controller.gatewayTLS.caConfigMap.name | quote }}
+            items:
+              - key: {{ .Values.controller.gatewayTLS.caConfigMap.key | quote }}
+                path: ca.crt
+        {{- end }}
+        {{- include "slurm-advisor-controller.slurmVolumes" . | nindent 8 }}
+        {{- if $gatewayAuth }}
+        - name: heimdall-service-account-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: {{ .Values.controller.kubernetesAuth.audience | quote }}
+                  expirationSeconds: {{ .Values.controller.kubernetesAuth.expirationSeconds }}
+                  path: service-account-token
+        {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

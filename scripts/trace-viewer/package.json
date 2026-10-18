@@ -1,0 +1,8 @@
+{
+  "name": "e2e-trace-viewer",
+  "private": true,
+  "description": "Pinned speedscope for viewing E2E trace files locally",
+  "dependencies": {
+    "speedscope": "1.25.0"
+  }
+}

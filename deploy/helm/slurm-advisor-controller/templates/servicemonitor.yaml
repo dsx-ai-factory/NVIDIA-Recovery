@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if and .Values.serviceMonitor.enabled .Values.metrics.controller.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "slurm-advisor-controller.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slurm-advisor-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "slurm-advisor-controller.controllerSelectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: ctrl-metrics
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+{{- end }}
+{{- if and .Values.serviceMonitor.enabled .Values.watchdog.enabled .Values.metrics.watchdog.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "slurm-advisor-controller.watchdogFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "slurm-advisor-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: watchdog
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "slurm-advisor-controller.watchdogSelectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: watch-metrics
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+{{- end }}

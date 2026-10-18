@@ -1,0 +1,94 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Documentation
+
+on:
+  push:
+    branches:
+      - main
+      - "pull-request/[0-9A-Za-z]+"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish configured Fern instance after hosting approval
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Fern documentation check and render
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: "true"
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: Set up locked public Python environment
+        uses: ./.github/actions/setup-uv-cache
+        with:
+          cache-role: docs
+      - name: Install pinned documentation tools
+        run: npm ci --prefix scripts/docs --ignore-scripts --no-audit --no-fund
+      - name: Verify Adapter schema without the private provider
+        run: uv run --locked --package attribution-adapter python scripts/docs/export-openapi.py --check
+      - name: Check configuration, links, schemas and MDX
+        run: npm --prefix scripts/docs run check
+      - name: Verify broken links, specs and MDX fail
+        run: npm --prefix scripts/docs test
+      - name: Render guides and both API references locally
+        run: npm --prefix scripts/docs run render
+
+  publish:
+    name: Publish approved documentation
+    needs: validate
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.publish &&
+      github.ref == 'refs/heads/main' && github.ref_protected &&
+      vars.DOCS_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Maintainer must configure required reviewers, prevent self-review and
+    # restrict this environment to protected main before enabling publication.
+    environment: docs-publish
+    steps:
+      - name: Check out the validated source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: Set up public Python environment
+        uses: ./.github/actions/setup-uv-cache
+        with:
+          cache-role: docs-publish
+      - name: Install pinned documentation tools
+        run: npm ci --prefix scripts/docs --ignore-scripts --no-audit --no-fund
+      - name: Refuse unallocated or unapproved hosting
+        env:
+          DOCS_NVIDIA_URL: ${{ vars.DOCS_NVIDIA_URL }}
+        run: uv run --locked --package attribution-adapter python scripts/docs/publish-check.py
+      - name: Prepare authoritative guides
+        run: npm --prefix scripts/docs run prepare
+      - name: Publish configured Fern instance
+        env:
+          FERN_TOKEN: ${{ secrets.DOCS_FERN_TOKEN }}
+        run: |
+          test -n "$FERN_TOKEN"
+          scripts/docs/node_modules/.bin/fern generate --docs

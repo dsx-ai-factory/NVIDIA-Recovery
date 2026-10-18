@@ -1,0 +1,749 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+package heimdall.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/dsx-ai-factory/nvidia-recovery/api/gen/go/heimdall/v1";
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Advanced Training Resiliency API"
+    version: "0.2.0"
+  }
+  schemes: [HTTPS]
+  consumes: "application/json"
+  produces: "application/json"
+};
+
+// JobStatus represents the state of a job.
+enum JobStatus {
+  // The status is not specified.
+  JOB_STATUS_UNSPECIFIED = 0;
+  // The job has been created but is not started yet due to being queued, waiting for resources or
+  // is pulling container images etc...
+  JOB_STATUS_PENDING = 1;
+  // The job is scheduled and has started running.
+  JOB_STATUS_RUNNING = 2;
+  // A stopped job is no longer running or using resources.
+  JOB_STATUS_STOPPED = 3;
+  // The job completed without reporting an error.
+  JOB_STATUS_COMPLETED = 4;
+  // The job exited with an error status.
+  JOB_STATUS_FAILED = 5;
+  // Job was cancelled by the user or system.
+  JOB_STATUS_CANCELLED = 6;
+  // The job is deleted.
+  JOB_STATUS_DELETED = 7;
+}
+
+// NodeConstraints defines node scheduling constraints for jobs.
+message NodeConstraints {
+  // List of nodes to exclude from job scheduling.
+  repeated string exclusions = 1;
+  // List of nodes to explicitly include for job scheduling.
+  repeated string inclusions = 2;
+}
+
+// JobAdditionalProperties contains additional configuration properties for jobs.
+message JobAdditionalProperties {
+  // Maximum number of times a job can be requeued. -1 means unlimited.
+  optional int32 max_requeue_times = 1;
+  // Whether NVRX is enabled for this job.
+  bool enable_nvrx = 2;
+}
+
+// JobRecoveryConfig contains typed recovery policy for scheduler jobs.
+message JobRecoveryConfig {
+  // AutoResumeMode defines how the system should resume a recoverable job.
+  enum AutoResumeMode {
+    // No job-level auto-resume mode was specified.
+    AUTO_RESUME_MODE_UNSPECIFIED = 0;
+    // Requeue the same scheduler job to resume progress.
+    AUTO_RESUME_MODE_REQUEUE = 1;
+    // Use singleton dependency jobs to resume progress.
+    AUTO_RESUME_MODE_SINGLETON_DEPENDENCY = 2;
+  }
+
+  // DagAction defines what Job Manager should request after all dependencies are satisfied.
+  enum DagAction {
+    // No DAG action was specified.
+    DAG_ACTION_UNSPECIFIED = 0;
+    // Release the held child so it becomes scheduler-eligible.
+    DAG_ACTION_RELEASE = 1;
+  }
+
+  // Job-level auto-resume mode.
+  AutoResumeMode auto_resume_mode = 1;
+  // Maximum number of times a job can be requeued. Must be positive when present.
+  optional int32 max_requeue_times = 2;
+  // Whether normal completion should trigger requeue. Presence overrides the system default.
+  optional bool requeue_on_completion = 3;
+  reserved 4;
+  reserved "watchdog_eligible";
+  // Job-level anomaly detection policy supplied by the scheduler adapter.
+  JobAnomalyDetectionConfig anomaly_detection_config = 5;
+  // Parent gates that must be satisfied before this job becomes eligible.
+  repeated JobDagDependency dag_dependencies = 6;
+  // Action to apply after all DAG dependencies are satisfied.
+  DagAction dag_action = 7;
+  // Optional APS routing environment preserved exactly from the scheduler job.
+  optional string environment = 8;
+  // Whether requeued attempts intentionally write to the same log files.
+  optional bool log_file_paths_shared_across_attempts = 9;
+}
+
+// JobAnomalyDetectionConfig contains per-job log detection controls.
+message JobAnomalyDetectionConfig {
+  // Whether Watcher log-based crash detection is enabled.
+  optional bool log_based_crash_enabled = 1;
+  // Whether Watcher no-output detection is enabled.
+  optional bool log_based_timeout_enabled = 2;
+  // No-output threshold during pre-training, in seconds. Must be positive when present.
+  optional int32 log_based_timeout_threshold_pretraining = 3;
+  // No-output threshold during the training loop, in seconds. Must be positive when present.
+  optional int32 log_based_timeout_threshold_trainingloop = 4;
+}
+
+// Job represents a job tracked by the Advisor, including both
+// actual (observed) and desired (advisor-set) states.
+message Job {
+  // The UUID assigned by NVIDIA Recovery.
+  string heimdall_job_id = 1;
+
+  // Legacy id for job for slurm systems.
+  string job_run_id = 2;
+
+  // Scheduler-specific job identifier.
+  string job_id = 3;
+  // The workflow ID this job belongs to.
+  string workflow_id = 5 [
+    (google.api.field_behavior) = REQUIRED,
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      min_length: 1
+      max_length: 256
+    }
+  ];
+  // The attempt index for this job.
+  int32 attempt_index = 6;
+  // List of nodes associated with the job.
+  repeated string nodes = 7;
+  // Number of GPUs per node. kill?
+  optional int32 gpu_count_per_node = 8;
+  // Node constraints observed on the job.
+  optional NodeConstraints node_constraints = 9;
+  // Additional properties for the job.
+  optional JobAdditionalProperties additional_properties = 10 [deprecated = true];
+  // The actual state of the job.
+  JobStatus state = 11;
+  // When the job was created.
+  google.protobuf.Timestamp created_at = 13;
+  // When the job was last seen.
+  google.protobuf.Timestamp last_seen = 14;
+  // When the job was last updated.
+  google.protobuf.Timestamp updated_at = 15;
+  // The name of the job
+  optional string job_name = 16;
+  // Scheduler metadata that is specific to the scheduler such as kubernetes namespace or job kind.
+  google.protobuf.Struct scheduler_metadata = 17;
+  // Typed recovery policy for scheduler recovery behavior.
+  optional JobRecoveryConfig recovery_config = 18;
+}
+
+// CreateOrUpdateJobRequest is used to create or update a job.
+// If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
+message CreateOrUpdateJobRequest {
+  // The UUID for the job. If not provided, will be computed from job_id and attempt_index.
+  optional string heimdall_job_id = 1;
+  // Scheduler-specific job identifier.
+  string job_id = 2;
+  // The workflow ID this job belongs to.
+  string workflow_id = 3 [
+    (google.api.field_behavior) = REQUIRED,
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      min_length: 1
+      max_length: 256
+    }
+  ];
+  // The attempt index for this job.
+  int32 attempt_index = 4;
+  // The name of the job.
+  optional string job_name = 5;
+  // List of nodes allocated to the job.
+  repeated string allocated_nodes = 6;
+  // Number of GPUs per node.
+  int32 gpu_count_per_node = 7;
+  // Node constraints for the job.
+  optional NodeConstraints node_constraints = 8;
+  // Additional properties for the job.
+  optional JobAdditionalProperties additional_properties = 9 [deprecated = true];
+  // The state of the job.
+  JobStatus state = 10;
+  // Scheduler-specific metadata (e.g., CRD kind, namespace, labels, annotations).
+  google.protobuf.Struct scheduler_metadata = 11;
+  // Typed recovery policy for scheduler recovery behavior.
+  optional JobRecoveryConfig recovery_config = 12;
+}
+
+// GetJobRequest is the request for the GetJob method.
+message GetJobRequest {
+  // The job identifier.
+  string heimdall_job_id = 1;
+  // If true, interpret heimdall_job_id as a UUID and query by heimdall_job_id directly.
+  // If false or not set (default), parse as "{job_id}-{attempt_index}" format.
+  optional bool use_heimdall_id = 2;
+}
+
+// GetJobResponse is the response for the GetJob method.
+message GetJobResponse {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {example: "{\"job\":{\"heimdallJobId\":\"test-job-0\",\"jobId\":\"test-job\",\"workflowId\":\"test-workflow\",\"attemptIndex\":0,\"nodes\":[\"node1\",\"node2\",\"node3\"],\"state\":\"JOB_STATUS_COMPLETED\"}}"}
+  };
+
+  // The job.
+  Job job = 1;
+}
+
+// GetWorkflowsRequest is the request for the GetWorkflows method.
+message GetWorkflowsRequest {
+  // A decimal zero-based offset from the previous response's next_page_token field. Mutually exclusive with page_number.
+  optional string page_token = 1;
+
+  // A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.
+  optional int32 page_number = 2;
+
+  // The maximum number of workflows to return. Defaults to 100 and cannot exceed 250.
+  int32 limit = 3;
+}
+
+// GetWorkflowsResponse is the response for the GetWorkflows method.
+message GetWorkflowsResponse {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {example: "{\"workflows\":[{\"workflowId\":\"workflow-0\",\"name\":\"workflow-0\",\"startTime\":\"2025-06-18T18:17:50.667816956Z\",\"endTime\":\"2025-06-18T18:37:00.667816956Z\"}],\"count\":1}"}
+  };
+
+  // The workflows.
+  repeated Workflow workflows = 1;
+
+  // The total count of workflows returned.
+  int32 count = 2;
+
+  // The decimal zero-based offset to use for the next page of results.
+  optional string next_page_token = 3;
+}
+
+// GetWorkflowRequest is the request for the GetWorkflow method.
+message GetWorkflowRequest {
+  // The opaque identifier of the workflow to get.
+  string workflow_id = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      min_length: 1
+      max_length: 256
+    }
+  ];
+}
+
+// GetWorkflowResponse is the response for the GetWorkflow method.
+message GetWorkflowResponse {
+  // The workflow.
+  Workflow workflow = 1;
+}
+
+// Workflow is the workflow.
+message Workflow {
+  string workflow_id = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      min_length: 1
+      max_length: 256
+    }
+  ];
+  // The ID of the workflow.
+  string scheduler_workflow_id = 2;
+  // The name of the workflow.
+  string name = 3;
+  // The start time of the workflow as utc unix timestamp.
+  google.protobuf.Timestamp start_time = 4;
+  // The end time of the workflow as utc unix timestamp.
+  optional google.protobuf.Timestamp end_time = 5;
+}
+
+// GetJobsRequest is the request for listing jobs.
+message GetJobsRequest {
+  // A decimal zero-based offset from the previous response's next_page_token field. Mutually exclusive with page_number.
+  optional string page_token = 1;
+  // A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.
+  optional int32 page_number = 2;
+  // The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.
+  int32 limit = 3;
+  // The workflow IDs to filter by.
+  repeated string workflow_ids = 4 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    min_length: 1
+    max_length: 256
+  }];
+  // The job IDs to filter by.
+  repeated string job_ids = 5;
+  // Job manager / scheduler state filter (e.g. RUNNING, COMPLETED). Passed through to job manager.
+  optional string jm_state = 6;
+  // Return jobs that can seed scheduler reconciliation: all non-final jobs plus
+  // failure-like terminal jobs. COMPLETED and REQUEUED jobs are excluded
+  // because their recovery is driven by exact-attempt Advice. Passed through
+  // to job manager and mutually exclusive with jm_state.
+  optional bool reconciliation_eligible_jobs = 7;
+  // Filter by backend completion state: false returns non-final attempts,
+  // true returns final attempts, and omission preserves historical listing.
+  // Passed through to job manager; mutually exclusive with jm_state and
+  // reconciliation_eligible_jobs=true.
+  optional bool completed_jobs = 8;
+  // Inclusive lower bound on persisted job end time, applied in job manager
+  // before count and pagination. Attempts without an end time are excluded.
+  optional google.protobuf.Timestamp end_time_from = 9;
+}
+
+// GetJobsResponse is the response for listing jobs.
+message GetJobsResponse {
+  // The list of jobs.
+  repeated Job jobs = 1;
+  // The total count of jobs returned.
+  int32 count = 2;
+  // The decimal zero-based offset to use for the next page of results.
+  optional string next_page_token = 3;
+}
+
+// GetJobsBySchedulerIdRequest is the request for getting jobs by scheduler ID.
+message GetJobsBySchedulerIdRequest {
+  // The scheduler job ID to search for.
+  string scheduler_job_id = 1;
+  // A decimal zero-based offset from the previous response's next_page_token field.
+  optional string page = 2;
+  // The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.
+  int32 limit = 3;
+}
+
+// GetJobsBySchedulerIdResponse is the response for getting jobs by scheduler ID.
+message GetJobsBySchedulerIdResponse {
+  // The list of jobs.
+  repeated Job jobs = 1;
+  // The total count of jobs returned.
+  int32 count = 2;
+  // The decimal zero-based offset to use for the next page of results.
+  optional string next_page_token = 3;
+}
+
+// CreateOrUpdateJobResponse is the response for creating or updating a job.
+message CreateOrUpdateJobResponse {
+  // The created or updated job.
+  Job job = 1;
+}
+
+// ResourceDetail represents details about a specific resource.
+message ResourceDetail {
+  // The type of resource (e.g., "node", "gpu").
+  string resource_type = 1;
+  // The unique identifier of the resource.
+  string resource_id = 2;
+  // Additional details about the resource.
+  optional string details = 3;
+}
+
+// RemediationAction represents an action taken to remediate an issue.
+message RemediationAction {
+  // The type of action (e.g., "exclude_node", "restart_job").
+  string action_type = 1;
+  // When the action was taken.
+  google.protobuf.Timestamp timestamp = 2;
+  // The reason for taking this action.
+  string reason = 3;
+  // Resources affected by this action.
+  repeated ResourceDetail resource_details = 4;
+}
+
+// Issue represents a detected issue with a job.
+message Issue {
+  // The type of issue detected.
+  string issue_type = 1;
+  // When the issue was detected.
+  google.protobuf.Timestamp timestamp = 2;
+  // What detected this issue (e.g., "watcher", "advisor").
+  string detected_by = 3;
+  // Relevant log lines related to the issue.
+  repeated string relevant_log_lines = 4;
+  // Actions taken to remediate this issue.
+  repeated RemediationAction remediation_actions = 5;
+}
+
+// AdviceState represents the recommended state action for a job.
+enum AdviceState {
+  // The state is not specified.
+  ADVICE_STATE_UNSPECIFIED = 0;
+  // The job should be restarted.
+  ADVICE_STATE_RESTARTED = 1;
+  // The job should be terminated.
+  ADVICE_STATE_TERMINATED = 2;
+  // The exact job attempt should be scheduler-eligible.
+  ADVICE_STATE_RELEASED = 3;
+}
+
+// RecoveryOperation identifies the scheduler-neutral recovery intent.
+enum RecoveryOperation {
+  // No recovery operation was specified.
+  RECOVERY_OPERATION_UNSPECIFIED = 0;
+  // Restart the failed source attempt.
+  RECOVERY_OPERATION_RESTART = 1;
+  // Terminate the source attempt.
+  RECOVERY_OPERATION_TERMINATE = 2;
+  // Release a held job after its DAG dependencies are satisfied.
+  RECOVERY_OPERATION_DAG_RELEASE = 3;
+}
+
+
+
+// RecoverySchedulerAction identifies one scheduler command occurrence.
+enum RecoverySchedulerAction {
+  // No scheduler action was specified.
+  RECOVERY_SCHEDULER_ACTION_UNSPECIFIED = 0;
+  // Ask Slurm to requeue the job and hold the target attempt.
+  RECOVERY_SCHEDULER_ACTION_SLURM_REQUEUE_HOLD = 1;
+  // Ask Slurm to update the target attempt's node constraints.
+  RECOVERY_SCHEDULER_ACTION_SLURM_UPDATE_CONSTRAINTS = 2;
+  // Ask Slurm to release the target attempt from its hold.
+  RECOVERY_SCHEDULER_ACTION_SLURM_RELEASE = 3;
+  // Ask Slurm to cancel the job.
+  RECOVERY_SCHEDULER_ACTION_SLURM_CANCEL = 4;
+}
+
+// RecoverySchedulerActionOutcome classifies one scheduler action occurrence.
+enum RecoverySchedulerActionOutcome {
+  // No scheduler action outcome was specified.
+  RECOVERY_SCHEDULER_ACTION_OUTCOME_UNSPECIFIED = 0;
+  // The action was planned in observe mode and no command ran.
+  RECOVERY_SCHEDULER_ACTION_OUTCOME_PLANNED = 1;
+  // The scheduler command completed successfully.
+  RECOVERY_SCHEDULER_ACTION_OUTCOME_SUCCESS = 2;
+  // The scheduler command returned an error.
+  RECOVERY_SCHEDULER_ACTION_OUTCOME_ERROR = 3;
+  // Fresh scheduler state showed that the action was already satisfied.
+  RECOVERY_SCHEDULER_ACTION_OUTCOME_ALREADY_SATISFIED = 4;
+}
+
+// RecoveryContext carries one durable recovery sequence's W3C trace context.
+// It is correlation data and does not authorize or otherwise change scheduler actions.
+message RecoveryContext {
+  // The durable recovery sequence UUID assigned by Job Manager.
+  string sequence_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // The canonical W3C traceparent for later recovery work.
+  string traceparent = 2 [(google.api.field_behavior) = REQUIRED];
+  // The canonical W3C tracestate, when present.
+  optional string tracestate = 3;
+  // When the triggering condition was observed.
+  google.protobuf.Timestamp triggered_at = 4 [(google.api.field_behavior) = REQUIRED];
+  // The scheduler-neutral recovery operation.
+  RecoveryOperation operation = 5 [(google.api.field_behavior) = REQUIRED];
+}
+
+// AdviceReconciliationDisposition describes whether one Advice generation
+// still needs work.
+enum AdviceReconciliationDisposition {
+  // The disposition is not specified.
+  ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED = 0;
+  // Reconciliation has not reached a terminal observation.
+  ADVICE_RECONCILIATION_DISPOSITION_PENDING = 1;
+  // Fresh scheduler state satisfies the desired state.
+  ADVICE_RECONCILIATION_DISPOSITION_CONVERGED = 2;
+  // The desired state can no longer be reached for this generation.
+  ADVICE_RECONCILIATION_DISPOSITION_ABANDONED = 3;
+}
+
+// AdviceReconciliationReason is a bounded explanation for a reconciliation disposition.
+enum AdviceReconciliationReason {
+  // The reason is not specified.
+  ADVICE_RECONCILIATION_REASON_UNSPECIFIED = 0;
+  // Fresh scheduler state exactly matches the desired state.
+  ADVICE_RECONCILIATION_REASON_DESIRED_STATE_OBSERVED = 1;
+  // The target already satisfied the desired state before an action was needed.
+  ADVICE_RECONCILIATION_REASON_ALREADY_SATISFIED = 2;
+  // Ordinary Advice exceeded its configured maximum age.
+  ADVICE_RECONCILIATION_REASON_ADVICE_EXPIRED = 3;
+  // A newer persisted attempt is beyond this recommendation's applicability window.
+  ADVICE_RECONCILIATION_REASON_STALE_ATTEMPT = 4;
+  // The target is final and cannot accept the recommendation.
+  ADVICE_RECONCILIATION_REASON_TARGET_STATE_FINAL = 5;
+  // A live successor cannot safely receive the required constraints.
+  ADVICE_RECONCILIATION_REASON_SUCCESSOR_ALREADY_RUNNING = 6;
+  // The recommendation has no reconciliation path.
+  ADVICE_RECONCILIATION_REASON_INVALID_RECOMMENDATION = 7;
+  // The controller cannot implement the recommendation.
+  ADVICE_RECONCILIATION_REASON_UNSUPPORTED_RECOMMENDATION = 8;
+}
+
+// AdviceRecommendation represents the recommended state and node constraints.
+message AdviceRecommendation {
+  // Desired state action for the job.
+  optional AdviceState state = 1;
+  // Node constraints for the job.
+  optional NodeConstraints node_constraints = 2;
+}
+
+// AdviceReconciliationStatus records one generation-scoped reconciliation observation.
+message AdviceReconciliationStatus {
+  // Advice generation observed by the controller.
+  int64 observed_generation = 1;
+  // Current lifecycle disposition for the observed generation.
+  AdviceReconciliationDisposition disposition = 2;
+  // Stable machine-readable explanation for the disposition.
+  AdviceReconciliationReason reason = 3;
+  // Time of the fresh scheduler or policy observation.
+  google.protobuf.Timestamp observed_at = 4;
+  // Time the disposition or reason last changed.
+  google.protobuf.Timestamp transitioned_at = 5;
+  // Optional bounded diagnostic text for operators.
+  optional string diagnostic_message = 6;
+}
+
+// Advice represents advice computed by the Advisor for a job.
+// This includes desired state, node constraints, and detected issues.
+message Advice {
+  // The UUID assigned by NVIDIA Recovery.
+  string heimdall_job_id = 1;
+  // Scheduler-specific job identifier.
+  string job_id = 2;
+  // Scheduler metadata that is specific to the scheduler such as kubernetes namespace or job kind.
+  google.protobuf.Struct scheduler_metadata = 3;
+  // The restart/attempt count for this job.
+  int32 attempt_index = 4;
+  // The advice recommendation (desired state and node constraints).
+  AdviceRecommendation advice = 5;
+  // Issues detected for this job.
+  repeated Issue issues = 6;
+  // When this advice was created.
+  optional google.protobuf.Timestamp created_at = 7;
+  // When this advice was last updated.
+  optional google.protobuf.Timestamp updated_at = 8;
+  // Desired-state generation. Changes only when scheduler-affecting intent changes.
+  int64 generation = 9;
+  // Reconciliation status for the current generation, when one has been observed.
+  AdviceReconciliationStatus reconciliation_status = 10;
+  // When the current scheduler-affecting desired-state generation began.
+  optional google.protobuf.Timestamp desired_state_changed_at = 11;
+  // Durable per-item recovery correlation context, when available.
+  optional RecoveryContext recovery_context = 12;
+}
+
+// ListAdviceRequest is the request for list advice.
+message ListAdviceRequest {
+  // The opaque page token from the previous response's next_page_token field.
+  optional string page = 1;
+  // The maximum number of advice records to return. Defaults to 100 and cannot exceed 250.
+  int32 limit = 2;
+  // Return only Advice that can still require reconciliation.
+  optional bool only_active = 3;
+}
+
+// ListAdviceResponse is the response for listing advice.
+message ListAdviceResponse {
+  // The list of advice records.
+  repeated Advice advice = 1;
+  // The total count of advice records returned.
+  int32 count = 2;
+  // The opaque token to use for the next page of results.
+  optional string next_page_token = 3;
+}
+
+// UpdateAdviceReconciliationStatusRequest records one controller observation.
+message UpdateAdviceReconciliationStatusRequest {
+  // UUID of the Advice record being observed.
+  string heimdall_job_id = 1;
+  // Generation-scoped reconciliation status.
+  AdviceReconciliationStatus status = 2;
+}
+
+// UpdateAdviceReconciliationStatusResponse returns the persisted status.
+message UpdateAdviceReconciliationStatusResponse {
+  // Idempotently persisted reconciliation status.
+  AdviceReconciliationStatus status = 1;
+}
+
+// GetRecoverySequenceRequest identifies one durable recovery operation.
+message GetRecoverySequenceRequest {
+  // Scheduler system name, for example "slurm".
+  string scheduler_system = 1 [(google.api.field_behavior) = REQUIRED];
+  // Deployment or cluster scope that disambiguates scheduler job identifiers.
+  string scheduler_scope = 2 [(google.api.field_behavior) = REQUIRED];
+  // Scheduler-specific job identifier.
+  string job_id = 3 [(google.api.field_behavior) = REQUIRED];
+  // Zero-based attempt index on which recovery was triggered.
+  int32 source_attempt_index = 4 [(google.api.field_behavior) = REQUIRED];
+  // Scheduler-neutral recovery operation.
+  RecoveryOperation operation = 5 [(google.api.field_behavior) = REQUIRED];
+
+}
+
+// GetRecoverySequenceResponse returns the sequence's canonical context.
+message GetRecoverySequenceResponse {
+  // Canonical durable correlation context for this recovery operation.
+  RecoveryContext recovery_context = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// RecordRecoveryMilestoneRequest records one scheduler-action completion occurrence.
+message RecordRecoveryMilestoneRequest {
+  // Durable recovery sequence UUID.
+  string sequence_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // Stable key that deduplicates reports of this action occurrence.
+  string idempotency_key = 2 [(google.api.field_behavior) = REQUIRED];
+  // Scheduler-neutral recovery operation.
+  RecoveryOperation operation = 3 [(google.api.field_behavior) = REQUIRED];
+  // Scheduler action that was attempted or evaluated.
+  RecoverySchedulerAction action = 4 [(google.api.field_behavior) = REQUIRED];
+  // Logical outcome of the action occurrence.
+  RecoverySchedulerActionOutcome outcome = 5 [(google.api.field_behavior) = REQUIRED];
+  // When the scheduler action returned or its logical outcome was determined.
+  google.protobuf.Timestamp completed_at = 6 [(google.api.field_behavior) = REQUIRED];
+  // Whether this occurrence completes the owning recovery sequence.
+  // The scheduler adapter sets this from its workflow semantics; Job Manager
+  // does not derive it from operation, action, or outcome.
+  optional bool completes_sequence = 7 [(google.api.field_behavior) = REQUIRED];
+}
+
+// RecordRecoveryMilestoneResponse reports durable milestone acceptance.
+message RecordRecoveryMilestoneResponse {
+  // Whether this idempotency key had already been recorded.
+  bool duplicate = 1;
+  // Whether the sequence is completed after accepting this report.
+  bool sequence_completed = 2;
+  // Trigger-to-terminal-milestone duration when this report newly completed its sequence.
+  optional double end_to_end_duration_seconds = 3;
+}
+
+// JobDagDependency identifies one parent gate for a DAG child.
+message JobDagDependency {
+  // TriggerCondition defines the parent state that satisfies this dependency.
+  enum TriggerCondition {
+    // No trigger condition was specified.
+    TRIGGER_CONDITION_UNSPECIFIED = 0;
+    // The parent must complete successfully.
+    TRIGGER_CONDITION_COMPLETED = 1;
+  }
+
+  // Exactly one scheduler-neutral parent reference must be supplied.
+  oneof target {
+    // Scheduler job ID of the parent.
+    string job_id = 1;
+    // Workflow-scoped job name of the parent.
+    string job_name = 2;
+  }
+  // Condition that satisfies this dependency.
+  TriggerCondition trigger = 3;
+}
+
+// Public API for the NVIDIA Recovery service.
+service HeimdallService {
+  // Returns a paginated list of jobs.
+  rpc GetJobs(GetJobsRequest) returns (GetJobsResponse) {
+    option (google.api.http) = {get: "/v1/jobs"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List jobs"
+      description: "Retrieve a list of jobs that the Advisor is aware of. Jobs are ordered by creation time ascending for synchronization purposes. Use the `page` parameter to get the next page of jobs."
+    };
+  }
+
+  // Returns a specific job by its NVIDIA Recovery UUID.
+  rpc GetJob(GetJobRequest) returns (GetJobResponse) {
+    option (google.api.http) = {get: "/v1/jobs/{heimdall_job_id}"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Get job by ID"
+      description: "Retrieve a specific job by its UUID."
+    };
+  }
+
+  // Returns jobs by scheduler job ID.
+  rpc GetJobsBySchedulerId(GetJobsBySchedulerIdRequest) returns (GetJobsBySchedulerIdResponse) {
+    option (google.api.http) = {get: "/v1/jobs/by-scheduler-id/{scheduler_job_id}"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Get jobs by scheduler ID"
+      description: "Retrieve jobs by their scheduler ID. Multiple jobs may share the same scheduler_job_id, so this endpoint returns a paginated list of matching jobs."
+    };
+  }
+
+  // Creates or updates a job.
+  rpc CreateOrUpdateJob(CreateOrUpdateJobRequest) returns (CreateOrUpdateJobResponse) {
+    option (google.api.http) = {
+      post: "/v1/jobs"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Create or update job"
+      description: "Create a new job or update an existing one. If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created."
+    };
+  }
+
+  // Returns the workflows.
+  rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {
+    option (google.api.http) = {get: "/v1/workflows"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Returns the workflows."
+      description: "Returns the workflows."
+    };
+  }
+
+  // Returns the workflow with the given ID.
+  rpc GetWorkflow(GetWorkflowRequest) returns (GetWorkflowResponse) {
+    option (google.api.http) = {
+      get: "/v1/workflows:lookup"
+      additional_bindings: {get: "/v1/workflows/{workflow_id}"}
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Returns the workflow with the given ID."
+      description: "Returns the workflow with the given ID."
+    };
+  }
+
+  // Returns advice for jobs.
+  rpc ListAdvice(ListAdviceRequest) returns (ListAdviceResponse) {
+    option (google.api.http) = {get: "/v1/advice"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List advice"
+      description: "Retrieve a list of advice for jobs. Advice includes only the desired state and node exclusions that the Advisor has computed for jobs. This is used by the NVIDIA Recovery Job Controller to synchronize job advice updates. Use the `page` parameter to get the next page of advice records."
+    };
+  }
+
+  // Records one generation-scoped Advice reconciliation observation.
+  rpc UpdateAdviceReconciliationStatus(UpdateAdviceReconciliationStatusRequest) returns (UpdateAdviceReconciliationStatusResponse) {
+    option (google.api.http) = {
+      put: "/v1/advice/{heimdall_job_id}/reconciliation-status"
+      body: "status"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Update Advice reconciliation status"
+      description: "Record an idempotent, generation-scoped reconciliation observation."
+    };
+  }
+
+  // Reads the durable trace context for an existing backend-owned recovery operation.
+  rpc GetRecoverySequence(GetRecoverySequenceRequest) returns (GetRecoverySequenceResponse) {
+    option (google.api.http) = {
+      get: "/v1/recovery/sequences"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Get a recovery sequence"
+      description: "Read the canonical trace context for one exact scoped recovery operation. A missing sequence returns not found without creating state or authorizing scheduler actions."
+    };
+  }
+
+  // Records one scheduler-action completion occurrence without replaying the action.
+  rpc RecordRecoveryMilestone(RecordRecoveryMilestoneRequest) returns (RecordRecoveryMilestoneResponse) {
+    option (google.api.http) = {
+      post: "/v1/recovery/milestones"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Record a recovery milestone"
+      description: "Idempotently persist one scheduler-action completion occurrence for recovery tracing and latency measurement."
+    };
+  }
+}

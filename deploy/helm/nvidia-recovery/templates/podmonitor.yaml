@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.global.prometheus.pod_monitor_enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  labels:
+    release: kube-prometheus-stack
+  name: heimdall-pod-monitor
+  namespace: {{ .Release.Namespace }}
+spec:
+  namespaceSelector:
+    matchNames:
+    -  {{ .Release.Namespace }}
+  podMetricsEndpoints:
+  - targetPort: metrics
+  - targetPort: 8080
+  selector:
+    matchExpressions:
+    - key: app.kubernetes.io/name
+      operator: Exists
+{{ end }}

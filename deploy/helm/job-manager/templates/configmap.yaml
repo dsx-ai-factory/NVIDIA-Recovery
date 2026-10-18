@@ -1,0 +1,151 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{/* Match the sibling Notifications chart's default fullname; custom names
+     and ports require an explicit notification_service_url. */ -}}
+{{ $notificationsName := .Release.Name -}}
+{{- if not (contains "notifications" .Release.Name) -}}
+{{- $notificationsName = printf "%s-notifications" .Release.Name -}}
+{{- end -}}
+{{- $notificationURL := .Values.service_config.notification_service_url | default (printf "http://%s:8080" ($notificationsName | trunc 63 | trimSuffix "-")) -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "job-manager.fullname" . }}-config
+  labels:
+    {{- include "job-manager.labels" . | nindent 4 }}
+data:
+  job_manager_config.yaml: |
+    service:
+      {{- if .Values.service_config.log_level }}
+      log_level: {{ .Values.service_config.log_level }}
+      {{- end }}
+      advice_enabled: {{ .Values.service_config.advice_enabled | default false }}
+      advice_management_enabled: {{ .Values.service_config.advice_management_enabled | default false }}
+      adi_attribution_request_emit_enabled: {{ .Values.service_config.adi_attribution_request_emit_enabled | default false }}
+      adi_straggler_emit_enabled: {{ .Values.service_config.adi_straggler_emit_enabled | default false }}
+      recovery_notifications_enabled: {{ .Values.service_config.recovery_notifications_enabled | default false }}
+      exclusion_node_stickiness_enabled: {{ .Values.service_config.exclusion_node_stickiness_enabled | default true }}
+      stale_job_cleanup_enabled: {{ .Values.service_config.stale_job_cleanup_enabled | default false }}
+      stale_job_scan_frequency_seconds: {{ .Values.service_config.stale_job_scan_frequency_seconds | default 300 }}
+      stale_job_threshold_seconds: {{ .Values.service_config.stale_job_threshold_seconds | default 300 }}
+      job_end_event_generation_enabled: {{ .Values.service_config.job_end_event_generation_enabled | default false }}
+      {{- if .Values.service_config.environment }}
+      environment: "{{ .Values.service_config.environment }}"
+      {{- end }}
+
+      attribution_summary_config:
+        {{- .Values.service_config.attribution_summary_config | toYaml | nindent 8 }}
+
+      attribution_insight_config:
+        {{- .Values.service_config.attribution_insight_config | toYaml | nindent 8 }}
+
+      {{- if .Values.service_config.system_max_requeue_times }}
+      system_max_requeue_times: {{ .Values.service_config.system_max_requeue_times}}
+      {{- end }}
+
+      {{- if .Values.service_config.checkpoint_based_requeue_stop_threshold }}
+      checkpoint_based_requeue_stop_threshold: {{ .Values.service_config.checkpoint_based_requeue_stop_threshold}}
+      {{- end }}
+
+      {{- if .Values.service_config.requeue_early_stop_scan_frequency_seconds }}
+      requeue_early_stop_scan_frequency_seconds: {{ .Values.service_config.requeue_early_stop_scan_frequency_seconds }}
+      {{- end }}
+
+      {{- if .Values.service_config.requeue_early_stop_threshold_seconds }}
+      requeue_early_stop_threshold_seconds: {{ .Values.service_config.requeue_early_stop_threshold_seconds }}
+      {{- end }}
+      requeue_on_completion: {{ .Values.service_config.requeue_on_completion }}
+
+      notification_service_url: {{ $notificationURL | quote }}
+      audit_trail:
+        {{- if hasKey .Values.service_config.audit_trail "destination" }}
+        {{- if .Values.service_config.audit_trail.destination }}
+        destination: {{ .Values.service_config.audit_trail.destination | quote }}
+        {{- end }}
+        {{- else }}
+        destination: {{ printf "%s/v1/audit/events" (regexReplaceAll "/+$" $notificationURL "") | quote }}
+        {{- end }}
+        max_batch_size: {{ .Values.service_config.audit_trail.max_batch_size | default 100 }}
+        max_buffer_size: {{ .Values.service_config.audit_trail.max_buffer_size | default 1000 }}
+        flush_interval_seconds: {{ .Values.service_config.audit_trail.flush_interval_seconds | default 30 }}
+
+      {{- if .Values.service_config.job_state_based_auto_resume_time_window_secs }}
+      job_state_based_auto_resume_time_window_secs: {{ .Values.service_config.job_state_based_auto_resume_time_window_secs }}
+      {{- end }}
+      {{- if .Values.service_config.job_state_based_auto_resume_threshold_secs }}
+      job_state_based_auto_resume_threshold_secs: {{ .Values.service_config.job_state_based_auto_resume_threshold_secs }}
+      {{- end }}
+      {{- if .Values.service_config.job_state_based_auto_resume_scan_interval_secs }}
+      job_state_based_auto_resume_scan_interval_secs: {{ .Values.service_config.job_state_based_auto_resume_scan_interval_secs }}
+      {{- end }}
+
+      {{- if .Values.service_config.dag_support }}
+      dag_support:
+        enabled: {{ .Values.service_config.dag_support.enabled | default false }}
+        action_timeout_seconds: {{ .Values.service_config.dag_support.action_timeout_seconds | default 120 }}
+        retry_scan_frequency_seconds: {{ .Values.service_config.dag_support.retry_scan_frequency_seconds | default 60 }}
+      {{- end }}
+
+      # Storage configuration
+      storage:
+        mode: "{{ .Values.storage.mode }}"
+
+        {{- if eq .Values.storage.mode "MYSQL" }}
+        sql:
+          host: "{{ .Values.storage.sql.host }}"
+          port: {{ .Values.storage.sql.port }}
+          username: "{{ .Values.storage.sql.username }}"
+          database_name: "{{ .Values.storage.sql.database_name }}"
+          {{- if .Values.storage.sql.ssl_enabled }}
+          ssl_enabled: {{ .Values.storage.sql.ssl_enabled }}
+          ssl_ca_path: "{{ .Values.storage.sql.ssl_ca_path }}"
+          {{- end }}
+          write_pool_enabled: {{ .Values.storage.sql.write_pool_enabled }}
+          write_pool_size: {{ .Values.storage.sql.write_pool_size }}
+          write_max_overflow: {{ .Values.storage.sql.write_max_overflow }}
+        {{- end }}
+
+      # HTTP endpoint configuration
+      http:
+        host: "0.0.0.0"
+        port: 8080
+
+      # Message bus configuration
+      event_bus:
+        host: "{{ .Values.event_bus.host }}"
+        workflow_controller_exchange: "{{ .Values.event_bus.workflow_controller_exchange }}"
+        workflow_controller_exchange_type: "{{ .Values.event_bus.workflow_controller_exchange_type | default "direct" }}"
+        job_queue: "{{ .Values.event_bus.job_queue }}"
+        job_routing_key: "{{ .Values.event_bus.job_routing_key }}"
+        anomaly_exchange: "{{ .Values.event_bus.anomaly_exchange }}"
+        anomaly_queue: "{{ .Values.event_bus.anomaly_queue }}"
+        anomaly_routing_key: "{{ .Values.event_bus.anomaly_routing_key }}"
+        anomaly_queue_delivery_retry_delay_secs: {{ .Values.event_bus.anomaly_queue_delivery_retry_delay_secs | default 0 }}
+        anomaly_dead_letter_routing_key: "{{ .Values.event_bus.anomaly_dead_letter_routing_key }}"
+        anomaly_dead_letter_redelivery_routing_key: "{{ .Values.event_bus.anomaly_dead_letter_redelivery_routing_key }}"
+        username: "{{ .Values.event_bus.username }}"
+        vhost: "{{ .Values.event_bus.vhost }}"
+
+        anomaly_isolator_exchange: "{{ .Values.event_bus.anomaly_isolator_exchange | default "aie_eventbus_exchange" }}"
+        anomaly_attribution_queue: "{{ .Values.event_bus.anomaly_attribution_queue | default "anomaly_attribution_queue" }}"
+        anomaly_attribution_routing_key: "{{ .Values.event_bus.anomaly_attribution_routing_key | default "anomaly.isolation.bad_nodes" }}"
+
+        {{- if .Values.event_bus.adi_attribution_request_exchange }}
+        adi_attribution_request_exchange: "{{ .Values.event_bus.adi_attribution_request_exchange }}"
+        {{- end }}
+        {{- if .Values.event_bus.adi_attribution_request_routing_key }}
+        adi_attribution_request_routing_key: "{{ .Values.event_bus.adi_attribution_request_routing_key }}"
+        {{- end }}
+
+      {{- if gt (int .Values.replicas) 1 }}
+      kubernetes_leader_election:
+        lease_name: "{{ .Values.kubernetes_leader_election.lease_name }}"
+        lease_duration_seconds: {{ .Values.kubernetes_leader_election.lease_duration_seconds }}
+        renew_deadline_seconds: {{ .Values.kubernetes_leader_election.renew_deadline_seconds }}
+        retry_period_seconds: {{ .Values.kubernetes_leader_election.retry_period_seconds }}
+        in_cluster: true
+      {{- end }}
+
+      guardrail_rules:
+        {{- .Values.service_config.guardrail_rules | toYaml | nindent 8 }}

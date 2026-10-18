@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AnomalyIsolation",
+  "description": "anomaly isolation",
+  "type": "object",
+  "required": [
+    "job_id"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "time_of_event": {
+      "type": "string",
+      "format": "datetime"
+    },
+    "verification": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "badranks": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "badnodes_dict": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "nonisolatednodes_dict": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "anomalies": {
+      "type": "array",
+      "items": {
+        "$ref": "../event_type.json#/definitions/event_type"
+      }
+    }
+  }
+}

@@ -1,0 +1,276 @@
+# Local values for the NVIDIA Recovery stack (umbrella chart) on Kind.
+#
+# Installed into the slurm namespace alongside the Slinky Slurm cluster:
+#   helm dependency build deploy/helm/nvidia-recovery
+#   helm upgrade --install nvidia-recovery deploy/helm/nvidia-recovery -n slurm \
+#     -f scripts/ci/e2e/values/stack-local.yaml
+#
+# RabbitMQ and MySQL are enabled umbrella dependencies. Tilt derives the
+# sibling service endpoints from HELM_RELEASE. All images
+# are locally built and side-loaded into Kind (pullPolicy Never). Services not
+# needed for the Slurm auto-resume loop are disabled.
+
+global:
+  log_query:
+    backend: loki
+    providers:
+      loki:
+        application:
+          url: http://loki-gateway.monitoring.svc.cluster.local
+          tenants: ""
+          org_id: ""
+        system:
+          url: http://loki-gateway.monitoring.svc.cluster.local
+          tenants: ""
+          org_id: ""
+        queries:
+          watcher:
+            # Keep the selector quoted so YAML preserves the native query text.
+            query_prefix: '{cluster="slurm", appName="slurm-app-log"}'
+  security:
+    allowInsecureImages: true
+  imagePullSecrets: []
+  mysql:
+    secret:
+      create: true
+      name: nvidia-recovery-mysql
+      password: heimdall
+  rabbitmq:
+    secret:
+      create: true
+      name: nvidia-recovery-rabbitmq
+      password_key: rabbitmq-password
+      cookie_key: rabbitmq-erlang-cookie
+      password: heimdall
+      cookie: heimdall-erlang-cookie
+
+# rabbitmq is deployed as part of the stack (umbrella subchart -> nvidia-recovery-rabbitmq).
+# The umbrella chart owns the Secret consumed by RabbitMQ and Heimdall services.
+rabbitmq:
+  enabled: true
+  # Restore the pinned chart's pre-existing local/CI resource preset. Null clears
+  # the umbrella allocation; an empty map would retain its inherited entries.
+  resources: null
+  resourcesPreset: micro
+  image:
+    repository: bitnamilegacy/rabbitmq
+    tag: 4.0.4-debian-12-r1
+  auth:
+    username: heimdall
+    existingPasswordSecret: nvidia-recovery-rabbitmq
+    existingErlangSecret: nvidia-recovery-rabbitmq
+  extraConfiguration: |
+    default_vhost = default-vhost
+    default_permissions.configure = .*
+    default_permissions.read = .*
+    default_permissions.write = .*
+
+# mysql is deployed as part of the stack (umbrella subchart -> nvidia-recovery-mysql).
+# The umbrella chart owns the Secret consumed by MySQL and Heimdall services.
+mysql:
+  enabled: true
+  image:
+    repository: bitnamilegacy/mysql
+  auth:
+    username: aps_mysql
+    database: aps_workflow_database
+    existingSecret: nvidia-recovery-mysql
+
+# API Gateway backs the standalone Slurm Advisor Controller in the local stack.
+api-gateway:
+  enabled: true
+  image:
+    repository: ""
+    name: api-gateway
+    tag: latest
+    pullPolicy: Never
+  imagePullSecrets: []
+  externalService:
+    enabled: true
+  service_type: ClusterIP
+  auth:
+    insecure: true
+  jobs:
+    source: jobmanager
+    endpoint: http://job-manager:8080
+  audit:
+    endpoint: http://nvidia-recovery-notifications:8080
+
+# Not needed for the local Slurm recovery development loop.
+loki-mcp: { enabled: false }
+grafana: { enabled: false }
+opentelemetry-collector: { enabled: false }
+dependency_checker: { enabled: false }
+
+dashboard:
+  enabled: true
+  image:
+    repository: ""
+    name: dashboard
+    tag: latest
+    pullPolicy: Never
+  imagePullSecrets: []
+  ingress_fqdn: ""
+  # The dashboard validates DATABASE_URL at startup but has no database client.
+  # These values only satisfy that legacy environment contract.
+  db:
+    protocol: mysql
+    user: aps_mysql
+    host: nvidia-recovery-mysql
+    port: "3306"
+    database: aps_workflow_database
+  app:
+    DATADOG_ENABLED: false
+    FACT_ENABLED: false
+    datadogWatcherURL: ""
+    apiGatewayURL: http://nvidia-recovery-api-gateway:8080
+    METRICS_ENABLED: false
+    API_KEYS_ENABLED: false
+
+notifications:
+  enabled: true
+  image:
+    repository: ""
+    name: notifications
+    tag: latest
+    pullPolicy: Never
+  imagePullSecrets: []
+  app:
+    slackEnabled: false
+    emailEnabled: false
+    callbackEnabled: false
+    cockpitProtocol: http
+    cockpitFQDN: localhost:3001
+  db:
+    protocol: mysql+pymysql
+    user: aps_mysql
+    host: nvidia-recovery-mysql
+    port: "3306"
+    database: aps_workflow_database
+    mysql_secret_name: nvidia-recovery-mysql
+    mysql_secret_key: mysql-password
+
+# --- Watcher (log-based anomaly detection: hang/no-output) ---
+watcher:
+  enabled: true
+  image:
+    repository: ""
+    name: watcher
+    tag: latest
+    pullPolicy: Never
+  command: ["/usr/local/bin/watcher"]
+  imagePullSecrets: []
+  resources:
+    requests:
+      memory: 384Mi
+  credentials:
+    rabbitmq:
+      secret_name: nvidia-recovery-rabbitmq
+      secret_key_name: rabbitmq-password
+  config:
+    service:
+      audit_trail:
+        max_batch_size: 100
+        max_buffer_size: 1000
+        flush_interval_seconds: 5
+    datasources:
+      log_query_policy:
+        # Leave a short ingestion buffer so the query cursor cannot advance past a
+        # late-arriving crash marker. This still keeps Watcher's normal poll
+        # comfortably inside the 90-second evidence window and ahead of the
+        # state-based Job Manager fallback.
+        query_delay: 10
+        # Alloy emits the established job_id attribute directly and preserves
+        # filename. No attempt label or synthetic path is needed.
+        label_remapping_enabled: false
+      rabbitmq:
+        publisher:
+          host: nvidia-recovery-rabbitmq
+          username: heimdall
+          vhost: default-vhost
+          # Match job_manager's anomaly_exchange (drop the _dev suffix default).
+          exchange: watcher_eventbus_exchange
+
+# --- Anomaly detection isolator (detects anomalies from job updates) ---
+anomaly-detection-isolator:
+  enabled: true
+  image:
+    repository: ""
+    name: anomaly-detection-isolator
+    tag: latest
+    pullPolicy: Never
+  command: ["/usr/local/bin/anomaly-detection-isolator"]
+  imagePullSecrets: []
+  resources:
+    requests:
+      memory: 384Mi
+  credentials:
+    rabbitmq:
+      secret_name: nvidia-recovery-rabbitmq
+      secret_key_name: rabbitmq-password
+  event_bus:
+    host: nvidia-recovery-rabbitmq
+    username: heimdall
+    port: 5672
+    vhost: default-vhost
+  job_manager:
+    host: http://job-manager
+    port: 8080
+  attribution_enabled: true
+  audit_trail:
+    max_batch_size: 100
+    max_buffer_size: 1000
+    flush_interval_seconds: 5
+
+# --- Job manager (APS DAG / requeue accounting; persists Advisor release intent) ---
+job-manager:
+  enabled: true
+  image:
+    repository: ""
+    name: job-manager
+    tag: latest
+    pullPolicy: Never
+  imagePullSecrets: []
+  credentials:
+    rabbitmq:
+      secret_name: nvidia-recovery-rabbitmq
+      secret_key_name: rabbitmq-password
+    mysql_secret_name: nvidia-recovery-mysql
+    mysql_secret_key_name: mysql-password
+  event_bus:
+    host: nvidia-recovery-rabbitmq
+    username: heimdall
+    vhost: default-vhost
+  storage:
+    mode: MYSQL
+    sql:
+      # MySQL is deployed by the umbrella (subchart -> service nvidia-recovery-mysql).
+      # job-manager also sets enableServiceLinks: false to avoid k8s injecting a
+      # *_PORT=tcp://... env over the configured port.
+      host: nvidia-recovery-mysql
+      port: 3306
+      username: aps_mysql
+      database_name: aps_workflow_database
+  resources:
+    requests:
+      memory: 1Gi
+  # Keep stale-job detection responsive in the single-node e2e/CI cluster.
+  # The Slurm advice controller reconciles job state through its backend API
+  # and local cache; stale-job scans do not request backend updates.
+  service_config:
+    environment: tilt
+    audit_trail:
+      max_batch_size: 1
+      max_buffer_size: 1000
+      flush_interval_seconds: 1
+    stale_job_threshold_seconds: 15            # production default remains 150
+    stale_job_scan_frequency_seconds: 5        # production default remains 30
+    # Keep the state-based fallback outside the 90s Watcher evidence window.
+    # Slurm attempts now carry typed end_time values, so a shorter threshold can
+    # preempt the Watcher-specific filename-correlation contract with fallback.
+    job_state_based_auto_resume_threshold_secs: 120  # production default remains 75
+    job_state_based_auto_resume_scan_interval_secs: 15  # was 30
+    dag_support:
+      enabled: true
+      action_timeout_seconds: 120
+      retry_scan_frequency_seconds: 60

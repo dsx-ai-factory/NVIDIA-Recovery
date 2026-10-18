@@ -1,0 +1,7 @@
+withGoMod: false
+packageName: notifications
+gitHost: github.com
+gitUserId: dsx-ai-factory
+gitRepoId: nvidia-recovery/api-gateway/gen
+isGoSubmodule: true
+disallowAdditionalPropertiesIfNotPresent: false

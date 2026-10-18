@@ -1,0 +1,126 @@
+{
+  "jobs": [
+    {
+      "account": "account-redacted",
+      "comment": {
+        "administrator": "",
+        "job": "{\"APS\":{}}",
+        "system": ""
+      },
+      "allocation_nodes": 1,
+      "array": {
+        "job_id": 0,
+        "limits": {
+          "max": {
+            "running": {
+              "tasks": 0
+            }
+          }
+        },
+        "task_id": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        },
+        "task": ""
+      },
+      "cluster": "cluster-redacted",
+      "failed_node": "",
+      "job_id": 9401,
+      "name": "workflow-redacted",
+      "nodes": "node001",
+      "partition": "partition-redacted",
+      "restart_cnt": 0,
+      "stdin_expanded": "/dev/null",
+      "stdout_expanded": "/redacted/logs/parent-9401.out",
+      "stderr_expanded": "",
+      "stdout": "/redacted/logs/parent-%j.out",
+      "stderr": "",
+      "stdin": "/dev/null",
+      "state": {
+        "current": [
+          "COMPLETED"
+        ],
+        "reason": "None"
+      },
+      "steps": [
+        {
+          "step": {
+            "id": "9401.batch",
+            "name": "batch",
+            "stderr": "",
+            "stdin": "",
+            "stdout": "",
+            "stderr_expanded": "",
+            "stdin_expanded": "",
+            "stdout_expanded": "/redacted/logs/batch-9401.out"
+          }
+        },
+        {
+          "step": {
+            "id": "9401.extern",
+            "name": "extern",
+            "stderr": "",
+            "stdin": "",
+            "stdout": "",
+            "stderr_expanded": "",
+            "stdin_expanded": "",
+            "stdout_expanded": "/redacted/logs/extern-9401.out"
+          }
+        },
+        {
+          "step": {
+            "id": "9401.0",
+            "name": "sleep",
+            "stderr": "",
+            "stdin": "",
+            "stdout": "/redacted/logs/step-%j-%s.out",
+            "stderr_expanded": "",
+            "stdin_expanded": "",
+            "stdout_expanded": "/redacted/logs/step-9401-0.out"
+          }
+        }
+      ],
+      "submit_line": "sbatch --parsable --job-name=workflow-redacted --output=/redacted/logs/parent-%j.out --wrap=srun --output=/redacted/logs/step-%j-%s.out sleep 60",
+      "time": {
+        "elapsed": 60,
+        "eligible": 1722927590,
+        "end": 1722927660,
+        "start": 1722927600,
+        "submission": 1722927590
+      },
+      "user": "user-redacted",
+      "working_directory": "/redacted/work"
+    }
+  ],
+  "meta": {
+    "plugin": {
+      "type": "",
+      "name": "",
+      "data_parser": "data_parser/v0.0.43",
+      "accounting_storage": "accounting_storage/slurmdbd"
+    },
+    "client": {
+      "source": "",
+      "user": "user-redacted",
+      "group": "group-redacted"
+    },
+    "command": [
+      "sacct",
+      "-j",
+      "9401",
+      "--duplicates"
+    ],
+    "slurm": {
+      "version": {
+        "major": "25",
+        "micro": "8",
+        "minor": "05"
+      },
+      "release": "25.05.8",
+      "cluster": "cluster-redacted"
+    }
+  },
+  "errors": [],
+  "warnings": []
+}

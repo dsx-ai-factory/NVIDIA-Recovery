@@ -1,0 +1,46 @@
+// The singleton application reader owns the shared log-link tree.
+// Component offsets persist below --storage.path; source mounts stay read-only.
+
+local.file_match "slurm_logs" {
+	path_targets = [
+		{
+			__address__ = "localhost",
+			__path__    = "/home/log-links/**/*.out",
+			appName     = "slurm-app-log",
+			cluster     = "slurm",
+		},
+		{
+			__address__ = "localhost",
+			__path__    = "/home/log-links/**/*.log",
+			appName     = "slurm-app-log",
+			cluster     = "slurm",
+		},
+	]
+}
+
+loki.process "slurm_logs" {
+	forward_to = [loki.write.default.receiver]
+
+	stage.regex {
+		expression = "(?:.*)[_-](?P<job_id>\\d+)(?:_date_.*|\\.(?:out|log))$"
+		source     = "filename"
+	}
+
+	stage.labels {
+		values = {
+			job_id = null,
+		}
+	}
+}
+
+loki.source.file "slurm_logs" {
+	targets    = local.file_match.slurm_logs.targets
+	forward_to = [loki.process.slurm_logs.receiver]
+}
+
+loki.write "default" {
+	endpoint {
+		url = "__LOG_PUSH_URL__"
+	}
+	external_labels = {}
+}

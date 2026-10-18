@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://schema.buildwithfern.dev/docs-yml.json
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# NVIDIA's shared Fern theme (fonts, header, footer, styling) is owned by the
+# nvidia Fern organization; the matching sources under fern/components
+# and fern/main.css are kept for reference and local review.
+
+global-theme: nvidia
+
+instances:
+  - url: nvidia-recovery.docs.buildwithfern.com/nvidia-recovery
+    custom-domain: docs.nvidia.com/nvidia-recovery
+    multi-source: true
+
+metadata:
+  canonical-host: "docs.nvidia.com/nvidia-recovery"
+
+title: NVIDIA Recovery
+navigation:
+  - section: Start
+    skip-slug: true
+    contents:
+      - page: Overview
+        path: generated/overview.mdx
+        slug: overview
+      - page: Documentation
+        path: generated/documentation.mdx
+        slug: documentation
+      - page: Getting started
+        path: generated/getting-started.mdx
+        slug: getting-started
+  - section: Use
+    skip-slug: true
+    contents:
+      - page: Running jobs
+        path: generated/running-jobs.mdx
+        slug: running-jobs
+      - page: Frequently asked questions
+        path: generated/faq.mdx
+        slug: faq
+  - section: Understand
+    skip-slug: true
+    contents:
+      - page: Architecture
+        path: generated/architecture.mdx
+        slug: architecture
+      - page: Jobs and workflows
+        path: generated/jobs-and-workflows.mdx
+        slug: jobs-and-workflows
+      - page: Advice
+        path: generated/advice.mdx
+        slug: advice
+      - page: Scheduler integration
+        path: generated/scheduler-integration.mdx
+        slug: scheduler-integration
+  - section: Operate
+    skip-slug: true
+    contents:
+      - page: Installation
+        path: generated/installation.mdx
+        slug: installation
+      - page: Slurm
+        path: generated/slurm.mdx
+        slug: slurm
+      - page: Slinky
+        path: generated/slinky.mdx
+        slug: slinky
+      - page: Operations
+        path: generated/operations.mdx
+        slug: operations
+      - page: Troubleshooting
+        path: generated/troubleshooting.mdx
+        slug: troubleshooting
+  - section: Develop
+    skip-slug: true
+    contents:
+      - page: Development setup
+        path: generated/development.mdx
+        slug: development
+      - page: Testing
+        path: generated/testing.mdx
+        slug: testing
+  - section: Reference
+    skip-slug: true
+    contents:
+      - page: API Gateway HTTP and gRPC
+        path: generated/api-gateway.mdx
+        slug: api-gateway
+      - api: API Gateway HTTP reference
+        api-name: api-gateway
+        slug: gateway-reference
+      - page: Optional NVIDIA Attribution
+        path: generated/optional-attribution.mdx
+        slug: optional-attribution
+      - page: Attribution Adapter
+        path: generated/attribution-adapter.mdx
+        slug: attribution-adapter
+      - api: Attribution Adapter HTTP reference
+        api-name: attribution-adapter
+        slug: attribution-reference
+navbar-links:
+  - type: github
+    value: https://github.com/dsx-ai-factory/NVIDIA-Recovery
+check:
+  rules:
+    broken-links: error

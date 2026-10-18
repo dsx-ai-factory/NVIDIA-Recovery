@@ -1,0 +1,52 @@
+# Attribution configuration for an existing custom installation. The standard
+# nvidia-recovery-values.yaml already includes these settings. Replace the
+# registry, tag, and environment placeholders before using this overlay.
+
+global:
+  log_query:
+    backend: loki
+    providers:
+      loki:
+        system:
+          url: http://loki-gateway
+          tenants: ""
+          org_id: ""
+        queries:
+          attribution:
+            application: >-
+              {{cluster='customer-slurm', appName='slurm-app-log', job_id='{}'}}
+            system: >-
+              {cluster='customer-slurm', component='journal'}
+            # Reserved for separately qualified epilog ingestion; slow analysis
+            # stays disabled in this profile. Do not inherit a site-specific query.
+            epilogue: >-
+              {{cluster='customer-slurm', component='journal'}} |= `epilog_slurmd_{}`
+
+anomaly-detection-isolator:
+  attribution_enabled: true
+  # No scheduler epilog health-check ingestion in this evaluation profile.
+  slow_signals_enabled: false
+
+attribution-service:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+
+attribution-adapter:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: 384Mi
+  lepton_base_url: ""
+  loki:
+    loki_cluster: customer-slurm
+  prometheus:
+    prometheus_url: ""
+    prometheus_cluster: customer-slurm
+    prometheus_checks_enabled: false

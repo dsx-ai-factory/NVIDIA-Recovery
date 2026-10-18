@@ -1,0 +1,77 @@
+name: Review E2E
+
+on:
+  push:
+    branches:
+      - "pull-request/[0-9A-Za-z]+"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e-base.yml
+    secrets:
+      BITNAMI_OCI_REGISTRY_MIRROR: ${{ secrets.BITNAMI_OCI_REGISTRY_MIRROR }}
+      DOCKER_HUB_REGISTRY_MIRROR: ${{ secrets.DOCKER_HUB_REGISTRY_MIRROR }}
+    with:
+      allow_failure: true
+      skip_nightly: true
+
+  test-summary:
+    name: Publish E2E Test Summary
+    needs:
+      - e2e
+    if: ${{ always() }}
+    continue-on-error: true
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Resolve pull request number
+        id: pull-request
+        env:
+          HEAD_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$HEAD_BRANCH" =~ ^pull-request/([0-9]+)$ ]]; then
+            echo "number=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Cannot derive a pull request number from '$HEAD_BRANCH'"
+            exit 1
+          fi
+
+      - name: Prepare report download directory
+        run: mkdir -p "$RUNNER_TEMP/e2e-reports"
+
+      - name: Download E2E JUnit artifacts
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          pattern: e2e*xunit-*
+          path: ${{ runner.temp }}/e2e-reports
+
+      - name: Publish JUnit summary comment
+        uses: ./.github/actions/publish-junit-summary
+        with:
+          reports-path: ${{ runner.temp }}/e2e-reports
+          github-token: ${{ github.token }}
+          pull-request-number: ${{ steps.pull-request.outputs.number }}
+          source-head-sha: ${{ github.sha }}
+
+      - name: Require report artifacts
+        if: ${{ always() && steps.download.outcome != 'success' }}
+        run: |
+          echo "::error::Unable to download E2E JUnit artifacts"
+          exit 1

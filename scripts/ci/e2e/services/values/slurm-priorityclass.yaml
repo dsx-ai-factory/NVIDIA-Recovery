@@ -1,0 +1,11 @@
+# Benign PriorityClass for the Slurm compute nodeset.
+# The slinky NodeSet CRD requires priorityClassName to be a non-empty string
+# (an empty value renders as null and is rejected by newer Kubernetes). value 0
+# is equivalent to "no priority", so this does not preempt other workloads.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: heimdall-e2e-compute
+value: 0
+globalDefault: false
+description: "Default (no-op) priority for Heimdall e2e Slurm compute nodes."

@@ -1,0 +1,18 @@
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 145, RLW_SRC_TRACK Nonfatal XC1 i0 Link 00 (0x040808e2 0x00000008 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000002 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000004 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000001 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000002 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000003 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000004 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000003 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000003 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000001 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000002 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000003 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 45, pid=119895, name=python3, Ch 00000004 caused by previous Xid 145
+Sep 29 14:14:22 heimdall-e2e-node kernel: NVRM: Xid (PCI:0009:01:00): 145, RLW_SRC_TRACK Nonfatal XC1 i0 Link 06 (0x0408c8e2 0x00000008 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 29 14:14:23 heimdall-e2e-node kernel: NVRM: Xid (PCI:0018:01:00): 94, pid=119893, name=python3, MSE-RISCV instance 0 fatal error
+Sep 29 14:14:23 heimdall-e2e-node kernel: NVRM: Xid (PCI:0018:01:00): 150, pid=119893, name=python3, MSE_WATCHDOG  Fatal   XC0 i1 Link -1 (0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)
+Sep 29 14:14:23 heimdall-e2e-node kernel: NVRM: Xid (PCI:0018:01:00): 94, pid=119893, name=python3, MSE-RISCV instance 0 fatal error
+Sep 29 14:14:23 heimdall-e2e-node kernel: NVRM: Xid (PCI:0018:01:00): 150, pid=119893, name=python3, MSE_WATCHDOG  Fatal   XC0 i0 Link -1 (0x00000000 0x00000000 0x00000000 0x00000000 0x00000000 0x00000000)

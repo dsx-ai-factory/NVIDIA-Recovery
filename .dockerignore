@@ -1,0 +1,14 @@
+.git
+.gitignore
+.cache/
+**/.cache/
+**/.DS_Store
+**/__pycache__/
+**/*.py[cod]
+deploy/tilt/tmp/
+
+# Local raw Slurm captures must not enter Docker build contexts or image layers.
+slurm-advisor-controller/internal/slurm/testdata/raw/
+slurm-advisor-controller/internal/slurm/testdata/capture/
+slurm-advisor-controller/internal/slurm/testdata/captures/
+slurm-advisor-controller/internal/slurm/testdata/**/*.raw.json

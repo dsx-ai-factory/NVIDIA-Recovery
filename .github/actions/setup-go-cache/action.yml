@@ -1,0 +1,33 @@
+name: Set up Go with cache
+description: Install Go and configure repository-local Go cache paths.
+
+inputs:
+  go-version:
+    description: Go version to install.
+    required: true
+  cache-dependency-path:
+    description: Dependency file paths used for the setup-go cache key.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure Go cache paths
+      shell: bash
+      run: |
+        gocache="${GITHUB_WORKSPACE}/.cache/go/build"
+        gobin="${GITHUB_WORKSPACE}/.cache/go/bin"
+        gomodcache="${GITHUB_WORKSPACE}/.cache/go/pkg/mod"
+        mkdir -p "$gocache" "$gobin" "$gomodcache"
+        printf '%s\n' "$gobin" >> "$GITHUB_PATH"
+        {
+          echo "GOCACHE=$gocache"
+          echo "GOBIN=$gobin"
+          echo "GOMODCACHE=$gomodcache"
+        } >> "$GITHUB_ENV"
+
+    - name: Set up Go
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}

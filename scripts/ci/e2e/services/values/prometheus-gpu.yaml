@@ -1,0 +1,28 @@
+# Optional GPU (DCGM) scrape overlay for kube-prometheus-stack.
+# Applied on top of prometheus.yaml only when DEPLOY_GPU_SCRAPE is set.
+#
+# Scrapes DCGM-exporter endpoints in the gpu-operator namespace. A Kind cluster
+# has no GPU operator, so this has no targets until a (fake or real) operator
+# is present.
+prometheus:
+  prometheusSpec:
+    additionalScrapeConfigs:
+      - job_name: gpu-metrics
+        scrape_interval: 1s
+        metrics_path: /metrics
+        scheme: http
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - gpu-operator
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_endpoints_name]
+            action: drop
+            regex: .*-node-feature-discovery-master
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            action: replace
+            target_label: kubernetes_node
+          - action: replace
+            target_label: cluster
+            replacement: __CLUSTER_LABEL__

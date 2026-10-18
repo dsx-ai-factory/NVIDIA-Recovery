@@ -1,0 +1,86 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ $db := default dict .Values.db -}}
+{{- if and .Values.app.base_path (not (hasPrefix "/" .Values.app.base_path)) -}}
+{{- fail "app.base_path must start with '/'" -}}
+{{- end -}}
+{{- if and .Values.app.base_path (hasSuffix "/" .Values.app.base_path) -}}
+{{- fail "app.base_path must not end with '/'; use an empty value for root deployment" -}}
+{{- end -}}
+{{- if and .Values.auth.NEXTAUTH_ENABLED (not (or .Values.auth.starfleet.enabled .Values.auth.azure.enabled .Values.auth.ldap.enabled)) -}}
+{{- fail "auth.NEXTAUTH_ENABLED=true requires one enabled Starfleet, Azure, or LDAP provider" -}}
+{{- end -}}
+{{- if and .Values.auth.NEXTAUTH_ENABLED (not .Values.auth.NEXTAUTH_URL) (or (not .Values.ingress_fqdn) (eq (toString .Values.ingress_fqdn) "*")) -}}
+{{- fail "auth.NEXTAUTH_URL is required when auth is enabled without a concrete ingress_fqdn" -}}
+{{- end -}}
+{{- if and .Values.app.agent.enabled (not .Values.app.agent.apiURL) -}}
+{{- fail "app.agent.apiURL is required when app.agent.enabled=true" -}}
+{{- end -}}
+{{- if and .Values.app.agent.enabled (not .Values.app.agent.webURL) -}}
+{{- fail "app.agent.webURL is required when app.agent.enabled=true" -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "dashboard.fullname" . }}-config
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+data:
+  .env: |
+    LOGGING_LEVEL={{ .Values.app.loggingLevel }}
+
+    NEXTAUTH_ENABLED={{ .Values.auth.NEXTAUTH_ENABLED }}
+    NEXTAUTH_URL={{ include "dashboard.nextAuthUrl" . }}
+    NEXTAUTH_URL_INTERNAL={{ include "dashboard.nextAuthInternalUrl" . }}
+
+    {{- if eq (toString .Values.ingress_fqdn) "*" }}
+    API_GATEWAY_URL={{ .Values.app.apiGatewayBasePath}}
+    {{- else if .Values.app.apiGatewayURL }}
+    API_GATEWAY_URL={{ .Values.app.apiGatewayURL }}
+    {{- else }}
+    API_GATEWAY_URL=https://{{ .Values.ingress_fqdn }}{{ .Values.app.apiGatewayBasePath}}
+    {{- end }}
+
+    {{ if .Values.auth.ldap.enabled }}
+    #ldap envs
+    LDAP_URI={{ .Values.auth.ldap.LDAP_URI }}
+    LDAP_CA_PATH={{ .Values.auth.ldap.LDAP_MOUNT_PATH }}/{{ .Values.auth.ldap.caName }}
+    LDAP_KEY_PATH={{ .Values.auth.ldap.LDAP_MOUNT_PATH }}/{{ .Values.auth.ldap.keyName }}
+    LDAP_CERT_PATH={{ .Values.auth.ldap.LDAP_MOUNT_PATH }}/{{ .Values.auth.ldap.certName }}
+    LDAP_BIND_DN={{ .Values.auth.ldap.LDAP_BIND_DN }}
+    LDAP_BIND_PASSWORD={{ .Values.auth.ldap.LDAP_BIND_PASSWORD }}
+    LDAP_SEARCH_BASE={{ .Values.auth.ldap.LDAP_SEARCH_BASE }}
+    {{ end }}
+    NODE_TLS_REJECT_UNAUTHORIZED=0
+
+    JOB_MANAGER_HOST=http://job-manager:8080
+    {{ if .Values.app.agent.enabled }}
+    AGENT_API_URL={{ .Values.app.agent.apiURL | quote }}
+    AGENT_WEB_URL={{ .Values.app.agent.webURL | quote }}
+    {{ end }}
+    NOTIFICATIONS_HOST=http://{{ .Release.Name }}-{{ .Values.app.notificationsHostPostfix }}:{{ .Values.app.notificationsPort }}
+    NEXT_TELEMETRY_DISABLED=1
+    DATADOG_WATCHER_URL={{ .Values.app.datadogWatcherURL }}
+    DATADOG_ENABLED={{ .Values.app.DATADOG_ENABLED }}
+    FACT_ENABLED={{ .Values.app.FACT_ENABLED }}
+    FACT_URL="{{ .Values.app.FACT_URL }}"
+
+    JOB_NODE_ANALYSIS_ENABLED={{ .Values.app.JOB_NODE_ANALYSIS_ENABLED }}
+    JOB_GROUPS_ENABLED={{ .Values.app.JOB_GROUPS_ENABLED }}
+    AUDIT_EVENTS_ENABLED={{ .Values.app.AUDIT_EVENTS_ENABLED }}
+    API_KEYS_ENABLED={{ .Values.app.API_KEYS_ENABLED }}
+    GRAFANA_TRACE_URL_ENABLED={{ .Values.app.GRAFANA_TRACE_URL_ENABLED }}
+    GRAFANA_DATA_SOURCE_ID={{ .Values.app.GRAFANA_DATA_SOURCE_ID }}
+    GRAFANA_URL={{ .Values.app.GRAFANA_URL }}
+    GRAFANA_ORG_ID={{ .Values.app.GRAFANA_ORG_ID }}
+
+    DATABASE_PROTOCOL={{ default "" $db.protocol }}
+    DATABASE_USER={{ default "" $db.user }}
+    DATABASE_HOST={{ default "" $db.host }}
+    DATABASE_PORT={{ default "" $db.port }}
+    DATABASE_DATABASE={{ default "" $db.database }}
+
+    BASE_PATH={{ .Values.app.base_path | quote }}
+    COCKPIT_NAME="{{ .Values.app.cockpitName }}"
+    METRICS_ENABLED={{ .Values.app.METRICS_ENABLED }}

@@ -1,0 +1,67 @@
+{
+  "source_repository": "/private/tmp/nvidia-recovery-dsx-release-impl-20260909",
+  "source_sha": "b736d1a46826929884a521f27730e782eab29640",
+  "captured_at": "2026-09-09T17:41:54.761440+00:00",
+  "inputs": [
+    {
+      "path": "uv.lock",
+      "sha256": "8e1df5536de9a98fcc813ab3b40cbe9fc5dd9e5e028eb93cc30aa642cd3f187d",
+      "bytes": 512394,
+      "primary_scan": true
+    },
+    {
+      "path": "api-gateway/go.mod",
+      "sha256": "9ddefd482559310d8584283d7bf186480c16b6abcd224b481263fda463528ebc",
+      "bytes": 5656,
+      "primary_scan": true
+    },
+    {
+      "path": "slurm-advisor-controller/go.mod",
+      "sha256": "99e71a4ef94a20d2037bc669c57f7f1debc7bfe3b74d2f1643719102900d5a81",
+      "bytes": 1722,
+      "primary_scan": true
+    },
+    {
+      "path": "dashboard/pnpm-lock.yaml",
+      "sha256": "89ff790c50c6f4304f5c7ecda5fe80be5996dac49c5d76d44d8fd6ce09355db6",
+      "bytes": 279043,
+      "primary_scan": true
+    },
+    {
+      "path": "scripts/docs/package-lock.json",
+      "sha256": "18552e9e48af3e6c8671977ba5d15769f3fd3116cd60ab0bf6abd674a1607c4e",
+      "bytes": 6731,
+      "primary_scan": true
+    },
+    {
+      "path": "api-gateway/go.sum",
+      "sha256": "f0aa6e3d192b15e635a5320aa33f7b20b2d433ae3b271493b9cb73389a2c2ddc",
+      "bytes": 38517,
+      "primary_scan": false
+    },
+    {
+      "path": "slurm-advisor-controller/go.sum",
+      "sha256": "dc1b369b1f6ce6627cf74ffe7307cbc60cb8b8560fe50facd55ec4362d39944c",
+      "bytes": 12372,
+      "primary_scan": false
+    },
+    {
+      "path": "api-gateway/buf.lock",
+      "sha256": "092c6585a5f9961d641d67383ffe9a8c2e2e8d46cd997e10ae9c822cd80403be",
+      "bytes": 519,
+      "primary_scan": false
+    },
+    {
+      "path": "deploy/helm/nvidia-recovery/Chart.lock",
+      "sha256": "9a3189987278d9bffd612da632edba6360e821a77d7079b8dfffcf7e5b3cba9d",
+      "bytes": 1351,
+      "primary_scan": false
+    },
+    {
+      "path": "deploy/dashboards/grafana/tools/requirements.txt",
+      "sha256": "706da6a0f6941f4756e79bf806019aee3a5d60b0cfd697ebed887b913ef59d4e",
+      "bytes": 27,
+      "primary_scan": false
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+{{ if .Values.externalService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "api-gateway.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+  {{- with .Values.externalService.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service_type }}
+  selector:
+    {{- include "api-gateway.selectorLabels" . | nindent 4 }}
+  ports:
+  - name: rest
+    port: {{ .Values.ports.rest }}
+    targetPort: rest
+  - name: grpc
+    port: {{ .Values.ports.grpc }}
+    targetPort: grpc
+{{ end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "api-gateway.fullname" . }}-internal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+  {{- with .Values.internalService.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service_type }}
+  selector:
+    {{- include "api-gateway.selectorLabels" . | nindent 4 }}
+  ports:
+  - name: rest
+    port: {{ .Values.ports.rest }}
+    targetPort: rest-internal
+  - name: grpc
+    port: {{ .Values.ports.grpc }}
+    targetPort: grpc-internal
+  {{- if and .Values.otel.enabled .Values.metricsTelemetry.enabled }}
+  - name: metrics
+    port: {{ .Values.metricsTelemetry.port }}
+    targetPort: metrics
+  {{- end }}

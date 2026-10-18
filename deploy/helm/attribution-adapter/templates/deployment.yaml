@@ -1,0 +1,499 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ $logQueryBackend := include "attribution-adapter.logQueryBackend" . -}}
+{{- $victoriaCredentials := .Values.credentials.victorialogs -}}
+{{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.api_token_secret_name (or .Values.credentials.loki.app_api_token_secret_name .Values.credentials.loki.sys_api_token_secret_name) }}
+{{- fail "credentials.loki.api_token_secret_name is mutually exclusive with app_api_token_secret_name and sys_api_token_secret_name" }}
+{{- end }}
+{{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.api_token_secret_name (or .Values.credentials.victorialogs.app_api_token_secret_name .Values.credentials.victorialogs.sys_api_token_secret_name) }}
+{{- fail "credentials.victorialogs.api_token_secret_name is mutually exclusive with app_api_token_secret_name and sys_api_token_secret_name" }}
+{{- end }}
+{{- if and (eq $logQueryBackend "victorialogs") (ne (empty $victoriaCredentials.username_secret_name) (empty $victoriaCredentials.password_secret_name)) }}
+{{- fail "credentials.victorialogs.username_secret_name and password_secret_name must be configured together" }}
+{{- end }}
+{{- if and (eq $logQueryBackend "victorialogs") (ne (empty $victoriaCredentials.app_username_secret_name) (empty $victoriaCredentials.app_password_secret_name)) }}
+{{- fail "credentials.victorialogs.app_username_secret_name and app_password_secret_name must be configured together" }}
+{{- end }}
+{{- if and (eq $logQueryBackend "victorialogs") (ne (empty $victoriaCredentials.sys_username_secret_name) (empty $victoriaCredentials.sys_password_secret_name)) }}
+{{- fail "credentials.victorialogs.sys_username_secret_name and sys_password_secret_name must be configured together" }}
+{{- end }}
+{{- $victoriaAppBearer := or $victoriaCredentials.app_api_token_secret_name $victoriaCredentials.api_token_secret_name -}}
+{{- $victoriaSystemBearer := or $victoriaCredentials.sys_api_token_secret_name $victoriaCredentials.api_token_secret_name -}}
+{{- $victoriaAppBasic := or $victoriaCredentials.app_username_secret_name $victoriaCredentials.username_secret_name -}}
+{{- $victoriaSystemBasic := or $victoriaCredentials.sys_username_secret_name $victoriaCredentials.username_secret_name -}}
+{{- if and (eq $logQueryBackend "victorialogs") $victoriaAppBearer $victoriaAppBasic }}
+{{- fail "credentials.victorialogs application bearer and Basic SecretRefs are mutually exclusive" }}
+{{- end }}
+{{- if and (eq $logQueryBackend "victorialogs") $victoriaSystemBearer $victoriaSystemBasic }}
+{{- fail "credentials.victorialogs system bearer and Basic SecretRefs are mutually exclusive" }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "attribution-adapter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "attribution-adapter.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "attribution-adapter.selectorLabels" . | nindent 6 }}
+  replicas: {{ .Values.replicas }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        prometheus.io/port: "{{ .Values.metrics_port }}"
+        prometheus.io/scrape: "true"
+        ad.datadoghq.com/{{ template "attribution-adapter.name" . }}.check_names: '["openmetrics"]'
+        ad.datadoghq.com/{{ template "attribution-adapter.name" . }}.init_configs: '[{}]'
+        ad.datadoghq.com/{{ template "attribution-adapter.name" . }}.instances: '[{"prometheus_url": "http://%%host%%:{{ .Values.metrics_port }}/metrics",
+          "namespace": "nvidia_recovery.{{ .Release.Namespace }}.{{ template "attribution-adapter.name" . }}", "metrics": ["adi_*", "http_requests_*"]}]'
+      labels:
+        {{- include "attribution-adapter.labels" . | nindent 8 }}
+    spec:
+      {{- with (default .Values.global.imagePullSecrets .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ template "attribution-adapter.serviceAccountName" . }}
+      automountServiceAccountToken: {{- if eq (include "attribution-adapter.serviceAccountName" . | trim) "default" }} false{{- else }} true{{- end }}
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: {{ template "attribution-adapter.name" . }}
+        env:
+        - name: CONFIG_FILE_PATH
+          value: /config/settings.env
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.api_token_secret_name }}
+        - name: LOKI_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.loki.api_token_secret_name }}
+              key: {{ .Values.credentials.loki.api_token_secret_key_name }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_api_token_secret_name }}
+        - name: APP_LOKI_API_TOKEN_FILE
+          value: /secrets/app_loki_api_token_secret/token
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_ca_cert_secret_name }}
+        - name: APP_LOKI_CA_CERT
+          value: /secrets/app_loki_ca_cert_secret/ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_cert_secret_name }}
+        - name: APP_LOKI_CERT_FILE
+          value: /secrets/app_loki_cert_secret/tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_key_secret_name }}
+        - name: APP_LOKI_KEY_FILE
+          value: /secrets/app_loki_key_secret/tls.key
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_api_token_secret_name }}
+        - name: SYS_LOKI_API_TOKEN_FILE
+          value: /secrets/sys_loki_api_token_secret/token
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.api_token_secret_name }}
+        - name: VICTORIALOGS_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.api_token_secret_name }}
+              key: {{ .Values.credentials.victorialogs.api_token_secret_key_name }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.username_secret_name }}
+        - name: VICTORIALOGS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.username_secret_name }}
+              key: {{ .Values.credentials.victorialogs.username_secret_key_name }}
+        - name: VICTORIALOGS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.password_secret_name }}
+              key: {{ .Values.credentials.victorialogs.password_secret_key_name }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_api_token_secret_name }}
+        - name: APP_VICTORIALOGS_API_TOKEN_FILE
+          value: /secrets/app_victorialogs_api_token_secret/token
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_username_secret_name }}
+        - name: APP_VICTORIALOGS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.app_username_secret_name }}
+              key: {{ .Values.credentials.victorialogs.app_username_secret_key_name }}
+        - name: APP_VICTORIALOGS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.app_password_secret_name }}
+              key: {{ .Values.credentials.victorialogs.app_password_secret_key_name }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_ca_cert_secret_name }}
+        - name: APP_VICTORIALOGS_CA_CERT
+          value: /secrets/app_victorialogs_ca_cert_secret/ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_cert_secret_name }}
+        - name: APP_VICTORIALOGS_CERT_FILE
+          value: /secrets/app_victorialogs_cert_secret/tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_key_secret_name }}
+        - name: APP_VICTORIALOGS_KEY_FILE
+          value: /secrets/app_victorialogs_key_secret/tls.key
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_api_token_secret_name }}
+        - name: SYS_VICTORIALOGS_API_TOKEN_FILE
+          value: /secrets/sys_victorialogs_api_token_secret/token
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_username_secret_name }}
+        - name: SYS_VICTORIALOGS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.sys_username_secret_name }}
+              key: {{ .Values.credentials.victorialogs.sys_username_secret_key_name }}
+        - name: SYS_VICTORIALOGS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.sys_password_secret_name }}
+              key: {{ .Values.credentials.victorialogs.sys_password_secret_key_name }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_ca_cert_secret_name }}
+        - name: SYS_VICTORIALOGS_CA_CERT
+          value: /secrets/sys_victorialogs_ca_cert_secret/ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_cert_secret_name }}
+        - name: SYS_VICTORIALOGS_CERT_FILE
+          value: /secrets/sys_victorialogs_cert_secret/tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_key_secret_name }}
+        - name: SYS_VICTORIALOGS_KEY_FILE
+          value: /secrets/sys_victorialogs_key_secret/tls.key
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_ca_cert_secret_name }}
+        - name: SYS_LOKI_CA_CERT
+          value: /secrets/sys_loki_ca_cert_secret/ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_cert_secret_name }}
+        - name: SYS_LOKI_CERT_FILE
+          value: /secrets/sys_loki_cert_secret/tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_key_secret_name }}
+        - name: SYS_LOKI_KEY_FILE
+          value: /secrets/sys_loki_key_secret/tls.key
+        {{- end }}
+        {{- if .Values.credentials.prometheus.api_token_secret_name }}
+        - name: PROMETHEUS_API_TOKEN_FILE
+          value: /secrets/prometheus_api_token_secret/token
+        {{- end }}
+        {{- if .Values.credentials.prometheus.ca_cert_secret_name }}
+        - name: PROMETHEUS_CA_CERT
+          value: /secrets/prometheus_ca_cert_secret/ca.crt
+        {{- end }}
+        {{- if .Values.credentials.prometheus.cert_secret_name }}
+        - name: PROMETHEUS_CERT_FILE
+          value: /secrets/prometheus_cert_secret/tls.crt
+        {{- end }}
+        {{- if .Values.credentials.prometheus.key_secret_name }}
+        - name: PROMETHEUS_KEY_FILE
+          value: /secrets/prometheus_key_secret/tls.key
+        {{- end }}
+        {{- if .Values.lepton_worker_cluster_name }}
+        - name: LEPTON_WORKER_CLUSTER_NAME
+          value: {{ .Values.lepton_worker_cluster_name }}
+        {{- end }}
+        {{- if .Values.lepton_base_url }}
+        - name: LEPTON_BASE_URL
+          value: {{ .Values.lepton_base_url }}
+        {{- end }}
+        {{- if (((.Values.global).otelcollector).enabled) }}
+        {{- include "heimdall.otelEnv" . | nindent 8 }}
+        {{- end }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          privileged: false
+        command:
+{{ .Values.command | toYaml | indent 12 }}
+        image: {{ include "attribution-adapter.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.port }}
+          name: http
+        - containerPort: {{ .Values.metrics_port }}
+          name: metrics
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+{{ .Values.resources | toYaml | indent 12 }}
+        volumeMounts:
+            - mountPath: "/config"
+              name: config
+            {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_api_token_secret_name }}
+            - mountPath: "/secrets/app_loki_api_token_secret"
+              name: app-loki-api-token-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_ca_cert_secret_name }}
+            - mountPath: "/secrets/app_loki_ca_cert_secret"
+              name: app-loki-ca-cert-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_cert_secret_name }}
+            - mountPath: "/secrets/app_loki_cert_secret"
+              name: app-loki-cert-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_key_secret_name }}
+            - mountPath: "/secrets/app_loki_key_secret"
+              name: app-loki-key-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_api_token_secret_name }}
+            - mountPath: "/secrets/sys_loki_api_token_secret"
+              name: sys-loki-api-token-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_ca_cert_secret_name }}
+            - mountPath: "/secrets/sys_loki_ca_cert_secret"
+              name: sys-loki-ca-cert-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_cert_secret_name }}
+            - mountPath: "/secrets/sys_loki_cert_secret"
+              name: sys-loki-cert-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_key_secret_name }}
+            - mountPath: "/secrets/sys_loki_key_secret"
+              name: sys-loki-key-secret
+            {{- end }}
+            {{- if .Values.credentials.prometheus.api_token_secret_name }}
+            - mountPath: "/secrets/prometheus_api_token_secret"
+              name: prometheus-api-token-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_api_token_secret_name }}
+            - mountPath: "/secrets/app_victorialogs_api_token_secret"
+              name: app-victorialogs-api-token-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_ca_cert_secret_name }}
+            - mountPath: "/secrets/app_victorialogs_ca_cert_secret"
+              name: app-victorialogs-ca-cert-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_cert_secret_name }}
+            - mountPath: "/secrets/app_victorialogs_cert_secret"
+              name: app-victorialogs-cert-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_key_secret_name }}
+            - mountPath: "/secrets/app_victorialogs_key_secret"
+              name: app-victorialogs-key-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_api_token_secret_name }}
+            - mountPath: "/secrets/sys_victorialogs_api_token_secret"
+              name: sys-victorialogs-api-token-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_ca_cert_secret_name }}
+            - mountPath: "/secrets/sys_victorialogs_ca_cert_secret"
+              name: sys-victorialogs-ca-cert-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_cert_secret_name }}
+            - mountPath: "/secrets/sys_victorialogs_cert_secret"
+              name: sys-victorialogs-cert-secret
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_key_secret_name }}
+            - mountPath: "/secrets/sys_victorialogs_key_secret"
+              name: sys-victorialogs-key-secret
+            {{- end }}
+            {{- if .Values.credentials.prometheus.ca_cert_secret_name }}
+            - mountPath: "/secrets/prometheus_ca_cert_secret"
+              name: prometheus-ca-cert-secret
+            {{- end }}
+            {{- if .Values.credentials.prometheus.cert_secret_name }}
+            - mountPath: "/secrets/prometheus_cert_secret"
+              name: prometheus-cert-secret
+            {{- end }}
+            {{- if .Values.credentials.prometheus.key_secret_name }}
+            - mountPath: "/secrets/prometheus_key_secret"
+              name: prometheus-key-secret
+            {{- end }}
+            {{- with .Values.volumeMounts }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ template "attribution-adapter.fullname" . }}-config
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_api_token_secret_name }}
+        - name: app-loki-api-token-secret
+          secret:
+            secretName: {{ .Values.credentials.loki.app_api_token_secret_name }}
+            items:
+            - key: token
+              path: token
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_ca_cert_secret_name }}
+        - name: app-loki-ca-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.loki.app_ca_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.loki.app_ca_cert_secret_key_name }}
+              path: ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_cert_secret_name }}
+        - name: app-loki-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.loki.app_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.loki.app_cert_secret_key_name }}
+              path: tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_key_secret_name }}
+        - name: app-loki-key-secret
+          secret:
+            secretName: {{ .Values.credentials.loki.app_key_secret_name }}
+            items:
+            - key: {{ .Values.credentials.loki.app_key_secret_key_name }}
+              path: tls.key
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_api_token_secret_name }}
+        - name: sys-loki-api-token-secret
+          secret:
+            secretName: {{ .Values.credentials.loki.sys_api_token_secret_name }}
+            items:
+            - key: token
+              path: token
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_ca_cert_secret_name }}
+        - name: sys-loki-ca-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.loki.sys_ca_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.loki.sys_ca_cert_secret_key_name }}
+              path: ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_cert_secret_name }}
+        - name: sys-loki-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.loki.sys_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.loki.sys_cert_secret_key_name }}
+              path: tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.sys_key_secret_name }}
+        - name: sys-loki-key-secret
+          secret:
+            secretName: {{ .Values.credentials.loki.sys_key_secret_name }}
+            items:
+            - key: {{ .Values.credentials.loki.sys_key_secret_key_name }}
+              path: tls.key
+        {{- end }}
+        {{- if .Values.credentials.prometheus.api_token_secret_name }}
+        - name: prometheus-api-token-secret
+          secret:
+            secretName: {{ .Values.credentials.prometheus.api_token_secret_name }}
+            items:
+            - key: token
+              path: token
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_api_token_secret_name }}
+        - name: app-victorialogs-api-token-secret
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.app_api_token_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.app_api_token_secret_key_name }}
+              path: token
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_ca_cert_secret_name }}
+        - name: app-victorialogs-ca-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.app_ca_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.app_ca_cert_secret_key_name }}
+              path: ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_cert_secret_name }}
+        - name: app-victorialogs-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.app_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.app_cert_secret_key_name }}
+              path: tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.app_key_secret_name }}
+        - name: app-victorialogs-key-secret
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.app_key_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.app_key_secret_key_name }}
+              path: tls.key
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_api_token_secret_name }}
+        - name: sys-victorialogs-api-token-secret
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.sys_api_token_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.sys_api_token_secret_key_name }}
+              path: token
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_ca_cert_secret_name }}
+        - name: sys-victorialogs-ca-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.sys_ca_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.sys_ca_cert_secret_key_name }}
+              path: ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_cert_secret_name }}
+        - name: sys-victorialogs-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.sys_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.sys_cert_secret_key_name }}
+              path: tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.sys_key_secret_name }}
+        - name: sys-victorialogs-key-secret
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.sys_key_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.sys_key_secret_key_name }}
+              path: tls.key
+        {{- end }}
+        {{- if .Values.credentials.prometheus.ca_cert_secret_name }}
+        - name: prometheus-ca-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.prometheus.ca_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.prometheus.ca_cert_secret_key_name }}
+              path: ca.crt
+        {{- end }}
+        {{- if .Values.credentials.prometheus.cert_secret_name }}
+        - name: prometheus-cert-secret
+          secret:
+            secretName: {{ .Values.credentials.prometheus.cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.prometheus.cert_secret_key_name }}
+              path: tls.crt
+        {{- end }}
+        {{- if .Values.credentials.prometheus.key_secret_name }}
+        - name: prometheus-key-secret
+          secret:
+            secretName: {{ .Values.credentials.prometheus.key_secret_name }}
+            items:
+            - key: {{ .Values.credentials.prometheus.key_secret_key_name }}
+              path: tls.key
+        {{- end }}
+        {{- with .Values.volumes }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with (mergeOverwrite (deepCopy (.Values.global.nodeSelector | default dict)) .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.global.tolerations .Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

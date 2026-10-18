@@ -1,0 +1,132 @@
+# Slurm cluster (Slinky) with a claim-backed shared home and two compute nodes.
+# Each disposable compute identity is pinned to one labeled Kind worker and may
+# write only that worker's exact /var/log/syslog file for trusted E2E fixtures.
+global:
+  security:
+    # Permit the legacy Bitnami MariaDB image (consistent with the NVIDIA Recovery chart).
+    allowInsecureImages: true
+
+slurm:
+  # Preserve APS/HEIMDALL comments after jobs leave slurmctld so the advisor
+  # can resolve per-job mode from targeted sacct records.
+  extraSlurmConf:
+    AccountingStoreFlags: job_comment
+
+mariadb:
+  image:
+    repository: bitnamilegacy/mariadb
+  auth:
+    rootPassword: heimdall
+    password: heimdall
+
+slurm-exporter:
+  enabled: false
+
+authcred:
+  image:
+    repository: ghcr.io/slinkyproject/sackd
+    tag: __SLINKY_SLURM_TAG__
+
+controller:
+  image:
+    repository: ghcr.io/slinkyproject/slurmctld
+    tag: __SLINKY_SLURM_TAG__
+
+# Login node shares /home with the compute nodes through the named claim.
+login:
+  enabled: true
+  image:
+    repository: ghcr.io/slinkyproject/login
+    tag: __SLINKY_SLURM_TAG__
+  # ClusterIP, not the chart default LoadBalancer: kind has no LB provisioner, so
+  # the Service never gets an external IP and helm v3 --wait blocks until timeout.
+  service:
+    type: ClusterIP
+  extraVolumeMounts:
+    - name: home-storage
+      mountPath: /home
+  extraVolumes:
+    - name: home-storage
+      persistentVolumeClaim:
+        claimName: slurm-shared-home
+
+compute:
+  nodesets:
+    - name: e2e-a
+      enabled: true
+      replicas: 1
+      # The nodesets list replaces the chart default, so keep the nested
+      # rollingUpdate object explicit. Slinky 0.3.1 dereferences it during
+      # reconciliation instead of applying the CRD's nested default.
+      updateStrategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 1
+      # The NodeSet CRD requires a non-empty string; an empty value renders as
+      # null and is rejected. References the benign PriorityClass installed
+      # alongside (slurm-priorityclass.yaml).
+      priorityClassName: heimdall-e2e-compute
+      image:
+        repository: ghcr.io/slinkyproject/slurmd
+        tag: __SLINKY_SLURM_TAG__
+      nodeSelector:
+        heimdall.nvidia.com/slurm-node: e2e-a-0
+      extraVolumeMounts:
+        - name: home-storage
+          mountPath: /home
+        - name: node-syslog
+          mountPath: /var/log/syslog
+      extraVolumes:
+        - name: home-storage
+          persistentVolumeClaim:
+            claimName: slurm-shared-home
+        - name: node-syslog
+          hostPath:
+            path: /var/log/syslog
+            type: FileOrCreate
+      partition:
+        enabled: true
+        config:
+          State: UP
+          MaxTime: UNLIMITED
+    - name: e2e-b
+      enabled: true
+      replicas: 1
+      updateStrategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 1
+      priorityClassName: heimdall-e2e-compute
+      image:
+        repository: ghcr.io/slinkyproject/slurmd
+        tag: __SLINKY_SLURM_TAG__
+      nodeSelector:
+        heimdall.nvidia.com/slurm-node: e2e-b-0
+      extraVolumeMounts:
+        - name: home-storage
+          mountPath: /home
+        - name: node-syslog
+          mountPath: /var/log/syslog
+      extraVolumes:
+        - name: home-storage
+          persistentVolumeClaim:
+            claimName: slurm-shared-home
+        - name: node-syslog
+          hostPath:
+            path: /var/log/syslog
+            type: FileOrCreate
+      partition:
+        enabled: true
+        config:
+          State: UP
+          MaxTime: UNLIMITED
+
+accounting:
+  image:
+    repository: ghcr.io/slinkyproject/slurmdbd
+    tag: __SLINKY_SLURM_TAG__
+
+restapi:
+  image:
+    repository: ghcr.io/slinkyproject/slurmrestd
+    tag: __SLINKY_SLURM_TAG__

@@ -1,0 +1,29 @@
+# Deny everything, then whitelist only what the build needs
+*
+
+# Package manager files (copied explicitly in early layers, but needed in context)
+!package.json
+!pnpm-workspace.yaml
+!pnpm-lock.yaml
+!.npmrc
+
+# Source and config needed for the build
+!src/
+!public/
+!next.config.js
+!tsconfig.json
+!postcss.config.cjs
+!.env
+
+# Dependencies are installed from pnpm-lock.yaml inside the build.
+**/node_modules
+
+# Ignore nested junk within whitelisted dirs
+**/__pycache__
+**/.next
+
+# Build artifacts and generated files
+**/.cache
+**/coverage
+**/junit.xml
+**/*.junit.xml

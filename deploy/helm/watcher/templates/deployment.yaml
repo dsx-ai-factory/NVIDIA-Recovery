@@ -1,0 +1,268 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ $logQueryBackend := include "watcher.logQueryBackend" . -}}
+{{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_secret_name .Values.credentials.loki.api_token_secret_name }}
+{{- fail "credentials.loki.app_secret_name and credentials.loki.api_token_secret_name are mutually exclusive" }}
+{{- end }}
+{{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.api_token_secret_name (or .Values.credentials.victorialogs.username_secret_name .Values.credentials.victorialogs.password_secret_name) -}}
+{{- fail "credentials.victorialogs.api_token_secret_name is mutually exclusive with username_secret_name and password_secret_name" -}}
+{{- end -}}
+{{- if and (eq $logQueryBackend "victorialogs") (or (and .Values.credentials.victorialogs.username_secret_name (not .Values.credentials.victorialogs.password_secret_name)) (and .Values.credentials.victorialogs.password_secret_name (not .Values.credentials.victorialogs.username_secret_name))) -}}
+{{- fail "credentials.victorialogs.username_secret_name and password_secret_name must be configured together" -}}
+{{- end -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "watcher.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "watcher.labels" . | nindent 4 }}
+  annotations:
+    checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    {{- if .Values.fluentbit.enabled }}
+    checksum/config-fluentbit: {{ include (print $.Template.BasePath "/configmap-fluentbit.yaml") . | sha256sum }}
+    {{- end }}
+    {{- if not .Values.ruleConfig.existingConfigMap }}
+    checksum/config-rules: {{ include (print $.Template.BasePath "/configmap-rules.yaml") . | sha256sum }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "watcher.selectorLabels" . | nindent 6 }}
+  replicas: {{ .Values.replicas }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.fluentbit.enabled }}
+        checksum/config-fluentbit: {{ include (print $.Template.BasePath "/configmap-fluentbit.yaml") . | sha256sum }}
+        {{- end }}
+        {{- if not .Values.ruleConfig.existingConfigMap }}
+        checksum/config-rules: {{ include (print $.Template.BasePath "/configmap-rules.yaml") . | sha256sum }}
+        {{- end }}
+        prometheus.io/port: "{{ .Values.port }}"
+        prometheus.io/scrape: "true"
+        ad.datadoghq.com/{{ template "watcher.name" . }}.check_names: '["openmetrics"]'
+        ad.datadoghq.com/{{ template "watcher.name" . }}.init_configs: '[{}]'
+        ad.datadoghq.com/{{ template "watcher.name" . }}.instances: '[{"prometheus_url": "http://%%host%%:{{ .Values.port }}/metrics",
+          "namespace": "nvidia_recovery.{{ .Release.Namespace }}.{{ template "watcher.name" . }}", "metrics": ["watcher_*", "http_requests_*"]}]'
+      labels:
+        {{- include "watcher.labels" . | nindent 8 }}
+    spec:
+      {{- with (default .Values.global.imagePullSecrets .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ template "watcher.serviceAccountName" . }}
+      automountServiceAccountToken: {{- if eq (include "watcher.serviceAccountName" . | trim) "default" }} false{{- else }} true{{- end }}
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: {{ template "watcher.name" . }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          privileged: false
+        command:
+{{ .Values.command | toYaml | indent 12 }}
+        image: {{ include "watcher.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.port }}
+          name: {{ template "watcher.name" . }}
+        env:
+        - name: VERSION
+          value: "{{ include "watcher.imageTag" . }}"
+        {{- if .Values.config }}
+        - name: CONFIG_PATH
+          value: "/config/config.yaml"
+        {{- else if .Values.config_path }}
+        - name: CONFIG_PATH
+          value: "{{ .Values.config_path }}"
+        {{- end }}
+        - name: RULES_PATH
+          value: {{ .Values.ruleConfig.rulePath | quote }}
+        - name: LOG_LEVEL
+          value: "{{ .Values.log_level }}"
+        - name: PORT
+          value: "{{ .Values.port }}"
+        - name: LOG_QUERY_BACKEND
+          value: {{ $logQueryBackend | quote }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_secret_name }}
+        - name: LOKI_API_KEY_PATH
+          value: "/secrets/loki_app_secret/token"
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.api_token_secret_name }}
+        - name: LOKI_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.loki.api_token_secret_name }}
+              key: {{ .Values.credentials.loki.api_token_secret_key_name }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.api_token_secret_name }}
+        - name: VICTORIALOGS_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.api_token_secret_name }}
+              key: {{ .Values.credentials.victorialogs.api_token_secret_key_name }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.username_secret_name }}
+        - name: VICTORIALOGS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.username_secret_name }}
+              key: {{ .Values.credentials.victorialogs.username_secret_key_name }}
+        - name: VICTORIALOGS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.victorialogs.password_secret_name }}
+              key: {{ .Values.credentials.victorialogs.password_secret_key_name }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.ca_cert_secret_name }}
+        - name: VICTORIALOGS_CA_CERT
+          value: /secrets/victorialogs-ca/ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.cert_secret_name }}
+        - name: VICTORIALOGS_CERT_FILE
+          value: /secrets/victorialogs-cert/tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.key_secret_name }}
+        - name: VICTORIALOGS_KEY_FILE
+          value: /secrets/victorialogs-key/tls.key
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.loki_cert_file }}
+        - name: LOKI_CERT_FILE
+          value: "{{ .Values.loki_cert_file }}"
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.loki_key_file }}
+        - name: LOKI_KEY_FILE
+          value: "{{ .Values.loki_key_file }}"
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.loki_ca_cert }}
+        - name: LOKI_CA_CERT
+          value: "{{ .Values.loki_ca_cert }}"
+        {{- end }}
+        {{- if .Values.use_lepton }}
+        - name: USE_LEPTON
+          value: "{{ .Values.use_lepton }}"
+        {{- end }}
+        {{- if .Values.lepton_worker_cluster_name }}
+        - name: LEPTON_WORKER_CLUSTER_NAME
+          value: "{{ .Values.lepton_worker_cluster_name }}"
+        {{- end }}
+        {{- if .Values.lepton_base_url }}
+        - name: LEPTON_BASE_URL
+          value: "{{ .Values.lepton_base_url }}"
+        {{- end }}
+
+        {{- if and .Values.credentials.rabbitmq.secret_name .Values.credentials.rabbitmq.secret_key_name }}
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.rabbitmq.secret_name }}
+              key: {{ .Values.credentials.rabbitmq.secret_key_name }}
+        {{- end }}
+        {{- if (((.Values.global).otelcollector).enabled) }}
+        {{- include "heimdall.otelEnv" . | nindent 8 }}
+        {{- end }}
+        readinessProbe:
+          periodSeconds: 5
+          initialDelaySeconds: 10
+          tcpSocket:
+            port: {{ .Values.port }}
+        livenessProbe:
+          periodSeconds: 5
+          initialDelaySeconds: 90
+          tcpSocket:
+            port: {{ .Values.port }}
+        resources:
+{{ .Values.resources | toYaml | indent 12 }}
+        volumeMounts:
+            {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_secret_name }}
+            - name: loki-app-secret
+              mountPath: "/secrets/loki_app_secret"
+            {{- end }}
+            {{- if .Values.config }}
+            - mountPath: /config
+              name: config-volume
+            {{- end }}
+            - mountPath: {{ dir .Values.ruleConfig.rulePath }}
+              name: rules-volume
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.ca_cert_secret_name }}
+            - mountPath: /secrets/victorialogs-ca
+              name: victorialogs-ca
+              readOnly: true
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.cert_secret_name }}
+            - mountPath: /secrets/victorialogs-cert
+              name: victorialogs-cert
+              readOnly: true
+            {{- end }}
+            {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.key_secret_name }}
+            - mountPath: /secrets/victorialogs-key
+              name: victorialogs-key
+              readOnly: true
+            {{- end }}
+            {{- with .Values.volumeMounts }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if and (eq $logQueryBackend "loki") .Values.credentials.loki.app_secret_name }}
+        - name: loki-app-secret
+          secret:
+            secretName: {{ .Values.credentials.loki.app_secret_name }}
+            items:
+              - key: {{ .Values.credentials.loki.secret_key_name }}
+                path: token
+        {{- end }}
+        {{- if .Values.config }}
+        - name: config-volume
+          configMap:
+            name: {{ include "watcher.fullname" . }}-config
+        {{- end }}
+        - name: rules-volume
+          configMap:
+            name: {{ .Values.ruleConfig.existingConfigMap | default (printf "%s-rules" (include "watcher.fullname" .)) }}
+            {{- if and .Values.ruleConfig.existingConfigMap .Values.ruleConfig.configMapKey }}
+            items:
+              - key: {{ .Values.ruleConfig.configMapKey }}
+                path: {{ base .Values.ruleConfig.rulePath }}
+            {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.ca_cert_secret_name }}
+        - name: victorialogs-ca
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.ca_cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.ca_cert_secret_key_name }}
+              path: ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.cert_secret_name }}
+        - name: victorialogs-cert
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.cert_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.cert_secret_key_name }}
+              path: tls.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.credentials.victorialogs.key_secret_name }}
+        - name: victorialogs-key
+          secret:
+            secretName: {{ .Values.credentials.victorialogs.key_secret_name }}
+            items:
+            - key: {{ .Values.credentials.victorialogs.key_secret_key_name }}
+              path: tls.key
+        {{- end }}
+        {{- with .Values.volumes }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with (default .Values.global.nodeSelector .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.global.tolerations .Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

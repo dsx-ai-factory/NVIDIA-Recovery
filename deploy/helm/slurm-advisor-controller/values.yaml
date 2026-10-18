@@ -1,0 +1,205 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: slurm-advisor-controller
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podLabels: {}
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 401
+  runAsGroup: 401
+  fsGroup: 401
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+controller:
+  # Only 0 (shutdown) or 1 is supported until replica coordination exists.
+  replicas: 1
+  heimdallEndpoint: heimdall-api-gateway-internal:9090
+  gatewayTLS:
+    # Also used by watchdog gateway audit delivery. Empty CA name uses system roots.
+    enabled: false
+    serverName: ""
+    caConfigMap:
+      name: ""
+      key: ca.crt
+  mode: observe
+  acknowledgeSchedulerActions: false
+  logLevel: info
+  pollInterval: 15s
+  slurmExecTimeout: 5s
+  logMetadataRefreshInterval: 5m
+  logMetadataEnrichmentTimeout: 2s
+  jobUpsertWorkerPoolSize: 8
+  accountingWorkerPoolSize: 8
+  accountingTimeout: 5m
+  # Shared per-tick budget; unfinished recovery resumes on later ticks.
+  failedJobRecoveryTimeout: 30s
+  adviceLoopTimeout: 15s
+  adviceItemTimeout: 30s
+  adviceMaxAge: 5m
+  requeueHoldDelay: 1s
+  # Wait for restart Advice; true restores compatibility eager recovery.
+  # Eager recovery can bypass backend retry/checkpoint stops.
+  enableEagerRequeue: false
+  # End-time lookback for bootstrap eager recovery of finished failures.
+  # Active attempts and unresolved Advice are retained regardless of age.
+  bootstrapFailureLookback: 30m
+  # APS routing identity: unspecified admits all valid comments, prod also
+  # admits absent/empty environments, and other values require an exact match.
+  environment: unspecified
+  # Temporary initial internal rollout only; deprecated soon, removable without notice.
+  # Shared SAC/watchdog action selection; monitoring is not filtered.
+  # With no explicit job mode: listed users act, others observe. Explicit mode wins.
+  # Empty uses controller.mode. Acknowledgement and other safety gates still apply.
+  userAllowlist: []
+  partitionAllowlist: []
+  versionedSqueueJSON: true
+  updateEligibleTimeAfterRequeue: false
+  auditTrail:
+    destination: gateway
+    maxBatchSize: 100
+    bufferSize: 1000
+    flushInterval: 30s
+  kubernetesAuth:
+    # Mount a short-lived, audience-bound ServiceAccount token for the gateway.
+    # Usable with public JWT validation as well as internal TokenReview.
+    enabled: false
+    audience: ""
+    expirationSeconds: 3600
+  logLinks:
+    enabled: false
+    destination: {}
+    sources: []
+    applicationPatterns: []
+    scanInterval: 1m
+    cleanupInterval: 1h
+    retention: 24h
+    scanTimeout: 5s
+    maxPathLength: 4096
+    maxPathsPerSync: 4096
+    maxPatterns: 32
+    maxScanDirectories: 64
+    maxEntriesPerDirectory: 4096
+    maxMatchesPerScan: 512
+    maxOwnedLinks: 16384
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+watchdog:
+  enabled: true
+  # Only 0 (shutdown) or 1 is supported until replica coordination exists.
+  replicas: 1
+  image:
+    repository: slurm-watchdog
+    tag: latest
+    pullPolicy: IfNotPresent
+  mode: observe
+  acknowledgeSchedulerActions: false
+  # null inherits controller.environment. Use "*" only for an explicitly
+  # reviewed deployment that should admit every valid APS environment.
+  environmentPattern: null
+  pollInterval: 15s
+  releaseTimeout: 10m
+  cleanupGracePeriod: 10m
+  slurmExecTimeout: 5s
+  partitionAllowlist: []
+  versionedSqueueJSON: true
+  logLevel: info
+  # Empty reuses controller.heimdallEndpoint for audit-only RPCs.
+  auditGatewayEndpoint: ""
+  auditTrail:
+    destination: gateway
+    maxBatchSize: 100
+    bufferSize: 1000
+    flushInterval: 30s
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+sackd:
+  image:
+    repository: ghcr.io/slinkyproject/sackd
+    tag: 25.05-ubuntu24.04
+    pullPolicy: IfNotPresent
+  confServer: slurm-controller:6817
+  runtimeDirectory: /run/slurm
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+slurm:
+  authSecret:
+    name: slurm-auth-key
+    key: slurm.key
+
+metrics:
+  controller:
+    enabled: true
+    bindAddress: ""
+    port: 9090
+  watchdog:
+    enabled: true
+    bindAddress: ""
+    port: 9091
+
+service:
+  annotations: {}
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+initContainer:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+terminationGracePeriodSeconds: 30
+nodeSelector: {}
+tolerations: []
+affinity: {}

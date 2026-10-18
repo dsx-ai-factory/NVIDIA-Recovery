@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AttributionRequest",
+  "description": "Attribution request event",
+  "type": "object",
+  "required": [
+    "job_id", "anomaly_time"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "job_attempt_index": {
+      "type": "integer"
+    },
+    "anomaly_time": {
+      "type": "string",
+      "format": "datetime"
+    },
+    "allocated_nodes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

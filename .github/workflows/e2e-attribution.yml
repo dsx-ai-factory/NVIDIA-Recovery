@@ -1,0 +1,138 @@
+name: Attribution qualification
+
+# Explicit qualification only; protect the named environment before running.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: attribution-qualification
+  cancel-in-progress: false
+
+jobs:
+  validate-ref:
+    name: Require main for attribution qualification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-main dispatch
+        env:
+          IS_MAIN: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          if [ "$IS_MAIN" != true ]; then
+            echo "Dispatch attribution qualification from refs/heads/main; got $GITHUB_REF" >&2
+            exit 1
+          fi
+
+  e2e-attribution:
+    name: Attribution e2e (${{ matrix.profile }}, ${{ matrix.log_backend }})
+    needs: validate-ref
+    environment: attribution-qualification
+    permissions:
+      contents: read
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: advisor-act
+            cluster_suffix: act-loki
+            log_backend: loki
+          - profile: advisor-act
+            cluster_suffix: act-vl
+            log_backend: victorialogs
+    env:
+      # The service is built from the pinned upstream source at test time. No
+      # provider source, chart, image, or registry coordinate is bundled here.
+      DEPLOY_INFRA: "1"
+      DEPLOY_STACK: "1"
+      HELM_NAMESPACE: "slurm"
+      # Exercise release-derived runtime routing and durable producer delivery.
+      HELM_RELEASE: recovery-qualification
+      E2E_STACK_NAMESPACE: "slurm"
+      FORCE_COLOR: "1"
+      # Keep build/deploy progress while suppressing continuous pod log streams.
+      TILT_LOG_SOURCE: "build"
+      E2E_ATTRIBUTION_MODE: available
+      ATTRIBUTION_SOURCE_URL: git@github.com:dsx-ai-factory/attribution.git
+      ATTRIBUTION_SOURCE_REF: 7d6dff168bc282f471828fc8468e02de0df17480
+      E2E_PROFILE: ${{ matrix.profile }}
+      E2E_LOG_BACKEND: ${{ matrix.log_backend }}
+      E2E_SCENARIOS: "02-log-ingestion 03-attribution-modes 10-simple-segfault 42-fault-inject-xid-79 40-fault-inject-1 41-fault-inject-2 20-segfault-template 55-checkpoint-stop-guardrail 57-system-requeue-limit"
+      E2E_XUNIT_PATH: reports/e2e-attribution/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/junit.xml
+      CLUSTER_NAME: heimdall-e2e-attribution-${{ github.run_id }}-${{ matrix.cluster_suffix }}
+      # Optional Docker Hub mirrors. Empty when the secret is unset, which the
+      # harness treats as "use Docker Hub directly".
+      BITNAMI_OCI_REGISTRY_MIRROR: ${{ secrets.BITNAMI_OCI_REGISTRY_MIRROR }}
+      DOCKER_HUB_REGISTRY_MIRROR: ${{ secrets.DOCKER_HUB_REGISTRY_MIRROR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Require provider source credential
+        env:
+          ATTRIBUTION_SOURCE_DEPLOY_KEY: ${{ secrets.ATTRIBUTION_SOURCE_DEPLOY_KEY }}
+        run: |
+          if [ -z "$ATTRIBUTION_SOURCE_DEPLOY_KEY" ]; then
+            echo "Configure the protected attribution-qualification environment deploy key" >&2
+            exit 1
+          fi
+
+      - name: Set up uv with cache
+        uses: ./.github/actions/setup-uv-cache
+        with:
+          cache-role: e2e-attribution-${{ matrix.profile }}-${{ matrix.log_backend }}
+
+      - name: Initialize attribution E2E status
+        run: |
+          mkdir -p "reports/e2e-attribution/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state"
+          printf 'failed\n' > "reports/e2e-attribution/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/status"
+
+      - name: Docker preflight
+        run: |
+          test "$(uname -m)" = x86_64
+          docker version
+          case "$(docker info --format '{{.Architecture}}')" in
+            x86_64|amd64) ;;
+            *) echo "Attribution qualification requires a native amd64 Docker engine" >&2; exit 1 ;;
+          esac
+
+      - name: Set inotify limits
+        run: |
+          sudo sysctl -w fs.inotify.max_user_watches=524288
+          sudo sysctl -w fs.inotify.max_user_instances=512
+
+      - name: Run attribution E2E harness
+        env:
+          ATTRIBUTION_SOURCE_DEPLOY_KEY: ${{ secrets.ATTRIBUTION_SOURCE_DEPLOY_KEY }}
+        run: |
+          bash scripts/ci/e2e/e2e.sh
+          printf 'passed\n' > "reports/e2e-attribution/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/status"
+
+      - name: Upload attribution E2E status
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: e2e-attribution-status-${{ matrix.profile }}-${{ matrix.log_backend }}-job_state
+          path: reports/e2e-attribution/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/status
+          if-no-files-found: error
+
+      - name: Upload attribution E2E XUnit report
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: e2e-attribution-xunit-${{ matrix.profile }}-${{ matrix.log_backend }}-job_state
+          path: reports/e2e-attribution/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/junit.xml
+          if-no-files-found: error
+
+      - name: Tear down Kind cluster
+        if: always()
+        run: |
+          source scripts/ci/e2e/env.sh 2>/dev/null || true
+          kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true

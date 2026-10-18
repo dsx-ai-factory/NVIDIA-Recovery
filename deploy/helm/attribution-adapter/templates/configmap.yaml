@@ -1,0 +1,142 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ $logQueryBackend := include "attribution-adapter.logQueryBackend" . -}}
+{{- include "attribution-adapter.validateLogQueryLocations" . -}}
+{{- $providerQueries := dig "global" "log_query" "providers" $logQueryBackend "queries" "attribution" dict .Values.AsMap -}}
+{{- $victoriaAppURL := include "attribution-adapter.providerValue" (list . "victorialogs" "application" "url") -}}
+{{- $victoriaSystemURL := include "attribution-adapter.providerValue" (list . "victorialogs" "system" "url") -}}
+{{- $victoriaAccountID := include "attribution-adapter.providerValue" (list . "victorialogs" "application" "account_id") -}}
+{{- $victoriaProjectID := include "attribution-adapter.providerValue" (list . "victorialogs" "application" "project_id") -}}
+{{- $victoriaSystemAccountID := include "attribution-adapter.providerValue" (list . "victorialogs" "system" "account_id") -}}
+{{- $victoriaSystemProjectID := include "attribution-adapter.providerValue" (list . "victorialogs" "system" "project_id") -}}
+{{- $victoriaAppRequireTenant := include "attribution-adapter.providerValue" (list . "victorialogs" "application" "require_tenant") | default "false" -}}
+{{- $victoriaSystemRequireTenant := include "attribution-adapter.providerValue" (list . "victorialogs" "system" "require_tenant") | default "false" -}}
+{{- $globalLokiAppTenants := include "attribution-adapter.providerValue" (list . "loki" "application" "tenants") -}}
+{{- $globalLokiAppOrgID := include "attribution-adapter.providerValue" (list . "loki" "application" "org_id") -}}
+{{- $globalLokiSystemTenants := include "attribution-adapter.providerValue" (list . "loki" "system" "tenants") -}}
+{{- $globalLokiSystemOrgID := include "attribution-adapter.providerValue" (list . "loki" "system" "org_id") -}}
+{{- $globalLokiAppURL := include "attribution-adapter.providerValue" (list . "loki" "application" "url") -}}
+{{- $globalLokiSystemURL := include "attribution-adapter.providerValue" (list . "loki" "system" "url") -}}
+{{- if eq $logQueryBackend "loki" -}}
+{{- $_ := required "loki.loki_cluster is required when backend=loki" .Values.loki.loki_cluster -}}
+{{- $_ := required "global.log_query.providers.loki.application.url is required when backend=loki; migrate connection and tenant identity into the provider block" $globalLokiAppURL -}}
+{{- $_ := required "global.log_query.providers.loki.system.url is required when backend=loki; migrate connection and tenant identity into the provider block" $globalLokiSystemURL -}}
+{{- end -}}
+{{- if eq $logQueryBackend "victorialogs" -}}
+{{- $_ := required "global.log_query.providers.victorialogs.application.url is required when backend=victorialogs" $victoriaAppURL -}}
+{{- $_ := required "global.log_query.providers.victorialogs.system.url is required when backend=victorialogs" $victoriaSystemURL -}}
+{{- if ne (empty $victoriaAccountID) (empty $victoriaProjectID) -}}
+{{- fail "global.log_query.providers.victorialogs.application.account_id and project_id must be configured together" -}}
+{{- end -}}
+{{- if ne (empty $victoriaSystemAccountID) (empty $victoriaSystemProjectID) -}}
+{{- fail "global.log_query.providers.victorialogs.system.account_id and project_id must be configured together" -}}
+{{- end -}}
+{{- if eq $victoriaAppRequireTenant "true" -}}
+{{- $_ := required "global.log_query.providers.victorialogs.application.account_id is required when backend=victorialogs" $victoriaAccountID -}}
+{{- $_ := required "global.log_query.providers.victorialogs.application.project_id is required when backend=victorialogs" $victoriaProjectID -}}
+{{- end -}}
+{{- if eq $victoriaSystemRequireTenant "true" -}}
+{{- $_ := required "global.log_query.providers.victorialogs.system.account_id is required when backend=victorialogs" $victoriaSystemAccountID -}}
+{{- $_ := required "global.log_query.providers.victorialogs.system.project_id is required when backend=victorialogs" $victoriaSystemProjectID -}}
+{{- end -}}
+{{- if not (contains "{job_id}" (get $providerQueries "application" | default "")) -}}
+{{- fail "global.log_query.providers.victorialogs.queries.attribution.application must contain {job_id} when backend=victorialogs" -}}
+{{- end -}}
+{{- if not (contains "{job_id}" (get $providerQueries "epilogue" | default "")) -}}
+{{- fail "global.log_query.providers.victorialogs.queries.attribution.epilogue must contain {job_id} when backend=victorialogs" -}}
+{{- end -}}
+{{- end -}}
+{{- range $queryName := list "application" "system" "epilogue" -}}
+{{- $_ := required (printf "global.log_query.providers.%s.queries.attribution.%s is required" $logQueryBackend $queryName) (get $providerQueries $queryName) -}}
+{{- end -}}
+{{- if .Values.prometheus.prometheus_checks_enabled -}}
+{{- $_ := required "prometheus.prometheus_url is required when Prometheus checks are enabled" .Values.prometheus.prometheus_url -}}
+{{- $_ := required "prometheus.prometheus_cluster is required when Prometheus checks are enabled" .Values.prometheus.prometheus_cluster -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "attribution-adapter.fullname" . }}-config
+  labels:
+    {{- include "attribution-adapter.labels" . | nindent 4 }}
+data:
+  settings.env: |
+    fact_url={{ include "attribution-adapter.factURL" . }}
+    fact_http_timeout_seconds={{ .Values.fact_http_timeout_seconds }}
+    log_query_backend={{ $logQueryBackend }}
+    {{/* Escape dollars in JSON before dotenv reads it: native ${...} syntax must not interpolate environment variables. */}}
+    log_query_providers={{ dict $logQueryBackend (dict "queries" $providerQueries) | toJson | replace "$" "\\u0024" | quote }}
+    loki_app_url={{ $globalLokiAppURL }}
+    loki_sys_url={{ $globalLokiSystemURL }}
+    loki_cluster={{ .Values.loki.loki_cluster}}
+    loki_app_tenants={{ $globalLokiAppTenants }}
+    loki_sys_tenants={{ $globalLokiSystemTenants }}
+    loki_app_org_id={{ $globalLokiAppOrgID }}
+    loki_sys_org_id={{ $globalLokiSystemOrgID }}
+    loki_http_timeout_seconds={{ .Values.loki_http_timeout_seconds }}
+    {{- if $victoriaAppURL }}
+    victorialogs_app_url={{ $victoriaAppURL }}
+    {{- end }}
+    {{- if $victoriaSystemURL }}
+    victorialogs_sys_url={{ $victoriaSystemURL }}
+    {{- end }}
+    {{- if $victoriaAccountID }}
+    victorialogs_app_account_id={{ $victoriaAccountID }}
+    {{- end }}
+    {{- if $victoriaProjectID }}
+    victorialogs_app_project_id={{ $victoriaProjectID }}
+    {{- end }}
+    {{- if $victoriaSystemAccountID }}
+    victorialogs_sys_account_id={{ $victoriaSystemAccountID }}
+    {{- end }}
+    {{- if $victoriaSystemProjectID }}
+    victorialogs_sys_project_id={{ $victoriaSystemProjectID }}
+    {{- end }}
+    victorialogs_app_require_tenant={{ $victoriaAppRequireTenant }}
+    victorialogs_sys_require_tenant={{ $victoriaSystemRequireTenant }}
+    victorialogs_http_timeout_seconds={{ .Values.victorialogs_http_timeout_seconds }}
+    prometheus_url={{ .Values.prometheus.prometheus_url }}
+    prometheus_cluster={{ .Values.prometheus.prometheus_cluster }}
+    prometheus_tenants={{ .Values.prometheus.prometheus_tenants }}
+    prometheus_checks_enabled={{ .Values.prometheus.prometheus_checks_enabled }}
+    prometheus_hostname_label={{ .Values.prometheus.prometheus_hostname_label }}
+    syslog_formatter="{{ .Values.syslog_formatter }}"
+    kernel_logs_only={{ .Values.kernel_logs_only }}
+    is_lepton_enabled={{ .Values.is_lepton_enabled }}
+    ib_metrics_query="{{ .Values.ib_metrics_query }}"
+    eth_metrics_query="{{ .Values.eth_metrics_query }}"
+    health_check_query="{{ .Values.health_check_query }}"
+    logql_lookback_timewindow_duration_minutes={{ .Values.logql_lookback_timewindow_duration_minutes }}
+    logql_applog_grace_time_seconds={{ .Values.logql_applog_grace_time_seconds }}
+    syslogindex_enabled={{ .Values.syslogindex_enabled }}
+    {{- if .Values.log_fetch_optimization_enabled }}
+    log_fetch_optimization_enabled={{ .Values.log_fetch_optimization_enabled }}
+    {{- end }}
+    {{- if .Values.log_fetch_direction }}
+    log_fetch_direction={{ .Values.log_fetch_direction }}
+    {{- end }}
+    {{- if .Values.log_fetch_timeout_syslogs_seconds }}
+    log_fetch_timeout_syslogs_seconds={{ .Values.log_fetch_timeout_syslogs_seconds }}
+    {{- end }}
+    {{- if .Values.log_fetch_timeout_applogs_seconds }}
+    log_fetch_timeout_applogs_seconds={{ .Values.log_fetch_timeout_applogs_seconds }}
+    {{- end }}
+    {{- if .Values.log_fetch_timeout_slow_signals_seconds }}
+    log_fetch_timeout_slow_signals_seconds={{ .Values.log_fetch_timeout_slow_signals_seconds }}
+    {{- end }}
+    {{- if .Values.nvrx_straggler_threshold }}
+    nvrx_straggler_threshold={{ .Values.nvrx_straggler_threshold }}
+    {{- end }}
+    {{- if .Values.nvrx_straggler_score_types }}
+    nvrx_straggler_score_types={{ .Values.nvrx_straggler_score_types }}
+    {{- end }}
+    {{- if .Values.megatron_straggler_threshold }}
+    megatron_straggler_threshold={{ .Values.megatron_straggler_threshold }}
+    {{- end }}
+    {{- if .Values.megatron_straggler_score_types }}
+    megatron_straggler_score_types={{ .Values.megatron_straggler_score_types }}
+    {{- end }}
+    {{- if .Values.megatron_straggler_infer_threshold_from_data }}
+    megatron_straggler_infer_threshold_from_data={{ .Values.megatron_straggler_infer_threshold_from_data }}
+    {{- end }}

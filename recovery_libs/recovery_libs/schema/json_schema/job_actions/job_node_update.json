@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JobNodeUpdate",
+  "description": "update the lists of excluded/included nodes that a job can use, identifying job by id.",
+  "type": "object",
+
+  "properties": {
+    "name": {
+      "const": "JobNodeUpdate"
+    },
+    "params": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "job_action_params.json#/definitions/base_params"
+        }
+      ],
+      "properties": {
+        "N": {
+          "type": "integer"
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "name", "params"
+  ]
+}

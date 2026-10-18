@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JobRelease",
+  "description": "release a held job to be scheduled, identifying job by id.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "const": "JobRelease"
+    },
+    "params": {
+      "$ref": "job_action_params.json#/definitions/base_params"
+    }
+  },
+  "required": [
+    "name", "params"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JobRequeueHold",
+  "description": "Requeue a job to be held, identifying job by id.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "const": "JobRequeueHold"
+    },
+    "params": {
+      "$ref": "job_action_params.json#/definitions/base_params"
+    }
+  },
+  "required": [
+    "name", "params"
+  ]
+}

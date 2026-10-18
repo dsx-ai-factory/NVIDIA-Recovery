@@ -1,0 +1,27 @@
+{
+  "jobs": [
+    {
+      "job_id": "12345",
+      "name": "test_job_12345",
+      "user_name": "test_user",
+      "restart_cnt": 0,
+      "job_state": "PENDING",
+      "state_reason": "Dependency",
+      "submit_time": 1722495600,
+      "start_time": -1,
+      "end_time": -1,
+      "cluster": "test_cluster",
+      "partition": "recovery",
+      "nodes": "node[1-5]",
+      "excluded_nodes": "node[6-8],node10",
+      "required_nodes": "node[1-3]",
+      "command": "sbatch test.sh",
+      "comment": "{\"APS\":{\"workflow_name\":\"test_workflow\"}}",
+      "tres_req_str": "cpu=800,mem=50000M,gres/gpu=8",
+      "tres_alloc_str": "",
+      "node_count": {
+        "number": 5
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Lint/render fixture for charts that require explicit log-query connections.
+# The endpoint matches the auth-disabled Loki gateway in the local E2E stack.
+global:
+  log_query:
+    backend: loki
+    providers:
+      loki:
+        queries:
+          attribution:
+            application: '{{app="test", cluster="test-cluster"}} |= `{}`'
+            system: '{app="test", cluster="test-cluster"}'
+            epilogue: '{{app="test", cluster="test-cluster"}} |= `epilogue {}`'
+        application:
+          url: http://loki-gateway.monitoring.svc.cluster.local
+          tenants: ""
+          org_id: ""
+        system:
+          url: http://loki-gateway.monitoring.svc.cluster.local
+          tenants: ""
+          org_id: ""
+attribution-adapter:
+  loki:
+    loki_cluster: test-cluster
+  prometheus:
+    prometheus_url: http://prometheus.example.com
+    prometheus_cluster: test-cluster

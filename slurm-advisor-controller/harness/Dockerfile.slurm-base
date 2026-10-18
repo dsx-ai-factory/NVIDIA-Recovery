@@ -1,0 +1,111 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+FROM rockylinux:9
+
+LABEL org.opencontainers.image.title="slurm-advisor-controller-slurm-base" \
+      org.opencontainers.image.description="Local Slurm base image for the Slurm advisor controller harness"
+
+ARG SLURM_TAG=slurm-25-05-8-1
+ARG GOSU_VERSION=1.11
+ARG GOSU_GPG_FINGERPRINT=B42F6819007F00F88E364FD4036A9C25BF357DD4
+ARG TARGETARCH
+
+RUN set -ex \
+    && yum makecache \
+    && yum -y update \
+    && yum -y install dnf-plugins-core \
+    && dnf config-manager --enable crb \
+    && yum -y install \
+       bash-completion \
+       bzip2 \
+       ca-certificates \
+       dbus-devel \
+       gcc \
+       gcc-c++ \
+       git \
+       gnupg \
+       http-parser-devel \
+       hwloc \
+       hwloc-devel \
+       json-c-devel \
+       lz4 \
+       make \
+       mariadb \
+       mariadb-devel \
+       mariadb-server \
+       munge \
+       munge-devel \
+       numactl-libs \
+       perl \
+       psmisc \
+       readline-devel \
+       rrdtool-devel \
+       tar \
+       vim-enhanced \
+       wget \
+    && yum clean all \
+    && rm -rf /var/cache/yum
+
+RUN set -ex \
+    && case "${TARGETARCH}" in \
+         amd64|arm64) gosu_arch="${TARGETARCH}" ;; \
+         *) echo "unsupported gosu architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+       esac \
+    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-${gosu_arch}" \
+    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-${gosu_arch}.asc" \
+    && wget -O /tmp/gosu-gpg.asc "https://keys.openpgp.org/vks/v1/by-fingerprint/${GOSU_GPG_FINGERPRINT}" \
+    && export GNUPGHOME="$(mktemp -d)" \
+    && gpg --batch --import /tmp/gosu-gpg.asc \
+    && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
+    && rm -rf "${GNUPGHOME}" /usr/local/bin/gosu.asc /tmp/gosu-gpg.asc \
+    && chmod +x /usr/local/bin/gosu \
+    && gosu nobody true
+
+RUN set -ex \
+    && git clone -b "${SLURM_TAG}" --single-branch --depth=1 https://github.com/SchedMD/slurm.git \
+    && cd slurm \
+    && ./configure --enable-debug --prefix=/usr --sysconfdir=/etc/slurm \
+        --with-mysql_config=/usr/bin --libdir=/usr/lib64 \
+    && make install -j 6 \
+    && install -D -m644 etc/cgroup.conf.example /etc/slurm/cgroup.conf.example \
+    && install -D -m644 etc/slurm.conf.example /etc/slurm/slurm.conf.example \
+    && install -D -m644 etc/slurmdbd.conf.example /etc/slurm/slurmdbd.conf.example \
+    && install -D -m644 contribs/slurm_completion_help/slurm_completion.sh /etc/profile.d/slurm_completion.sh \
+    && cd / \
+    && rm -rf slurm \
+    && groupadd -r --gid=990 slurm \
+    && useradd -r -g slurm --uid=990 slurm \
+    && mkdir /etc/sysconfig/slurm \
+        /var/spool/slurmd \
+        /var/run/slurmd \
+        /var/run/slurmdbd \
+        /var/lib/slurmd \
+        /var/log/slurm \
+        /data \
+    && touch /var/lib/slurmd/node_state \
+        /var/lib/slurmd/front_end_state \
+        /var/lib/slurmd/job_state \
+        /var/lib/slurmd/resv_state \
+        /var/lib/slurmd/trigger_state \
+        /var/lib/slurmd/assoc_mgr_state \
+        /var/lib/slurmd/assoc_usage \
+        /var/lib/slurmd/qos_usage \
+        /var/lib/slurmd/fed_mgr_state \
+    && chown -R slurm:slurm /var/*/slurm* \
+    && /sbin/create-munge-key
+
+COPY slurm-advisor-controller/harness/slurm.conf /etc/slurm/slurm.conf
+COPY slurm-advisor-controller/harness/slurmdbd.conf /etc/slurm/slurmdbd.conf
+COPY slurm-advisor-controller/harness/cgroup.conf /etc/slurm/cgroup.conf
+COPY slurm-advisor-controller/harness/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY slurm-advisor-controller/harness/jobs /data/jobs
+
+RUN set -ex \
+    && chown slurm:slurm /etc/slurm/slurmdbd.conf /etc/slurm/slurm.conf /etc/slurm/cgroup.conf \
+    && chmod 600 /etc/slurm/slurmdbd.conf \
+    && chmod 644 /etc/slurm/slurm.conf /etc/slurm/cgroup.conf \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["slurmdbd"]

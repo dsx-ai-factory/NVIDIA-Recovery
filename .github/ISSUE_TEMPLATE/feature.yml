@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Feature request
+description: Propose new or improved NVIDIA Recovery behavior
+title: "[FEATURE]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the user or operator problem before proposing implementation.
+        Substantial changes may require design discussion and an architecture
+        decision record before implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Description
+      description: Describe the proposed feature and the user or operator problem it should solve.
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Rationale
+      description: Explain why this matters to users or operators and the impact of leaving it unresolved.
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: Describe the affected user or operator, their workflow, and what they need to accomplish. Use anonymized examples.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Functional requirements
+      description: Describe the required observable behavior, scope, and acceptance criteria.
+    validations:
+      required: true
+  - type: textarea
+    id: technical-considerations
+    attributes:
+      label: Technical considerations
+      description: Identify affected components, schedulers, APIs, deployment modes, dependencies, constraints, and security, compatibility, or operational risks.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Initial severity (impact)
+      description: Select the current impact of the problem or missing capability. Maintainers may adjust this during triage.
+      options:
+        - Unsure / needs triage
+        - Critical - widespread outage, data loss, or essential workflows blocked with no workaround
+        - High - major functionality unavailable or severely impaired
+        - Medium - functionality limited, with a usable workaround
+        - Low - minor inconvenience or cosmetic issue
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Initial priority (urgency)
+      description: Select the requested urgency.
+      options:
+        - Unsure / needs triage
+        - Urgent - needs immediate attention
+        - High - needed in the next planned release or work cycle
+        - Normal - can follow regular planning
+        - Low - can be deferred
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative solutions
+      description: Describe workarounds or alternative approaches considered or tried, and why they are insufficient.
+  - type: textarea
+    id: supporting-info
+    attributes:
+      label: Additional supporting info / evidence
+      description: Attach relevant sanitized logs, output, screenshots, measurements, or links. Remove sensitive information.
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and discussions for this request.
+          required: true
+        - label: I agree to follow the project's Code of Conduct.
+          required: true

@@ -1,0 +1,138 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "job-manager.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "job-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ template "job-manager.fullname" . }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "job-manager.selectorLabels" . | nindent 6 }}
+  replicas: {{ .Values.replicas }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        prometheus.io/port: "{{ .Values.port }}"
+        prometheus.io/scrape: "true"
+        ad.datadoghq.com/{{ template "job-manager.name" . }}.check_names: '["openmetrics"]'
+        ad.datadoghq.com/{{ template "job-manager.name" . }}.init_configs: '[{}]'
+        ad.datadoghq.com/{{ template "job-manager.name" . }}.instances: '[{"prometheus_url": "http://%%host%%:{{ .Values.port }}/metrics",
+          "namespace": "nvidia_recovery.{{ .Release.Namespace }}.{{ template "job-manager.name" . }}", "metrics": ["aps_job_manager_*", "http_requests_*"]}]'
+      labels:
+        {{- include "job-manager.labels" . | nindent 8 }}
+    spec:
+      # Disable Kubernetes service-link env injection: a Service named "mysql"
+      # otherwise injects MYSQL_PORT=tcp://<ip>:3306, which overrides the
+      # configured DB port and breaks startup.
+      enableServiceLinks: false
+      {{- with (default .Values.global.imagePullSecrets .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ template "job-manager.serviceAccountName" . }}
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: {{ template "job-manager.name" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: JOB_MANAGER_CONFIG_PATH
+          value: /config/job_manager_config.yaml
+        - name: AWS_DEFAULT_REGION
+          value: {{ .Values.storage.aws_default_region }}
+        {{- if .Values.credentials.aws.secret_name }}
+        - name: AWS_SHARED_CREDENTIALS_FILE
+          value: /creds/aws_creds
+        {{- else }}
+        - name: AWS_ACCESS_KEY_ID
+          value: somerandomstuff
+        - name: AWS_SECRET_ACCESS_KEY
+          value: somerandomstuff
+        {{- end }}
+
+        {{- if and .Values.credentials.rabbitmq.secret_name .Values.credentials.rabbitmq.secret_name .Values.credentials.rabbitmq.secret_key_name }}
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.rabbitmq.secret_name }}
+              key: {{ .Values.credentials.rabbitmq.secret_key_name }}
+        {{- end }}
+
+        {{- if and .Values.credentials.mysql_secret_name .Values.credentials.mysql_secret_key_name }}
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.credentials.mysql_secret_name }}
+              key: {{ .Values.credentials.mysql_secret_key_name }}
+        {{- end }}
+        {{- if and .Values.service_config.log_level }}
+        - name: LOG_LEVEL
+          value: {{ upper .Values.service_config.log_level }}
+         {{- end }}
+        {{- if (((.Values.global).otelcollector).enabled) }}
+        {{- include "heimdall.otelEnv" . | nindent 8 }}
+        {{- end }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          privileged: false
+        command:
+{{ .Values.command | toYaml | indent 12 }}
+        image: {{ include "job-manager.image" . }}
+        ports:
+        - containerPort: {{ .Values.port }}
+          name: {{ template "job-manager.name" . }}
+        readinessProbe:
+          periodSeconds: 5
+          initialDelaySeconds: 10
+          httpGet:
+            path: /status
+            port: {{ .Values.port }}
+        livenessProbe:
+          periodSeconds: 5
+          initialDelaySeconds: 90
+          httpGet:
+            path: /status
+            port: {{ .Values.port }}
+        resources:
+{{ .Values.resources | toYaml | indent 12 }}
+        volumeMounts:
+            - mountPath: "/config"
+              name: config
+            {{- if .Values.credentials.aws.secret_name }}
+            - mountPath: "/creds/aws_creds"
+              name: aws-creds
+              subPath: aws_creds
+            {{- end }}
+            {{- with .Values.volumeMounts }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "job-manager.fullname" . }}-config
+        {{- if .Values.credentials.aws.secret_name }}
+        - name: aws-creds
+          secret:
+            defaultMode: 420
+            secretName: {{ $.Values.credentials.aws.secret_name }}
+        {{- end }}
+        {{- with .Values.volumes }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with (default .Values.global.nodeSelector .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.global.tolerations .Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,12 @@
+*
+!notifications/README.md
+!notifications/pyproject.toml
+!pyproject.toml
+!uv.lock
+!notifications/settings.toml
+!notifications/notifications
+!recovery_libs/docs
+!recovery_libs/pyproject.toml
+!recovery_libs/recovery_libs
+**/__pycache__
+**/*.pyc

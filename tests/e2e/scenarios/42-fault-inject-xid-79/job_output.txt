@@ -1,0 +1,4 @@
+[2026-07-13 12:34:50] [rank=0] starting as master
+[2026-07-13 12:34:52] [rank=0] training step 0
+[2026-07-13 12:34:54] [rank=0] training step 1
+[2026-07-13 12:34:56] [rank=0] segmentation fault here

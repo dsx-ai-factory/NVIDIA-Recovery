@@ -1,0 +1,55 @@
+[project]
+name = "attribution-adapter"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "requests>=2.34.2",
+    "pydantic-settings>=2.2.1",
+    "prometheus-client>=0.20.0",
+    "recovery-libs",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-cov",
+    "pytest",
+    "pytest-mock",
+    "httpx",
+    "types-requests",
+    "types-pyyaml",
+    "pyyaml",
+    "types-cachetools",
+    "types-pytz",
+    "types-python-dateutil",
+    "mypy",
+]
+
+[project.scripts]
+attribution-adapter = "attribution_adapter.main:main"
+
+[tool.uv.sources]
+recovery-libs = { workspace = true }
+
+[tool.pytest.ini_options]
+markers = [
+    "nightly: tests excluded from pull requests and main pushes; included in nightly and tagged-release suites",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.mypy]
+explicit_package_bases = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+plugins = ["pydantic.mypy"]
+exclude = [
+    "tests/",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

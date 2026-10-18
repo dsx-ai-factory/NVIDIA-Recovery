@@ -1,0 +1,21 @@
+# For details on buf.yaml configuration, visit https://buf.build/docs/configuration/v2/buf-yaml
+version: v2
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/grpc-ecosystem/grpc-gateway
+lint:
+  use:
+    - STANDARD
+  disallow_comment_ignores: false
+  except:
+    # Contradicts https://google.aip.dev/126 and is annoyingly verbose especially with grpc-gateway
+    - ENUM_VALUE_PREFIX
+    # Enums with obvious default values should be 0
+    - ENUM_ZERO_VALUE_SUFFIX
+    # Probably need to fix this?
+    - PACKAGE_DIRECTORY_MATCH
+breaking:
+  use:
+    - FILE
+modules:
+  - path: protos/heimdall/v1

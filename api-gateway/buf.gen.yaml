@@ -1,0 +1,22 @@
+version: v2
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.31.0
+    out: gen/go/heimdall/v1
+    opt:
+      - paths=source_relative
+  - remote: buf.build/grpc/go:v1.3.0
+    out: gen/go/heimdall/v1
+    opt:
+      - paths=source_relative
+  - remote: buf.build/grpc-ecosystem/gateway:v2.16.2
+    out: gen/go/heimdall/v1
+    opt:
+      - paths=source_relative
+  - remote: buf.build/grpc-ecosystem/openapiv2:v2.27.1
+    out: gen/openapiv2/heimdall/v1
+    opt:
+      - allow_merge=true
+      - merge_file_name=heimdall
+      - output_format=yaml
+      - preserve_rpc_order=true
+      - enable_rpc_deprecation=true

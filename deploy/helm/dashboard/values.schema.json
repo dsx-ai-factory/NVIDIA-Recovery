@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Dashboard chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "name", "tag", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 0 },
+        "name": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "minLength": 0 },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "azureSecretValue": {
+      "oneOf": [{ "type": "null" }, { "type": "string" }]
+    }
+  },
+  "required": [
+    "applicationName",
+    "image",
+    "replicas",
+    "port",
+    "ingress_fqdn",
+    "ingressClassName",
+    "ingress",
+    "app",
+    "auth",
+    "service",
+    "imagePullSecrets",
+    "nodeSelector",
+    "tolerations",
+    "volumes",
+    "volumeMounts",
+    "serviceAccount",
+    "gateway",
+    "enableExtendedLabelSelectors"
+  ],
+  "properties": {
+    "global": { "type": "object" },
+    "enabled": { "type": "boolean" },
+    "applicationName": { "type": "string", "minLength": 1 },
+    "image": { "$ref": "#/definitions/image" },
+    "replicas": { "type": "integer", "minimum": 0 },
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "ingress_fqdn": { "type": "string" },
+    "ingressClassName": { "type": "string" },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotations", "tls"],
+      "properties": {
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "secretName"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "secretName": { "type": "string" }
+          }
+        }
+      }
+    },
+    "db": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": { "type": "string" },
+        "user": { "type": "string" },
+        "host": { "type": "string" },
+        "port": {
+          "oneOf": [{ "type": "string" }, { "type": "integer" }]
+        },
+        "database": { "type": "string" },
+        "mysql_secret_name": { "type": "string" },
+        "mysql_secret_key": { "type": "string" }
+      }
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cockpitName",
+        "DATADOG_ENABLED",
+        "FACT_ENABLED",
+        "FACT_URL",
+        "datadogWatcherURL",
+        "base_path",
+        "loggingLevel",
+        "notificationsHostPostfix",
+        "notificationsPort",
+        "apiGatewayBasePath",
+        "METRICS_ENABLED",
+        "API_KEYS_ENABLED",
+        "JOB_NODE_ANALYSIS_ENABLED",
+        "JOB_GROUPS_ENABLED",
+        "AUDIT_EVENTS_ENABLED",
+        "GRAFANA_TRACE_URL_ENABLED",
+        "GRAFANA_DATA_SOURCE_ID",
+        "apiGatewayURL",
+        "agent"
+      ],
+      "properties": {
+        "cockpitName": { "type": "string", "minLength": 1 },
+        "DATADOG_ENABLED": { "type": "boolean" },
+        "FACT_ENABLED": { "type": "boolean" },
+        "FACT_URL": { "type": "string" },
+        "datadogWatcherURL": { "type": "string" },
+        "base_path": { "type": "string" },
+        "loggingLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"]
+        },
+        "notificationsHostPostfix": { "type": "string", "minLength": 1 },
+        "notificationsPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "apiGatewayBasePath": { "type": "string" },
+        "METRICS_ENABLED": { "type": "boolean" },
+        "API_KEYS_ENABLED": { "type": "boolean" },
+        "JOB_NODE_ANALYSIS_ENABLED": { "type": "boolean" },
+        "JOB_GROUPS_ENABLED": { "type": "boolean" },
+        "AUDIT_EVENTS_ENABLED": { "type": "boolean" },
+        "GRAFANA_TRACE_URL_ENABLED": { "type": "boolean" },
+        "GRAFANA_DATA_SOURCE_ID": { "type": "string" },
+        "GRAFANA_URL": { "type": "string" },
+        "GRAFANA_ORG_ID": { "type": "string", "pattern": "^([1-9][0-9]*)?$" },
+        "apiGatewayURL": { "type": "string" },
+        "agent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "apiURL", "webURL"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "apiURL": { "type": "string" },
+            "webURL": { "type": "string" }
+          }
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["NEXTAUTH_ENABLED", "NEXTAUTH_URL", "azure", "starfleet", "ldap"],
+      "properties": {
+        "NEXTAUTH_ENABLED": { "type": "boolean" },
+        "existingSessionSecret": { "type": "string" },
+        "NEXTAUTH_SECRET": { "type": "string" },
+        "API_GATEWAY_SESSION_SECRET": { "type": "string" },
+        "NEXTAUTH_URL": { "type": "string" },
+        "azure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "azureAdSecretName",
+            "azureAdClientIdKey",
+            "azureAdClientSecretKey",
+            "azureAdTenantIdKey",
+            "createSecret"
+          ],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "azureAdSecretName": { "type": "string", "minLength": 1 },
+            "azureAdClientIdKey": { "type": "string", "minLength": 1 },
+            "azureAdClientSecretKey": { "type": "string", "minLength": 1 },
+            "azureAdTenantIdKey": { "type": "string", "minLength": 1 },
+            "createSecret": { "type": "boolean" },
+            "azureAdClientIdValue": { "$ref": "#/definitions/azureSecretValue" },
+            "azureAdClientSecretValue": { "$ref": "#/definitions/azureSecretValue" },
+            "azureAdTenantIdValue": { "$ref": "#/definitions/azureSecretValue" }
+          }
+        },
+        "starfleet": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "starfleetSecretName",
+            "starfleetOpenIdConfigUrlKey",
+            "starfleetClientIdKey",
+            "starfleetClientSecretKey",
+            "createSecret"
+          ],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "starfleetSecretName": { "type": "string", "minLength": 1 },
+            "starfleetOpenIdConfigUrlKey": { "type": "string", "minLength": 1 },
+            "starfleetClientIdKey": { "type": "string", "minLength": 1 },
+            "starfleetClientSecretKey": { "type": "string", "minLength": 1 },
+            "createSecret": { "type": "boolean" },
+            "starfleetOpenIdConfigUrlValue": { "$ref": "#/definitions/azureSecretValue" },
+            "starfleetClientIdValue": { "$ref": "#/definitions/azureSecretValue" },
+            "starfleetClientSecretValue": { "$ref": "#/definitions/azureSecretValue" }
+          }
+        },
+        "ldap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "LDAP_URI",
+            "LDAP_MOUNT_PATH",
+            "LDAP_BIND_DN",
+            "LDAP_BIND_PASSWORD",
+            "LDAP_SEARCH_BASE",
+            "ldapCASecretName",
+            "keyName",
+            "certName",
+            "caName",
+            "createSecret",
+            "keyValue",
+            "certValue",
+            "caValue"
+          ],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "LDAP_URI": { "type": "string" },
+            "LDAP_MOUNT_PATH": { "type": "string" },
+            "LDAP_BIND_DN": { "type": "string" },
+            "LDAP_BIND_PASSWORD": { "type": "string" },
+            "LDAP_SEARCH_BASE": { "type": "string" },
+            "ldapCASecretName": { "type": "string", "minLength": 1 },
+            "keyName": { "type": "string", "minLength": 1 },
+            "certName": { "type": "string", "minLength": 1 },
+            "caName": { "type": "string", "minLength": 1 },
+            "createSecret": { "type": "boolean" },
+            "keyValue": { "type": "string" },
+            "certValue": { "type": "string" },
+            "caValue": { "type": "string" }
+          }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumes": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumeMounts": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "automount", "annotations", "name"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "automount": { "type": "boolean" },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "name": { "type": "string" }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parentRef"],
+      "properties": {
+        "parentRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "namespace", "sectionName"],
+          "properties": {
+            "name": { "type": "string" },
+            "namespace": { "type": "string" },
+            "sectionName": { "type": "string" }
+          }
+        }
+      }
+    },
+    "enableExtendedLabelSelectors": { "type": "boolean" }
+  }
+}

@@ -1,0 +1,5 @@
+!lib/
+
+# Keep Python caches ignored inside the re-included library directory.
+__pycache__/
+*.py[cod]

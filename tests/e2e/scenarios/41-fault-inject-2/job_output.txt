@@ -1,0 +1,9 @@
+[init] Heimdall e2e synthetic training job starting
+[init] world_size=8 rank=0 local_rank=0
+[train] step 1 loss=10.41 tokens/s=18190
+[train] step 2 loss=10.09 tokens/s=18512
+[train] step 3 loss=9.83 tokens/s=18588
+[train] step 4 loss=9.49 tokens/s=18540
+[error] NVLink: link 3 on device 0000:3b:00.0 went down
+[error] NCCL error: unhandled system error during allreduce
+[error] aborting training: GPU fell off the bus

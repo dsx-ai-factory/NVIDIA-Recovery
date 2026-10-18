@@ -1,0 +1,143 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+package heimdall.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/dsx-ai-factory/nvidia-recovery/api/gen/go/heimdall/v1";
+
+// ProducerAuditEvent is one structured event emitted by an NVIDIA Recovery component.
+message ProducerAuditEvent {
+  // NVIDIA Recovery's internal identifier for the job.
+  string heimdall_job_id = 1;
+  // Component that produced the event.
+  string event_producer = 2;
+  // Stable event-type identifier.
+  string event_type = 3;
+  // Stable audit event-level identifier.
+  string event_level = 4;
+  // Event-specific structured data.
+  google.protobuf.Struct payload = 5;
+  // Producer emission time as Unix microseconds.
+  int64 event_produced_at = 6;
+  // Producer-computed key used to discard duplicate events.
+  string idempotency_key = 7;
+}
+
+// CreateAuditEventsRequest is a batch of producer audit events to ingest.
+message CreateAuditEventsRequest {
+  // Events in this ingestion batch.
+  repeated ProducerAuditEvent items = 1;
+}
+
+// AuditEventPartialSuccess describes events rejected from an otherwise accepted batch.
+message AuditEventPartialSuccess {
+  // Number of rejected events.
+  int32 rejected_events = 1;
+  // Human-readable explanation of why events were rejected.
+  string error_message = 2;
+}
+
+// CreateAuditEventsResponse reports full or partial batch acceptance.
+message CreateAuditEventsResponse {
+  // Present only when the downstream audit service rejected some events.
+  optional AuditEventPartialSuccess partial_success = 1;
+}
+
+// GetAuditEventsRequest selects a page of persisted audit events.
+message GetAuditEventsRequest {
+  // Exact internal job identifier; exclusive with scheduler job selectors.
+  optional string heimdall_job_id = 1;
+  // Scheduler job identifier; omitting attempt_index includes all attempts.
+  optional string job_id = 2;
+  // Exact non-negative attempt; requires job_id. Zero is a valid attempt.
+  optional int32 attempt_index = 3;
+  // Stable event type to match exactly.
+  optional string event_type = 4;
+  // Event level to match exactly.
+  optional string event_level = 5;
+  // Producer component to match exactly.
+  optional string event_producer = 6;
+  // Inclusive minimum producer timestamp in Unix microseconds.
+  optional int64 min_event_produced_at = 7;
+  // Inclusive maximum producer timestamp in Unix microseconds.
+  optional int64 max_event_produced_at = 8;
+  // Timestamp ordering: event_produced_at:asc or event_produced_at:desc.
+  optional string sort_by = 9;
+  // Opaque cursor returned for an adjacent page of the same query.
+  optional string cursor = 10;
+  // Page size from 1 through 100; defaults to 100 when omitted.
+  optional int32 limit = 11;
+}
+
+// AuditEventHumanSummary describes a persisted event for human readers.
+message AuditEventHumanSummary {
+  // Event title.
+  string title = 1;
+  // Concise event description.
+  string description = 2;
+  // Granularity used to group events in human-facing views.
+  int32 granularity = 3;
+}
+
+// AuditEvent is the public projection of a persisted event.
+message AuditEvent {
+  // Internal job identifier; distinct from the private storage row identifier.
+  string heimdall_job_id = 1;
+  // Component that produced the event.
+  string event_producer = 2;
+  // Stable event-type identifier.
+  string event_type = 3;
+  // Stable audit event-level identifier.
+  string event_level = 4;
+  // Event-specific structured data.
+  google.protobuf.Struct payload = 5;
+  // Producer emission time as Unix microseconds.
+  int64 event_produced_at = 6;
+  // Human-readable event details.
+  AuditEventHumanSummary summary = 7;
+}
+
+// AuditEventPageCursor identifies adjacent pages without exposing storage keys.
+message AuditEventPageCursor {
+  // Previous page cursor; empty when no previous page exists.
+  string prev_cursor = 1;
+  // Next page cursor; empty when no next page exists.
+  string next_cursor = 2;
+}
+
+// GetAuditEventsResponse returns one page of persisted public audit events.
+message GetAuditEventsResponse {
+  // Opaque adjacent-page cursors.
+  AuditEventPageCursor cursor = 1;
+  // Events matching the requested filters and ordering.
+  repeated AuditEvent items = 2;
+}
+
+// AuditService provides authenticated audit ingestion and reads.
+service AuditService {
+  // Queries persisted audit events using optional job and event filters.
+  rpc GetAuditEvents(GetAuditEventsRequest) returns (GetAuditEventsResponse) {
+    option (google.api.http) = { get: "/v1/audit/events" };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Query audit events"
+      description: "Read persisted audit events by internal job ID or scheduler job ID with an optional attempt. A job without an attempt includes all attempts. Event filters and inclusive producer-time bounds narrow results; page size defaults to and cannot exceed 100. Cursors are opaque and must be reused with the same query."
+    };
+  }
+
+  // Ingests one batch of audit events.
+  rpc CreateAuditEvents(CreateAuditEventsRequest) returns (CreateAuditEventsResponse) {
+    option (google.api.http) = {
+      post: "/v1/audit/events"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Ingest audit events"
+      description: "Submit a batch of producer audit events to Audit Trail. A successful response reports full or partial acceptance, not durable persistence. Do not retry partially accepted batches; retry an overloaded request using the same idempotency keys."
+    };
+  }
+}

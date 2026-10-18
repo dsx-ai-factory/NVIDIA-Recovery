@@ -1,0 +1,15 @@
+[init] Heimdall e2e synthetic training job starting
+[init] world_size=8 rank=0 local_rank=0
+[init] loading dataset shard 0/8
+[train] step 1 loss=10.40 tokens/s=18210
+[train] step 2 loss=10.10 tokens/s=18533
+[train] step 3 loss=9.84 tokens/s=18602
+[train] step 4 loss=9.50 tokens/s=18551
+[train] step 5 loss=9.22 tokens/s=18610
+[train] step 6 loss=8.99 tokens/s=18588
+[train] step 7 loss=8.74 tokens/s=18599
+[train] step 8 loss=8.53 tokens/s=18544
+[train] step 9 loss=8.31 tokens/s=18620
+[train] step 10 loss=8.10 tokens/s=18601
+[train] step 11 loss=7.94 tokens/s=18533
+[train] step 12 loss=7.78 tokens/s=18577

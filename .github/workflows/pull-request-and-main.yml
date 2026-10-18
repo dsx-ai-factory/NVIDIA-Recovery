@@ -1,0 +1,344 @@
+name: Pull Request and Merges to Main
+
+on:
+  push:
+    branches:
+      - main
+      - "pull-request/[0-9A-Za-z]+"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GO_VERSION: "1.27.1"
+  BUF_VERSION: "1.54.0"
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.8.0"
+  PYTEST_ADDOPTS: '-m "not nightly"'
+
+jobs:
+  spdx-source-headers:
+    name: SPDX Source Headers
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up uv with cache
+        uses: ./.github/actions/setup-uv-cache
+        with:
+          cache-role: spdx
+
+      - name: Check SPDX source headers
+        run: uv run --locked pre-commit run license-eye-header-check --all-files --hook-stage manual
+
+      - name: Check GitHub Actions SHA pins
+        run: uv run --locked pre-commit run action-sha-pins --all-files --hook-stage manual
+
+      - name: Prune uv cache
+        if: always()
+        run: uv cache prune --ci
+
+  python-package-matrix:
+    name: Package Matrix
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    outputs:
+      packages: ${{ steps.packages.outputs.packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Resolve Python package matrix
+        id: packages
+        run: printf 'packages=%s\n' "$(scripts/ci/list-python-packages.sh --json)" >> "$GITHUB_OUTPUT"
+
+  python-static:
+    name: Python Static check
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up uv with cache
+        uses: ./.github/actions/setup-uv-cache
+        with:
+          cache-role: static
+
+      - name: Check Python formatting
+        run: scripts/ci/format-python.sh
+
+      - name: Check Python lint
+        run: scripts/ci/lint-python.sh
+
+      - name: Check Python types
+        run: scripts/ci/typecheck-python.sh
+
+      - name: Prune uv cache
+        if: always()
+        run: uv cache prune --ci
+
+  python-unit:
+    name: Python Unit Test (${{ matrix.python_package }})
+    needs:
+      - python-package-matrix
+      - python-static
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    strategy:
+      fail-fast: false
+      matrix:
+        python_package: ${{ fromJSON(needs.python-package-matrix.outputs.packages) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up uv with cache
+        uses: ./.github/actions/setup-uv-cache
+        with:
+          cache-role: ${{ matrix.python_package }}
+
+      - name: Run Python unit tests
+        run: scripts/ci/test-python.sh --package "${{ matrix.python_package }}" --ci-reports
+
+      - name: Prune uv cache
+        if: always()
+        run: uv cache prune --ci
+
+      - name: Upload Python package reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: python-reports-${{ matrix.python_package }}
+          path: reports/python/${{ matrix.python_package }}/
+          if-no-files-found: warn
+
+  python-integration:
+    name: Python Integration Test (${{ matrix.python_integration_package }})
+    needs:
+      - python-static
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    strategy:
+      fail-fast: false
+      matrix:
+        python_integration_package:
+          - recovery-libs
+          - notifications
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up uv with cache
+        uses: ./.github/actions/setup-uv-cache
+        with:
+          cache-role: ${{ matrix.python_integration_package }}-integration
+
+      - name: Run Python integration tests
+        run: scripts/ci/test-python-integration.sh --package "${{ matrix.python_integration_package }}" --ci-reports
+
+      - name: Prune uv cache
+        if: always()
+        run: uv cache prune --ci
+
+      - name: Upload Python integration reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: python-reports-${{ matrix.python_integration_package }}-integration
+          path: reports/python/${{ matrix.python_integration_package }}-integration/
+          if-no-files-found: warn
+
+  helm-lint:
+    name: Helm Lint
+    # Use hosted egress for anonymous upstream chart pulls, as release packaging does.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: v3.17.3
+
+      - name: Validate charts
+        run: |
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo add grafana-community https://grafana-community.github.io/helm-charts
+          helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+          helm dependency build deploy/helm/nvidia-recovery
+          deploy/helm/scripts/check-charts.sh deploy/helm/*/Chart.yaml
+
+  go-lint:
+    name: Go Lint
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go with cache
+        uses: ./.github/actions/setup-go-cache
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            api-gateway/go.mod
+            api-gateway/go.sum
+            slurm-advisor-controller/go.mod
+            slurm-advisor-controller/go.sum
+
+      - name: Install pinned Go tools
+        run: make install-go-tools
+
+      - name: Check tidy Go modules
+        run: make check-tidy-go
+
+      - name: Run Go vet
+        run: make vet-go
+
+      - name: Run Go lint
+        run: make lint-go
+
+  go-buf-lint:
+    name: Go Buf Lint
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go with cache
+        uses: ./.github/actions/setup-go-cache
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            api-gateway/go.mod
+            api-gateway/go.sum
+
+      - name: Install minisign
+        run: |
+          if command -v minisign >/dev/null 2>&1; then
+            minisign -v
+            exit 0
+          fi
+          if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends minisign
+          else
+            apt-get update
+            apt-get install -y --no-install-recommends minisign
+          fi
+          minisign -v
+
+      - name: Install Buf
+        run: |
+          scripts/ci/install-buf.sh
+          buf --version
+
+      - name: Run Buf lint
+        run: scripts/ci/lint-buf.sh --package api-gateway
+
+      - name: Check generated Go artifacts
+        run: make check-generated-go
+
+  go-test:
+    name: Go Unit Test
+    needs:
+      - go-lint
+      - go-buf-lint
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go with cache
+        uses: ./.github/actions/setup-go-cache
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            api-gateway/go.mod
+            api-gateway/go.sum
+            slurm-advisor-controller/go.mod
+            slurm-advisor-controller/go.sum
+
+      - name: Install pinned Go tools
+        run: make install-go-tools
+
+      - name: Run Go tests
+        env:
+          GO_TEST_ARGS: "-coverprofile=coverage.out -skip ^TestNightly"
+        run: make test-go-race
+
+      - name: Upload Go coverage
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: go-coverage
+          path: |
+            api-gateway/coverage.out
+            slurm-advisor-controller/coverage.out
+          if-no-files-found: warn
+
+  typescript-lint:
+    name: TypeScript Lint
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up pnpm with cache
+        uses: ./.github/actions/setup-pnpm-cache
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          pnpm-version: ${{ env.PNPM_VERSION }}
+          cache-dependency-path: dashboard/pnpm-lock.yaml
+
+      - name: Install dashboard dependencies
+        run: pnpm --dir dashboard install --frozen-lockfile --child-concurrency=1 --network-concurrency=4
+
+      - name: Run TypeScript lint
+        run: scripts/ci/lint-typescript.sh
+
+  typescript-test:
+    name: TypeScript Unit Test
+    needs:
+      - typescript-lint
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up pnpm with cache
+        uses: ./.github/actions/setup-pnpm-cache
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          pnpm-version: ${{ env.PNPM_VERSION }}
+          cache-dependency-path: dashboard/pnpm-lock.yaml
+
+      - name: Install dashboard dependencies
+        run: pnpm --dir dashboard install --frozen-lockfile --child-concurrency=1 --network-concurrency=4
+
+      - name: Run TypeScript tests
+        run: scripts/ci/test-typescript.sh

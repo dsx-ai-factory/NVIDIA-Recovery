@@ -1,0 +1,138 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dashboard.fullname" . }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "dashboard.selectorLabels" . | nindent 6 }}
+  replicas: {{ .Values.replicas }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- if not .Values.auth.existingSessionSecret }}
+        checksum/session-secrets: {{ include "dashboard.sessionSecretData" . | sha256sum }}
+        {{- end }}
+      labels:
+        {{- include "dashboard.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ template "dashboard.serviceAccountName" . }}
+      automountServiceAccountToken: {{- if eq (include "dashboard.serviceAccountName" . | trim) "default" }} false{{- else }} true{{- end }}
+      {{- with (default .Values.global.imagePullSecrets .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: settings
+          configMap:
+            name: {{ template "dashboard.fullname" . }}-config
+            defaultMode: 420
+            items:
+            - key: .env
+              path: .env.production
+        {{ if .Values.auth.ldap.enabled }}
+        - name: ldap-ca
+          secret:
+            secretName: {{ .Values.auth.ldap.ldapCASecretName }}
+        {{ end }}
+        {{- with .Values.volumes }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      containers:
+        - name: dashboard
+          image: {{ include "dashboard.image" . }}
+          command: ["node"]
+          args:
+            - --env-file
+            - .env.production
+            - .next/standalone/server.js
+          resources:
+            limits:
+              memory: 4Gi
+            requests:
+              memory: 2Gi
+
+          volumeMounts:
+            - name: settings
+              mountPath: /app/.env.production
+              subPath: .env.production
+            {{ if .Values.auth.ldap.enabled }}
+            - name: ldap-ca
+              mountPath: {{ .Values.auth.ldap.LDAP_MOUNT_PATH }}
+              readOnly: true
+            {{ end }}
+            {{- with .Values.volumeMounts }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.port }}
+              protocol: TCP
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dashboard.sessionSecretName" . | quote }}
+                  key: NEXTAUTH_SECRET
+            - name: API_GATEWAY_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dashboard.sessionSecretName" . | quote }}
+                  key: API_GATEWAY_SESSION_SECRET
+            {{ if .Values.auth.starfleet.enabled }}
+            - name: STARFLEET_OPENID_CONFIG_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.starfleet.starfleetSecretName }}
+                  key: {{ .Values.auth.starfleet.starfleetOpenIdConfigUrlKey }}
+            - name: STARFLEET_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.starfleet.starfleetSecretName }}
+                  key: {{ .Values.auth.starfleet.starfleetClientIdKey }}
+            - name: STARFLEET_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.starfleet.starfleetSecretName }}
+                  key: {{ .Values.auth.starfleet.starfleetClientSecretKey }}
+            {{ end }}
+
+            {{- if (((.Values.global).otelcollector).enabled) }}
+            {{- include "heimdall.otelEnv" . | nindent 12 }}
+            {{- end }}
+
+            {{ if .Values.auth.azure.enabled }}
+            - name: AZURE_AD_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.azure.azureAdSecretName }}
+                  key: {{ .Values.auth.azure.azureAdClientIdKey }}
+            - name: AZURE_AD_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.azure.azureAdSecretName }}
+                  key: {{ .Values.auth.azure.azureAdClientSecretKey }}
+            - name: AZURE_AD_TENANT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.azure.azureAdSecretName }}
+                  key: {{ .Values.auth.azure.azureAdTenantIdKey }}
+            {{ end }}
+
+      {{- with (default .Values.global.nodeSelector .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.global.tolerations .Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

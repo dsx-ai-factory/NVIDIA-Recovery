@@ -1,0 +1,46 @@
+global:
+  imagePullSecrets: []
+  log_query:
+    backend: loki
+    providers:
+      loki:
+        application:
+          url: http://heimdall-loki:3100
+          tenants: ""
+          org_id: ""
+        system:
+          url: http://heimdall-loki:3100
+          tenants: ""
+          org_id: ""
+  prometheus: &prometheus_info
+    prometheus_url: 'http:/heimdall-prometheus-server'
+    prometheus_cluster: ''
+    pod_monitor_enabled: false
+  mysql:
+    database: &mysql_database heimdall
+    username: &mysql_username heimdall
+    password: &mysql_password heimdall
+  rabbitmq:
+    username: &rabbitmq_username heimdall
+    vhost: &rabbitmq_vhost default-vhost
+enabled: true
+enableExtendedLabelSelectors: true
+ingress_fqdn: dashboard.127.0.0.1.sslip.io
+db:
+  port: '3306'
+  database: *mysql_database
+  user: *mysql_username
+  mysql_secret_name: nvidia-recovery-mysql
+  mysql_secret_key: mysql-password
+app:
+  DATADOG_ENABLED: false
+  FACT_ENABLED: false
+  datadogWatcherURL: ''
+  METRICS_ENABLED: false
+  agent:
+    enabled: false
+    apiURL: ''
+    webURL: ''
+auth:
+  USE_AD_AUTH: false
+  NEXTAUTH_ENABLED: false

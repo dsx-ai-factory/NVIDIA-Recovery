@@ -1,0 +1,415 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Job manager chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "name", "tag", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string" },
+        "name": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "resourceList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu", "memory"],
+      "properties": {
+        "cpu": { "type": "string", "minLength": 1 },
+        "memory": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": { "$ref": "#/definitions/resourceList" },
+        "limits": { "$ref": "#/definitions/resourceList" }
+      }
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "nullableString": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" }
+      ]
+    },
+    "auditTrail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_batch_size",
+        "max_buffer_size",
+        "flush_interval_seconds"
+      ],
+      "properties": {
+        "destination": {
+          "oneOf": [
+            { "const": "" },
+            {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://(\\[[^\\]]+\\]|[^/?#:\\s]+)(:[0-9]+)?([/?#]|$)"
+            }
+          ]
+        },
+        "max_batch_size": { "type": "integer", "minimum": 1 },
+        "max_buffer_size": { "type": "integer", "minimum": 1 },
+        "flush_interval_seconds": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  },
+  "required": [
+    "name",
+    "port",
+    "replicas",
+    "resources",
+    "image",
+    "command",
+    "service_type",
+    "credentials",
+    "service_config",
+    "event_bus",
+    "storage",
+    "kubernetes_leader_election",
+    "grafana_dashboard",
+    "imagePullSecrets",
+    "nodeSelector",
+    "tolerations",
+    "volumes",
+    "volumeMounts",
+    "rbac",
+    "serviceAccount",
+    "enableExtendedLabelSelectors"
+  ],
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "global": { "type": "object" },
+    "name": { "type": "string", "minLength": 1 },
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "replicas": { "type": "integer", "minimum": 0 },
+    "resources": { "$ref": "#/definitions/resources" },
+    "image": { "$ref": "#/definitions/image" },
+    "command": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "service_type": {
+      "type": "string",
+      "enum": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"]
+    },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aws", "rabbitmq"],
+      "properties": {
+        "aws": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "secret_name": { "$ref": "#/definitions/nullableString" }
+          }
+        },
+        "rabbitmq": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["secret_key_name"],
+          "properties": {
+            "secret_name": { "$ref": "#/definitions/nullableString" },
+            "secret_key_name": { "type": "string", "minLength": 1 }
+          }
+        },
+        "mysql_secret_name": { "$ref": "#/definitions/nullableString" },
+        "mysql_secret_key_name": { "$ref": "#/definitions/nullableString" }
+      }
+    },
+    "service_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "log_level",
+        "stale_job_cleanup_enabled",
+        "stale_job_scan_frequency_seconds",
+        "stale_job_threshold_seconds",
+        "advice_enabled",
+        "advice_management_enabled",
+        "adi_attribution_request_emit_enabled",
+        "adi_straggler_emit_enabled",
+        "recovery_notifications_enabled",
+        "exclusion_node_stickiness_enabled",
+        "job_end_event_generation_enabled",
+        "system_max_requeue_times",
+        "checkpoint_based_requeue_stop_threshold",
+        "requeue_early_stop_scan_frequency_seconds",
+        "requeue_early_stop_threshold_seconds",
+        "requeue_on_completion",
+        "audit_trail",
+        "job_state_based_auto_resume_time_window_secs",
+        "job_state_based_auto_resume_threshold_secs",
+        "job_state_based_auto_resume_scan_interval_secs",
+        "dag_support",
+        "attribution_insight_config",
+        "attribution_summary_config",
+        "guardrail_rules"
+      ],
+      "properties": {
+        "log_level": {
+          "type": "string",
+          "enum": ["debug", "info", "warning", "error", "critical"]
+        },
+        "stale_job_cleanup_enabled": { "type": "boolean" },
+        "stale_job_scan_frequency_seconds": { "type": "integer", "minimum": 1 },
+        "stale_job_threshold_seconds": { "type": "integer", "minimum": 1 },
+        "advice_enabled": { "type": "boolean" },
+        "advice_management_enabled": { "type": "boolean" },
+        "adi_attribution_request_emit_enabled": { "type": "boolean" },
+        "adi_straggler_emit_enabled": { "type": "boolean" },
+        "recovery_notifications_enabled": { "type": "boolean" },
+        "exclusion_node_stickiness_enabled": { "type": "boolean" },
+        "job_end_event_generation_enabled": { "type": "boolean" },
+        "environment": { "$ref": "#/definitions/nullableString" },
+        "system_max_requeue_times": { "type": "integer", "minimum": 0 },
+        "checkpoint_based_requeue_stop_threshold": { "type": "integer", "minimum": 0 },
+        "requeue_early_stop_scan_frequency_seconds": { "type": "integer", "minimum": 1 },
+        "requeue_early_stop_threshold_seconds": { "type": "integer", "minimum": 1 },
+        "requeue_on_completion": { "type": "boolean" },
+        "notification_service_url": { "type": "string", "minLength": 1 },
+        "audit_trail": { "$ref": "#/definitions/auditTrail" },
+        "job_state_based_auto_resume_time_window_secs": { "type": "integer", "minimum": 0 },
+        "job_state_based_auto_resume_threshold_secs": { "type": "integer", "minimum": 0 },
+        "job_state_based_auto_resume_scan_interval_secs": { "type": "integer", "minimum": 1 },
+        "dag_support": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "action_timeout_seconds", "retry_scan_frequency_seconds"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "action_timeout_seconds": { "type": "integer", "minimum": 1 },
+            "retry_scan_frequency_seconds": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "attribution_insight_config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["confirmed", "temporary", "none"],
+          "properties": {
+            "confirmed": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["insight"],
+              "properties": { "insight": { "type": "string", "minLength": 1 } }
+            },
+            "temporary": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["insight"],
+              "properties": { "insight": { "type": "string", "minLength": 1 } }
+            },
+            "none": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["insight"],
+              "properties": { "insight": { "type": "string", "minLength": 1 } }
+            }
+          }
+        },
+        "attribution_summary_config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["infra", "potential_infra", "not_infra"],
+          "properties": {
+            "infra": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["summary"],
+              "properties": { "summary": { "type": "string", "minLength": 1 } }
+            },
+            "potential_infra": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["summary"],
+              "properties": { "summary": { "type": "string", "minLength": 1 } }
+            },
+            "not_infra": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["summary"],
+              "properties": { "summary": { "type": "string", "minLength": 1 } }
+            }
+          }
+        },
+        "guardrail_rules": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "event_bus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "workflow_controller_exchange",
+        "job_queue",
+        "job_routing_key",
+        "anomaly_exchange",
+        "anomaly_queue",
+        "anomaly_routing_key",
+        "anomaly_queue_delivery_retry_delay_secs",
+        "anomaly_dead_letter_routing_key",
+        "anomaly_dead_letter_redelivery_routing_key",
+        "username",
+        "vhost",
+        "anomaly_isolator_exchange",
+        "anomaly_attribution_queue",
+        "anomaly_attribution_routing_key",
+        "adi_attribution_request_exchange",
+        "adi_attribution_request_routing_key"
+      ],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "workflow_controller_exchange": { "type": "string", "minLength": 1 },
+        "job_queue": { "type": "string", "minLength": 1 },
+        "job_routing_key": { "type": "string", "minLength": 1 },
+        "anomaly_exchange": { "type": "string", "minLength": 1 },
+        "anomaly_queue": { "type": "string", "minLength": 1 },
+        "anomaly_routing_key": { "type": "string", "minLength": 1 },
+        "anomaly_queue_delivery_retry_delay_secs": { "type": "integer", "minimum": 0 },
+        "anomaly_dead_letter_routing_key": { "type": "string", "minLength": 1 },
+        "anomaly_dead_letter_redelivery_routing_key": { "type": "string", "minLength": 1 },
+        "username": { "type": "string", "minLength": 1 },
+        "vhost": { "type": "string", "minLength": 1 },
+        "anomaly_isolator_exchange": { "type": "string", "minLength": 1 },
+        "anomaly_attribution_queue": { "type": "string", "minLength": 1 },
+        "anomaly_attribution_routing_key": { "type": "string", "minLength": 1 },
+        "adi_attribution_request_exchange": { "type": "string", "minLength": 1 },
+        "adi_attribution_request_routing_key": { "type": "string", "minLength": 1 }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "aws_default_region",
+        "read_capacity_units",
+        "write_capacity_units",
+        "sql"
+      ],
+      "properties": {
+        "mode": { "type": "string", "enum": ["MYSQL", "DYNAMODB"] },
+        "endpoint_url": { "$ref": "#/definitions/nullableString" },
+        "table_name": { "$ref": "#/definitions/nullableString" },
+        "aws_default_region": { "type": "string" },
+        "read_capacity_units": { "type": "integer", "minimum": 1 },
+        "write_capacity_units": { "type": "integer", "minimum": 1 },
+        "sql": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "port",
+            "username",
+            "database_name",
+            "ssl_enabled",
+            "ssl_ca_path"
+          ],
+          "properties": {
+            "host": { "type": "string", "minLength": 1 },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "username": { "type": "string", "minLength": 1 },
+            "database_name": { "type": "string", "minLength": 1 },
+            "ssl_enabled": { "type": "boolean" },
+            "ssl_ca_path": { "type": "string", "minLength": 1 },
+            "write_pool_enabled": { "type": "boolean" },
+            "write_pool_size": { "type": "integer", "minimum": 1 },
+            "write_max_overflow": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "kubernetes_leader_election": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lease_name",
+        "lease_duration_seconds",
+        "renew_deadline_seconds",
+        "retry_period_seconds"
+      ],
+      "properties": {
+        "lease_name": { "type": "string", "minLength": 1 },
+        "lease_duration_seconds": { "type": "integer", "minimum": 1 },
+        "renew_deadline_seconds": { "type": "integer", "minimum": 1 },
+        "retry_period_seconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "grafana_dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumes": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumeMounts": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "rbac": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enable"],
+      "properties": {
+        "enable": { "type": "boolean" }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "automount", "annotations", "name"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "automount": { "type": "boolean" },
+        "annotations": { "$ref": "#/definitions/annotations" },
+        "name": { "type": "string" }
+      }
+    },
+    "enableExtendedLabelSelectors": { "type": "boolean" }
+  }
+}

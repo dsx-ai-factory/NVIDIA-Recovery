@@ -1,0 +1,10 @@
+[init] Heimdall e2e synthetic training job starting
+[init] world_size=8 rank=0 local_rank=0
+[train] step 1 loss=10.40 tokens/s=18210
+[train] step 2 loss=10.10 tokens/s=18533
+[train] step 3 loss=9.84 tokens/s=18602
+[train] step 4 loss=9.50 tokens/s=18551
+[train] step 5 loss=9.22 tokens/s=18610
+[error] CUDA error: uncorrectable ECC error encountered on device 3
+[error] NCCL watchdog caught collective timeout on rank 3
+[error] aborting training: unrecoverable device fault

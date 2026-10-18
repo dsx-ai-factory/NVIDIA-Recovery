@@ -1,0 +1,90 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Apply after stack-local.yaml and the optional attribution stack-values.yaml.
+# These native LogsQL filters mirror the Loki workflow filters, including each
+# case-sensitive substring prefilter. Keep both variants aligned when changing
+# the workflows. Message parsing is disabled on the shared Alloy ingest URL.
+global:
+  log_query:
+    backend: victorialogs
+    providers:
+      victorialogs:
+        application:
+          url: http://victorialogs.monitoring.svc.cluster.local:9428
+          account_id: 0
+          project_id: 0
+          require_tenant: false
+        system:
+          url: http://victorialogs.monitoring.svc.cluster.local:9428
+          account_id: 0
+          project_id: 0
+          require_tenant: false
+        queries:
+          watcher:
+            query_prefix: '_stream:{cluster="slurm", appName="slurm-app-log"}'
+            workflows:
+              straggler:
+                query:
+                - '_msg:~"per GPU" AND _msg:~"(?i)(approx flops per GPU)|(throughput per GPU)"'
+              noprogress:
+                query:
+                - PRE_TRAINING: '_msg:~"before the start of training step"'
+                - PRE_TRAINING: '_msg:~"using world size"'
+                - PRE_TRAINING: '_msg:~"Initialized distributed training" AND _msg:~"RANK 0.*Initialized distributed training"'
+                - PRE_TRAINING: '_msg:~"main_function" AND _msg:~"type=(start|event).*name=main_function.*event.metrics.world_size"'
+                - PRE_TRAINING: '_msg:~"distributed_code_initialization" AND _msg:~"type=complete.*stop_event.name=span_stop.*name=distributed_code_initialization"'
+                - PRE_TRAINING: '_msg:~"rendezvous_started" AND _msg:~"(Cycle:.*Event:.*rendezvous_started)"'
+                - PRE_TRAINING: '_msg:~"Executing the training task"'
+                - PRE_TRAINING: '_msg:~"Running TrainingRunner on device"'
+                - PRE_TRAINING: '_msg:~"JobTracker initialized" AND _msg:~"JobTracker initialized.*job_id"'
+                - TRAINING_LOOP: '_msg:~"approx flops per GPU"'
+                - TRAINING_LOOP: '_msg:~"Activation Checkpointing Information"'
+                - TRAINING_LOOP: '_msg:~"throughput per GPU"'
+                - TRAINING_LOOP: '_msg:~"on_train_start"'
+                - TRAINING_LOOP: '_msg:~"tflops" AND _msg:~"event.name=training_iterations.*event.metrics.tflops"'
+                - TRAINING_LOOP: '_msg:~"training_metrics_update" AND _msg:~"event.name=training_metrics_update.*event.attributes.total_flops"'
+                - TRAINING_LOOP: '_msg:~"average_iteration_time" AND _msg:~"event.name=training_iterations.*event.metrics.average_iteration_time"'
+                - TRAINING_LOOP: '_msg:~"checkpoint_load" AND _msg:~"type=complete.*stop_event.name=span_stop.*name=checkpoint_load"'
+                - TRAINING_LOOP: '_msg:~"checkpoint_save_" AND _msg:~"type=complete.*stop_event.name=span_stop.*name=checkpoint_save_"'
+                nooutput_validation_query: 'job_id:="{job_id}"'
+              hangpushrecv:
+                query:
+                - '_msg:~"expect" AND _msg:~"(?i)(pushrecv: expected)|(]: expecting )"'
+              hang_app:
+                query:
+                - '_msg:~"(?i)(botocore.*exceptions)|(Disk quota exceeded)"'
+                - '_msg:~"NCCL" AND _msg:~"(?i)(NCCL WARN.*status=5)|(NCCL WARN.*with error 5)|(NCCL Error 5)"'
+                - '_msg:~"NCCL" AND _msg:~"(?i)(NCCL WARN.*status=12)|(NCCL WARN.*with error 12)|(NCCL Error 12)"'
+              crash:
+                query:
+                - '_msg:~"(?i)(segmentation fault)|(illegal memory access was encountered)|(illegal instruction was encountered)"'
+                - '_msg:~"rror: " AND _msg:~"(?i)(RuntimeError: )|(CUDA error: )|(NCCL error: )"'
+                - '_msg:~"(?i)(Signal: Aborted [(]6[)])|(NCCL WARN Cuda failure 2.*out of memory)|(: AssertionError[(]Rank)"'
+                - '_msg:~"(?i)(Exited with exit code 1)|(Watchdog caught collective operation timeout: WorkNCCL)"'
+                - '_msg:~"rror: " AND _msg:~"(?i)(torch.distributed..*Error: )|(error: Prolog hung on node)"'
+                - '_msg:~"(?i)(AssertionError.*found NaN)|(lm_loss: NAN)"'
+                - '_msg:~"(?i)(slurmstepd: error: pyxis: child.*failed with error code: 1)|(nvidia_resiliency_ext.*InjectedException$)"'
+                - '_msg:~"uncorrectable" AND _msg:~"(?i)(CUDA error.*uncorrectable|NVLink error.*uncorrectable|uncorrectable.*NVLink error|uncorrectable.*CUDA error)"'
+              chkpt_load:
+                query:
+                - '_msg:~"checkpoint" AND _msg:~"(?i)(load-checkpoint)|(Loaded checkpoint from)"'
+                - '_msg:~"checkpoint_load" AND _msg:~"type=complete.*stop_event.name=span_stop.*name=checkpoint_load"'
+                - '_msg:~"restoring checkpoint" AND _msg:~"(?i)(Done restoring checkpoint)"'
+              chkpt_save:
+                query:
+                - '_msg:~"(?i)(save-checkpoint)|(SAVE_CHECKPOINT: iteration:.*, ckpt saving takes .* seconds)|(Saved checkpoint to)"'
+                - '_msg:~"checkpoint_save_" AND _msg:~"type=complete.*stop_event.name=span_stop.*name=checkpoint_save_"'
+                - '_msg:~"saving distributed checkpoint" AND _msg:~"(?i)(Done saving distributed checkpoint)"'
+              synthetic_application_log_events:
+                query:
+                - '_msg:~"heartbeat_application_logs"'
+          attribution:
+            application: '_stream:{cluster="slurm", appName="slurm-app-log"} AND job_id:="{job_id}"'
+            system: '_stream:{cluster="slurm", component="journal"}'
+            # Epilogue lookup requires the job placeholder, without assigning a
+            # workload label to node syslog. The local fixture has no epilogue.
+            epilogue: '_stream:{cluster="slurm", component="journal"} AND _msg:~"(^|[^0-9]){job_id}([^0-9]|$)"'
+          health:
+            application: '_stream:{cluster="slurm", appName="slurm-app-log"}'
+            system: '_stream:{cluster="slurm", component="journal"}'

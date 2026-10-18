@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "API Gateway chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "name", "tag", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string" },
+        "name": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "resourceList": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": { "$ref": "#/definitions/resourceList" },
+        "limits": { "$ref": "#/definitions/resourceList" }
+      }
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "required": [
+    "replicaCount",
+    "image",
+    "logging",
+    "otel",
+    "metricsTelemetry",
+    "ingress",
+    "gateway",
+    "externalService",
+    "internalService",
+    "service_type",
+    "prestopDelay",
+    "ports",
+    "urlPrefix",
+    "internalUrlPrefix",
+    "publicBaseUrl",
+    "auth",
+    "nameOverride",
+    "fullnameOverride",
+    "jobs",
+    "audit",
+    "resources",
+    "serviceAccount",
+    "podSecurityContext",
+    "securityContext",
+    "imagePullSecrets",
+    "nodeSelector",
+    "tolerations",
+    "volumes",
+    "volumeMounts"
+  ],
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "global": { "type": "object" },
+    "replicaCount": { "type": "integer", "minimum": 0 },
+    "image": { "$ref": "#/definitions/image" },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format"],
+      "properties": {
+        "format": { "type": "string", "enum": ["json", "console"] }
+      }
+    },
+    "otel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "serviceName",
+        "serviceVersion",
+        "insecure",
+        "sampleRate"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "serviceName": { "type": "string", "minLength": 1 },
+        "serviceVersion": { "type": "string", "minLength": 1 },
+        "insecure": { "type": "boolean" },
+        "sampleRate": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "metricsTelemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "port", "serverEndpoint"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "serverEndpoint": { "type": "string", "minLength": 1 }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "fqdn",
+        "base_path",
+        "ingressClassName",
+        "annotations",
+        "tls",
+        "grpc"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "fqdn": { "type": "string" },
+        "base_path": { "type": "string", "minLength": 1 },
+        "ingressClassName": { "type": "string" },
+        "annotations": { "$ref": "#/definitions/annotations" },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["secretName", "certManager"],
+          "properties": {
+            "secretName": { "type": "string" },
+            "certManager": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["enabled", "issuerRef"],
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "issuerRef": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "kind", "group"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "kind": { "type": "string", "minLength": 1 },
+                    "group": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "grpc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "base_path"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "base_path": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parentRef"],
+      "properties": {
+        "parentRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "namespace", "sectionName"],
+          "properties": {
+            "name": { "type": "string" },
+            "namespace": { "type": "string" },
+            "sectionName": { "type": "string" }
+          }
+        }
+      }
+    },
+    "externalService": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "annotations"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "annotations": { "$ref": "#/definitions/annotations" }
+      }
+    },
+    "internalService": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotations"],
+      "properties": {
+        "annotations": { "$ref": "#/definitions/annotations" }
+      }
+    },
+    "service_type": {
+      "type": "string",
+      "enum": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"]
+    },
+    "prestopDelay": { "type": "integer", "minimum": 0 },
+    "ports": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rest", "grpc", "restInternal", "grpcInternal"],
+      "properties": {
+        "rest": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "grpc": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "restInternal": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "grpcInternal": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "urlPrefix": { "type": "string" },
+    "internalUrlPrefix": { "type": "string" },
+    "publicBaseUrl": { "type": "string", "minLength": 1 },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "insecure",
+        "secureCookie",
+        "cookieSecretName",
+        "cookieSecretKey",
+        "oidc",
+        "jwt",
+        "kubernetes"
+      ],
+      "properties": {
+        "insecure": { "type": "boolean" },
+        "secureCookie": { "type": "boolean" },
+        "cookieSecretName": { "type": "string", "minLength": 1 },
+        "cookieSecretKey": { "type": "string", "minLength": 1 },
+        "oidc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "providerUrl",
+            "clientId",
+            "clientSecretName",
+            "clientSecretKey",
+            "scopes",
+            "subjectClaim",
+            "clientIdClaim",
+            "scopesClaim"
+          ],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "providerUrl": { "type": "string" },
+            "clientId": { "type": "string" },
+            "clientSecretName": { "type": "string", "minLength": 1 },
+            "clientSecretKey": { "type": "string", "minLength": 1 },
+            "scopes": { "type": "string" },
+            "subjectClaim": { "type": "string", "minLength": 1 },
+            "clientIdClaim": { "type": "string", "minLength": 1 },
+            "scopesClaim": { "type": "string", "minLength": 1 }
+          }
+        },
+        "jwt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "issuer",
+            "audiences",
+            "jwksUrl",
+            "subjectClaim",
+            "clientIdClaim",
+            "scopesClaim"
+          ],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "issuer": { "type": "string" },
+            "audiences": { "type": "string" },
+            "jwksUrl": { "type": "string" },
+            "allowedSubjects": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1, "pattern": "^[^,\\s]+$" }
+            },
+            "subjectClaim": { "type": "string", "minLength": 1 },
+            "clientIdClaim": { "type": "string", "minLength": 1 },
+            "scopesClaim": { "type": "string", "minLength": 1 }
+          }
+        },
+        "kubernetes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "audience", "expectedServiceAccount"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "audience": { "type": "string" },
+            "expectedServiceAccount": { "type": "string" }
+          }
+        }
+      }
+    },
+    "nameOverride": { "type": "string", "maxLength": 63 },
+    "fullnameOverride": { "type": "string", "maxLength": 63 },
+    "jobs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "endpoint"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "endpoint": { "type": "string", "minLength": 1 }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint"],
+      "properties": {
+        "endpoint": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resources": { "$ref": "#/definitions/resources" },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "automount", "annotations", "name"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "automount": { "type": "boolean" },
+        "annotations": { "$ref": "#/definitions/annotations" },
+        "name": { "type": "string", "maxLength": 63 }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "securityContext": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumes": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumeMounts": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    }
+  }
+}

@@ -1,0 +1,769 @@
+{
+  "description": "Health and responsibility dashboard for the Slurm Advisor Controller. All controller and watchdog metrics are scoped by the selected environment label.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "panels": [],
+      "title": "Controller availability and reconciliation health",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Prometheus scrape health for the nvidia-recovery-slurm-advisor service in the selected environment.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "DOWN"}, "1": {"color": "green", "text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+      "id": 2,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "max(up{environment=~\"${environment_var:regex}\", service=\"nvidia-recovery-slurm-advisor\"})", "instant": true, "legendFormat": "SAC targets", "range": false, "refId": "A"}
+      ],
+      "title": "SAC scrape health",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Completed reconciliation ticks per minute.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 1}, {"color": "green", "value": 3}]}, "unit": "cpm"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(rate(slurm_advisor_controller_reconcile_loops_total{environment=~\"${environment_var:regex}\"}[$__rate_interval])) * 60", "instant": true, "legendFormat": "ticks/min", "range": false, "refId": "A"}
+      ],
+      "title": "Reconciliation cadence",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Percentage of completed reconciliation ticks whose overall outcome was success.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 2, "mappings": [], "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 95}, {"color": "green", "value": 99}]}, "unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
+      "id": 4,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "100 * sum(rate(slurm_advisor_controller_reconcile_loops_total{environment=~\"${environment_var:regex}\", outcome=\"success\"}[$__rate_interval])) / clamp_min(sum(rate(slurm_advisor_controller_reconcile_loops_total{environment=~\"${environment_var:regex}\"}[$__rate_interval])), 1e-9)", "instant": true, "legendFormat": "success", "range": false, "refId": "A"}
+      ],
+      "title": "Tick success rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Failed reconciliation ticks in Grafana's current rate interval.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 1},
+      "id": 5,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(increase(slurm_advisor_controller_reconcile_loops_total{environment=~\"${environment_var:regex}\", outcome=\"error\"}[$__rate_interval])) or vector(0)", "instant": true, "legendFormat": "failed ticks", "range": false, "refId": "A"}
+      ],
+      "title": "Failed ticks",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Completed ticks in the last two minutes. Zero while scrape health is UP means the controller loop is stalled.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 1},
+      "id": 6,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(increase(slurm_advisor_controller_reconcile_loops_total{environment=~\"${environment_var:regex}\"}[2m])) or vector(0)", "instant": true, "legendFormat": "ticks", "range": false, "refId": "A"}
+      ],
+      "title": "Ticks in last 2m",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "95th percentile reconciliation duration over the current rate interval.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 2, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 15}, {"color": "red", "value": 30}]}, "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 1},
+      "id": 7,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le) (rate(slurm_advisor_controller_reconcile_duration_seconds_bucket{environment=~\"${environment_var:regex}\"}[$__rate_interval])))", "instant": true, "legendFormat": "p95", "range": false, "refId": "A"}
+      ],
+      "title": "Tick duration p95",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+      "id": 8,
+      "panels": [],
+      "title": "Reconciliation latency and stages",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Median whole-tick reconciliation duration by configured controller mode.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 0, "y": 6},
+      "id": 51,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "histogram_quantile(0.50, sum by (mode, le) (rate(slurm_advisor_controller_reconcile_duration_seconds_bucket{environment=~\"${environment_var:regex}\"}[$__rate_interval])))", "legendFormat": "p50 {{mode}}", "range": true, "refId": "A"}
+      ],
+      "title": "Whole-tick duration p50",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Whole-tick latency distribution by configured controller mode.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 8, "y": 6},
+      "id": 9,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (mode, le) (rate(slurm_advisor_controller_reconcile_duration_seconds_bucket{environment=~\"${environment_var:regex}\"}[$__rate_interval])))", "legendFormat": "p95 {{mode}}", "range": true, "refId": "A"}
+      ],
+      "title": "Whole-tick duration p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Average whole-tick duration by configured controller mode.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 16, "y": 6},
+      "id": 10,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (mode) (rate(slurm_advisor_controller_reconcile_duration_seconds_sum{environment=~\"${environment_var:regex}\"}[$__rate_interval])) / sum by (mode) (rate(slurm_advisor_controller_reconcile_duration_seconds_count{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "avg {{mode}}", "range": true, "refId": "A"}
+      ],
+      "title": "Whole-tick average duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Median duration for each bounded reconciliation stage.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 0, "y": 18},
+      "id": 52,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "histogram_quantile(0.50, sum by (stage, le) (rate(slurm_advisor_controller_reconcile_stage_duration_seconds_bucket{environment=~\"${environment_var:regex}\"}[$__rate_interval])))", "legendFormat": "p50 {{stage}}", "range": true, "refId": "A"}
+      ],
+      "title": "Stage duration p50",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "95th percentile duration for each bounded reconciliation stage.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 8, "y": 18},
+      "id": 11,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (stage, le) (rate(slurm_advisor_controller_reconcile_stage_duration_seconds_bucket{environment=~\"${environment_var:regex}\"}[$__rate_interval])))", "legendFormat": "p95 {{stage}}", "range": true, "refId": "A"}
+      ],
+      "title": "Stage duration p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Average duration for each bounded reconciliation stage.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 16, "y": 18},
+      "id": 12,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (stage) (rate(slurm_advisor_controller_reconcile_stage_duration_seconds_sum{environment=~\"${environment_var:regex}\"}[$__rate_interval])) / sum by (stage) (rate(slurm_advisor_controller_reconcile_stage_duration_seconds_count{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "avg {{stage}}", "range": true, "refId": "A"}
+      ],
+      "title": "Stage average duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Median duration of each individual dependency read within the job_status_polling stage, grouped by source. Concurrent reads overlap and should not be summed to estimate the stage duration; heimdall_jobs is normally emitted only during process bootstrap.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 16, "w": 8, "x": 0, "y": 30},
+      "id": 53,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "histogram_quantile(0.50, sum by (source, le) (rate(slurm_advisor_controller_source_read_duration_seconds_bucket{environment=~\"${environment_var:regex}\"}[$__rate_interval])))", "legendFormat": "p50 {{source}}", "range": true, "refId": "A"}
+      ],
+      "title": "Source read duration p50",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "90th percentile duration of each individual dependency read within the job_status_polling stage, grouped by source. Concurrent reads overlap and should not be summed to estimate the stage duration; heimdall_jobs is normally emitted only during process bootstrap.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 16, "w": 8, "x": 8, "y": 30},
+      "id": 54,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "histogram_quantile(0.90, sum by (source, le) (rate(slurm_advisor_controller_source_read_duration_seconds_bucket{environment=~\"${environment_var:regex}\"}[$__rate_interval])))", "legendFormat": "p90 {{source}}", "range": true, "refId": "A"}
+      ],
+      "title": "Source read duration p90",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Average duration of each individual dependency read within the job_status_polling stage, grouped by source. Concurrent reads overlap and should not be summed to estimate the stage duration; heimdall_jobs is normally emitted only during process bootstrap.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 16, "w": 8, "x": 16, "y": 30},
+      "id": 55,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (source) (rate(slurm_advisor_controller_source_read_duration_seconds_sum{environment=~\"${environment_var:regex}\"}[$__rate_interval])) / sum by (source) (rate(slurm_advisor_controller_source_read_duration_seconds_count{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "avg {{source}}", "range": true, "refId": "A"}
+      ],
+      "title": "Source read average duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Stage failures over Grafana's rate interval. Later stages are absent when an earlier stage terminates the tick.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 35, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 24, "x": 0, "y": 46},
+      "id": 13,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (stage) (increase(slurm_advisor_controller_reconcile_stage_duration_seconds_count{environment=~\"${environment_var:regex}\", outcome=\"error\"}[$__rate_interval]))", "legendFormat": "{{stage}}", "range": true, "refId": "A"}
+      ],
+      "title": "Stage failures",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 58},
+      "id": 14,
+      "panels": [],
+      "title": "Jobs, cache, and advice snapshot",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Entries in the in-memory job-attempt cache after the latest completed tick. This cache resets when SAC restarts.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 5, "x": 0, "y": 59},
+      "id": 15,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(slurm_advisor_controller_local_job_attempt_cache_entries{environment=~\"${environment_var:regex}\"})", "instant": true, "legendFormat": "cache", "range": false, "refId": "A"}
+      ],
+      "title": "Active job-attempt cache",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Environment-admitted active Slurm jobs in the most recent snapshot.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 5, "x": 5, "y": 59},
+      "id": 16,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(slurm_advisor_controller_snapshot_jobs{environment=~\"${environment_var:regex}\", source=\"slurm_active\"})", "instant": true, "legendFormat": "active", "range": false, "refId": "A"}
+      ],
+      "title": "Active Slurm jobs",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Advice records fetched into the most recent controller snapshot.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 5, "x": 10, "y": 59},
+      "id": 17,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(slurm_advisor_controller_snapshot_advice{environment=~\"${environment_var:regex}\"})", "instant": true, "legendFormat": "fetched", "range": false, "refId": "A"}
+      ],
+      "title": "Advice fetched last tick",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Advice records that entered reconciliation during the most recent tick, including skips and failed actions.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 5, "x": 15, "y": 59},
+      "id": 18,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(slurm_advisor_controller_advice_reconciliation_attempts{environment=~\"${environment_var:regex}\"})", "instant": true, "legendFormat": "entered", "range": false, "refId": "A"}
+      ],
+      "title": "Advice entered last tick",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Fetched advice that did not enter reconciliation. This can mean environment rejection, cancellation, or an early failure; it is not a pure backlog metric.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 59},
+      "id": 19,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "clamp_min(sum(slurm_advisor_controller_snapshot_advice{environment=~\"${environment_var:regex}\"}) - sum(slurm_advisor_controller_advice_reconciliation_attempts{environment=~\"${environment_var:regex}\"}), 0)", "instant": true, "legendFormat": "not entered", "range": false, "refId": "A"}
+      ],
+      "title": "Advice not entered",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Latest controller snapshot sizes. seen_store is read near the start of a tick; the active cache stat above is measured after the tick.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 0, "y": 63},
+      "id": 20,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (source) (slurm_advisor_controller_snapshot_jobs{environment=~\"${environment_var:regex}\"})", "legendFormat": "{{source}}", "range": true, "refId": "A"}
+      ],
+      "title": "Jobs in latest snapshot",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Advice item throughput from Heimdall. Durable advice is counted again on each poll and this is therefore read volume, not unique advice.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "cpm"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 12, "y": 63},
+      "id": 21,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(rate(slurm_advisor_controller_source_items_total{environment=~\"${environment_var:regex}\", source=\"heimdall_advice\"}[$__rate_interval])) * 60", "legendFormat": "advice items/min", "range": true, "refId": "A"}
+      ],
+      "title": "Advice read from backend",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 75},
+      "id": 22,
+      "panels": [],
+      "title": "Backend flow and advice outcomes",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Logical reads from Slurm, Heimdall, and the seen store by source and outcome.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 25, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 0, "y": 76},
+      "id": 23,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (source, outcome) (increase(slurm_advisor_controller_source_reads_total{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "{{source}} / {{outcome}}", "range": true, "refId": "A"}
+      ],
+      "title": "Dependency source reads",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Heimdall job upsert attempts per minute. Error includes both request-building errors and backend call errors.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "cpm"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 12, "y": 76},
+      "id": 24,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (source, outcome) (rate(slurm_advisor_controller_job_upserts_total{environment=~\"${environment_var:regex}\"}[$__rate_interval])) * 60", "legendFormat": "{{source}} / {{outcome}}", "range": true, "refId": "A"}
+      ],
+      "title": "Job status upserts per minute",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Average job upserts per completed reconciliation tick over the current rate interval. SAC does not currently expose an exact last-tick upsert gauge.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 0, "y": 88},
+      "id": 25,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (source, outcome) (increase(slurm_advisor_controller_job_upserts_total{environment=~\"${environment_var:regex}\"}[$__rate_interval])) / scalar(clamp_min(sum(increase(slurm_advisor_controller_reconcile_loops_total{environment=~\"${environment_var:regex}\"}[$__rate_interval])), 1))", "legendFormat": "{{source}} / {{outcome}}", "range": true, "refId": "A"}
+      ],
+      "title": "Average job upserts per tick",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Successful scheduler actions executed for advice. This counts actions, not advice records; one advice may execute multiple actions.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 30, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 12, "y": 88},
+      "id": 26,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (action) (increase(slurm_advisor_controller_advice_actions_total{environment=~\"${environment_var:regex}\", mode=\"act\", outcome=\"success\"}[$__rate_interval]))", "legendFormat": "{{action}}", "range": true, "refId": "A"}
+      ],
+      "title": "Successful advice actions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Scheduler actions that SAC would execute in observe mode.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 30, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 0, "y": 100},
+      "id": 27,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (action) (increase(slurm_advisor_controller_advice_actions_total{environment=~\"${environment_var:regex}\", mode=\"observe\", outcome=\"planned\"}[$__rate_interval]))", "legendFormat": "{{action}}", "range": true, "refId": "A"}
+      ],
+      "title": "Planned advice actions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Advice records that required no action because fresh Slurm state already satisfied them.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 30, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 8, "y": 100},
+      "id": 28,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(increase(slurm_advisor_controller_advice_skips_total{environment=~\"${environment_var:regex}\", skip_reason=\"already_satisfied\"}[$__rate_interval]))", "legendFormat": "already satisfied", "range": true, "refId": "A"}
+      ],
+      "title": "Advice already converged",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "All advice skips by bounded reason. already_satisfied is healthy; investigate unsupported, empty, missing, future, or excessive stale advice.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 30, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 16, "y": 100},
+      "id": 29,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (skip_reason) (increase(slurm_advisor_controller_advice_skips_total{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "{{skip_reason}}", "range": true, "refId": "A"}
+      ],
+      "title": "Advice skips by reason",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 112},
+      "id": 30,
+      "panels": [],
+      "title": "Failures, recovery, and policy",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Failed reads from Slurm, Heimdall, or the local seen store.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 35, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 0, "y": 113},
+      "id": 31,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (source) (increase(slurm_advisor_controller_source_reads_total{environment=~\"${environment_var:regex}\", outcome=\"error\"}[$__rate_interval]))", "legendFormat": "{{source}}", "range": true, "refId": "A"}
+      ],
+      "title": "Dependency read failures",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Failed job upserts. The metric currently conflates request-building failures with backend call failures.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 35, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 12, "y": 113},
+      "id": 32,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (source) (increase(slurm_advisor_controller_job_upserts_total{environment=~\"${environment_var:regex}\", outcome=\"error\"}[$__rate_interval]))", "legendFormat": "{{source}}", "range": true, "refId": "A"}
+      ],
+      "title": "Job upsert failures",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Scheduler action failures while applying advice.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 35, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 0, "y": 125},
+      "id": 33,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (action, mode) (increase(slurm_advisor_controller_advice_actions_total{environment=~\"${environment_var:regex}\", outcome=\"error\"}[$__rate_interval]))", "legendFormat": "{{action}} / {{mode}}", "range": true, "refId": "A"}
+      ],
+      "title": "Advice action failures",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Direct failed-job requeuehold decisions. A successful act-mode recovery increments planned and applied; a failure increments planned and error.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 25, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 12, "y": 125},
+      "id": 34,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (mode, outcome) (increase(slurm_advisor_controller_failed_requeues_total{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "{{mode}} / {{outcome}}", "range": true, "refId": "A"}
+      ],
+      "title": "Failed-job recovery outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Environment admission decisions that prevent or question controller ownership of jobs.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 30, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 0, "y": 137},
+      "id": 35,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (decision_reason) (increase(slurm_advisor_controller_job_environment_admissions_total{environment=~\"${environment_var:regex}\", decision_reason=~\"environment_mismatch|not_onboarded|invalid_environment\"}[$__rate_interval]))", "legendFormat": "{{decision_reason}}", "range": true, "refId": "A"}
+      ],
+      "title": "Routing and admission issues",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Invalid or action-limited mode decisions. action_denied can be expected during observe-only rollout.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 30, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 12, "x": 12, "y": 137},
+      "id": 36,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (decision_reason) (increase(slurm_advisor_controller_job_mode_decisions_total{environment=~\"${environment_var:regex}\", decision_reason=~\"invalid_request|invalid_default|action_denied\"}[$__rate_interval]))", "legendFormat": "{{decision_reason}}", "range": true, "refId": "A"}
+      ],
+      "title": "Mode policy issues",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Best-effort log-link operation errors and manifest-scoped cleanup failures. These may not fail the controller tick.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 35, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 24, "x": 0, "y": 149},
+      "id": 37,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(increase(slurm_advisor_controller_log_link_errors_total{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "operation errors", "range": true, "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(increase(slurm_advisor_controller_log_link_cleanup_failures_total{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "cleanup failures", "range": true, "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(increase(slurm_advisor_controller_log_link_collisions_total{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "collisions", "range": true, "refId": "C"},
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(increase(slurm_advisor_controller_log_links_rejected_total{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "rejected paths", "range": true, "refId": "D"}
+      ],
+      "title": "Optional log-link issues",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 161},
+      "id": 38,
+      "panels": [],
+      "title": "Controller runtime and log-link materializer",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Resident memory for SAC scrape targets only.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 0, "y": 162},
+      "id": 39,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "process_resident_memory_bytes{environment=~\"${environment_var:regex}\", job=~\"${sac_job_var:regex}\"}", "legendFormat": "{{instance}}", "range": true, "refId": "A"}
+      ],
+      "title": "Resident memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "CPU cores consumed by SAC scrape targets.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "cores"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 8, "y": 162},
+      "id": 40,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "rate(process_cpu_seconds_total{environment=~\"${environment_var:regex}\", job=~\"${sac_job_var:regex}\"}[5m])", "legendFormat": "{{instance}}", "range": true, "refId": "A"}
+      ],
+      "title": "CPU usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Current Go goroutine count for SAC scrape targets.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 16, "y": 162},
+      "id": 41,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "go_goroutines{environment=~\"${environment_var:regex}\", job=~\"${sac_job_var:regex}\"}", "legendFormat": "{{instance}}", "range": true, "refId": "A"}
+      ],
+      "title": "Goroutines",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Fraction of the process file descriptor limit currently in use.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "max": 1, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.7}, {"color": "red", "value": 0.9}]}, "unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 174},
+      "id": 42,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "max(process_open_fds{environment=~\"${environment_var:regex}\", job=~\"${sac_job_var:regex}\"} / process_max_fds{environment=~\"${environment_var:regex}\", job=~\"${sac_job_var:regex}\"})", "instant": true, "legendFormat": "FD utilization", "range": false, "refId": "A"}
+      ],
+      "title": "File descriptor utilization",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Changes to process start time over the dashboard range, used as a restart indicator.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 3}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 174},
+      "id": 43,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(changes(process_start_time_seconds{environment=~\"${environment_var:regex}\", job=~\"${sac_job_var:regex}\"}[$__range]))", "instant": true, "legendFormat": "restarts", "range": false, "refId": "A"}
+      ],
+      "title": "Process restarts",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Manifest-owned Slurm log links after the most recent completed materializer sync.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 174},
+      "id": 44,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(slurm_advisor_controller_log_links_owned{environment=~\"${environment_var:regex}\"})", "instant": true, "legendFormat": "owned", "range": false, "refId": "A"}
+      ],
+      "title": "Owned log links",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "95th percentile duration of bounded adjacent application-log scans.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}, "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 174},
+      "id": 45,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showPercentChange": false, "textMode": "auto", "wideLayout": true},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le) (rate(slurm_advisor_controller_log_link_scan_duration_seconds_bucket{environment=~\"${environment_var:regex}\"}[$__rate_interval])))", "instant": true, "legendFormat": "p95", "range": false, "refId": "A"}
+      ],
+      "title": "Log-link scan p95",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 179},
+      "id": 46,
+      "panels": [],
+      "title": "Standalone Slurm watchdog (optional companion)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Standalone watchdog poll throughput by mode and outcome.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "cpm"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 0, "y": 180},
+      "id": 47,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (mode, outcome) (rate(slurm_watchdog_polls_total{environment=~\"${environment_var:regex}\"}[$__rate_interval])) * 60", "legendFormat": "{{mode}} / {{outcome}}", "range": true, "refId": "A"}
+      ],
+      "title": "Watchdog polls per minute",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "95th percentile standalone watchdog poll duration.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 8, "y": 180},
+      "id": 48,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (mode, le) (rate(slurm_watchdog_poll_duration_seconds_bucket{environment=~\"${environment_var:regex}\"}[$__rate_interval])))", "legendFormat": "{{mode}}", "range": true, "refId": "A"}
+      ],
+      "title": "Watchdog poll duration p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Latest watchdog job counts: observed Slurm jobs, Heimdall-managed jobs, and exact job identities retained in watchdog memory.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "linear", "lineWidth": 2, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 8, "x": 16, "y": 180},
+      "id": 49,
+      "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(slurm_watchdog_observed_jobs{environment=~\"${environment_var:regex}\"})", "legendFormat": "observed", "range": true, "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(slurm_watchdog_managed_jobs{environment=~\"${environment_var:regex}\"})", "legendFormat": "managed", "range": true, "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum(slurm_watchdog_tracked_jobs{environment=~\"${environment_var:regex}\"})", "legendFormat": "tracked", "range": true, "refId": "C"}
+      ],
+      "title": "Watchdog jobs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "description": "Watchdog release candidates by observe/act mode and planned/applied/error outcome.",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "bars", "fillOpacity": 30, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "normal"}}, "mappings": [], "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 24, "x": 0, "y": 192},
+      "id": 50,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "${datasource}"}, "editorMode": "code", "expr": "sum by (mode, outcome) (increase(slurm_watchdog_release_candidates_total{environment=~\"${environment_var:regex}\"}[$__rate_interval]))", "legendFormat": "{{mode}} / {{outcome}}", "range": true, "refId": "A"}
+      ],
+      "title": "Watchdog release candidates",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "90s",
+  "schemaVersion": 39,
+  "tags": ["heimdall", "slurm", "advisor", "controller", "recovery"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Prometheus",
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": {"text": "All", "value": "$__all"},
+        "datasource": {"type": "prometheus", "uid": "${datasource}"},
+        "definition": "label_values(slurm_advisor_controller_reconcile_loops_total, environment)",
+        "description": "Cluster environment label attached to SAC metrics.",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Environment",
+        "multi": true,
+        "name": "environment_var",
+        "options": [],
+        "query": {"qryType": 1, "query": "label_values(slurm_advisor_controller_reconcile_loops_total, environment)", "refId": "PrometheusVariableQueryEditor-Environment"},
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {"text": "All", "value": "$__all"},
+        "datasource": {"type": "prometheus", "uid": "${datasource}"},
+        "definition": "label_values(slurm_advisor_controller_reconcile_loops_total{environment=~\"${environment_var:regex}\"}, job)",
+        "description": "Prometheus scrape job names that export SAC metrics in the selected environment. Used to scope generic Go/process metrics.",
+        "hide": 2,
+        "includeAll": true,
+        "label": "SAC scrape job",
+        "multi": true,
+        "name": "sac_job_var",
+        "options": [],
+        "query": {"qryType": 1, "query": "label_values(slurm_advisor_controller_reconcile_loops_total{environment=~\"${environment_var:regex}\"}, job)", "refId": "PrometheusVariableQueryEditor-SACJob"},
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-3h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Slurm Advisor Controller Health",
+  "uid": "heimdall-sac-health",
+  "version": 1,
+  "weekStart": ""
+}

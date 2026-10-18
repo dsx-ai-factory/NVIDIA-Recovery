@@ -1,0 +1,8 @@
+withGoMod: false
+packageName: jobmanager
+gitHost: github.com
+gitUserId: dsx-ai-factory
+gitRepoId: nvidia-recovery
+isGoSubmodule: true
+disallowAdditionalPropertiesIfNotPresent: false
+enumClassPrefix: true

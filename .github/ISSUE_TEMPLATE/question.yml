@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Usage or contribution question
+description: Ask about using, understanding, or contributing to NVIDIA Recovery
+title: "[QUESTION]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Anyone may ask a question here. Use the bug form for reproducible incorrect
+        behavior and the feature form for new behavior. Support is best effort, with
+        no guaranteed response time. Remove secrets, private hostnames, and customer
+        data. Report suspected vulnerabilities privately through SECURITY.md.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question and intended outcome
+      description: What are you trying to do, and what do you need to understand?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Relevant context
+      description: Include the version, deployment mode, or contribution area when relevant; write not applicable for a general question.
+    validations:
+      required: true
+  - type: textarea
+    id: attempted
+    attributes:
+      label: Documentation consulted and steps already tried
+      description: Link related documentation or explain where you looked. Include only sanitized output.
+    validations:
+      required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and found no answer to this question.
+          required: true
+        - label: I removed sensitive information and this is not a security vulnerability.
+          required: true
+        - label: I agree to follow the project's Code of Conduct.
+          required: true

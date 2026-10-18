@@ -1,0 +1,137 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Bug report
+description: Report reproducible incorrect behavior in NVIDIA Recovery
+title: "[BUG]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve NVIDIA Recovery. Do not include secrets, private
+        hostnames, customer data, or suspected security vulnerabilities.
+  - type: input
+    id: version
+    attributes:
+      label: NVIDIA Recovery version or revision
+      description: Provide a release tag or full commit SHA.
+      placeholder: "Example: v0.1.0 or 0123456789abcdef..."
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment mode
+      multiple: false
+      options:
+        - Bare-metal Slurm
+        - Slurm on Kubernetes with Slinky
+        - Kubernetes-native workload
+        - Local development or test harness
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Summarize the incorrect behavior and the affected functionality.
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Rationale
+      description: Explain why this matters to users or operators and the impact of leaving it unresolved.
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: Describe the affected user or operator, their workflow, and what they need to accomplish. Use anonymized examples.
+  - type: textarea
+    id: functional-requirements
+    attributes:
+      label: Functional requirements
+      description: Describe the behavior or acceptance criteria a fix must satisfy, including relevant edge cases or existing requirements.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Test environment setup
+      description: Include relevant OS, architecture, Kubernetes, Slurm, Helm, container runtime versions, plus configuration, prerequisites, and setup needed to reproduce. Remove sensitive information.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest safe sequence that reproduces the issue, including commands or inputs and how often it occurs.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-result
+    attributes:
+      label: Expected result
+      description: What should happen after following the reproduction steps?
+    validations:
+      required: true
+  - type: textarea
+    id: actual-result
+    attributes:
+      label: Actual result
+      description: What actually happens? Include error messages and link supporting evidence below.
+    validations:
+      required: true
+  - type: textarea
+    id: technical-considerations
+    attributes:
+      label: Technical considerations
+      description: Identify affected components, schedulers, APIs, deployment modes, dependencies, constraints, and security, compatibility, or operational risks.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Initial severity (impact)
+      description: Select the current impact of the problem or missing capability. Maintainers may adjust this during triage.
+      options:
+        - Unsure / needs triage
+        - Critical - widespread outage, data loss, or essential workflows blocked with no workaround
+        - High - major functionality unavailable or severely impaired
+        - Medium - functionality limited, with a usable workaround
+        - Low - minor inconvenience or cosmetic issue
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Initial priority (urgency)
+      description: Select the requested urgency.
+      options:
+        - Unsure / needs triage
+        - Urgent - needs immediate attention
+        - High - needed in the next planned release or work cycle
+        - Normal - can follow regular planning
+        - Low - can be deferred
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative solutions
+      description: Describe workarounds or alternative approaches considered or tried, and why they are insufficient.
+  - type: textarea
+    id: supporting-info
+    attributes:
+      label: Additional supporting info / evidence
+      description: Attach relevant sanitized logs, output, screenshots, measurements, or links. Remove sensitive information.
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and found no duplicate.
+          required: true
+        - label: I removed sensitive information and this is not a security vulnerability.
+          required: true
+        - label: I agree to follow the project's Code of Conduct.
+          required: true

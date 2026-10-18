@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "anomaly-detection-isolator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection-isolator.labels" . | nindent 4 }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "{{ .Values.port }}"
+    prometheus.io/path: "/metrics"
+spec:
+  type: {{ .Values.service_type | default "ClusterIP" }}
+  selector:
+    {{- include "anomaly-detection-isolator.selectorLabels" . | nindent 4 }}
+  ports:
+  - name: metrics
+    port: {{ .Values.port }}
+    targetPort: {{ .Values.port }}

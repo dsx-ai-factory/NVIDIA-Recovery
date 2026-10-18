@@ -1,0 +1,131 @@
+global: {}
+
+applicationName: dashboard
+image:
+  repository: ""
+  name: dashboard
+  tag: ""
+  pullPolicy: Always
+replicas: 1
+port: 3001
+ingress_fqdn: ""
+# Set to "*" to deploy ingress without a host (paths-only). TLS hosts will be omitted.
+ingressClassName: nginx
+ingress:
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""
+app:
+  cockpitName: NVIDIA Recovery
+  DATADOG_ENABLED: true
+  FACT_ENABLED: false
+  FACT_URL: ""
+  datadogWatcherURL: ""
+  # Optional dashboard prefix. Leave empty for /dashboard and /api routes.
+  # A non-empty value must match BASE_PATH used to build the dashboard image.
+  base_path: ""
+  loggingLevel: info
+  notificationsHostPostfix: notifications
+  notificationsPort: 8080
+  apiGatewayBasePath: "/mission-control/recovery-engine-api"
+  METRICS_ENABLED: true
+  API_KEYS_ENABLED: true
+  JOB_NODE_ANALYSIS_ENABLED: false
+  JOB_GROUPS_ENABLED: false
+  AUDIT_EVENTS_ENABLED: true
+  GRAFANA_TRACE_URL_ENABLED: false
+  GRAFANA_DATA_SOURCE_ID: ""
+  # Operator-provided Grafana base URL; optional organization ID.
+  GRAFANA_URL: ""
+  GRAFANA_ORG_ID: ""
+  apiGatewayURL: ""
+  # Optional Agent session lookup on the jobs page.
+  agent:
+    enabled: false
+    apiURL: ""
+    webURL: ""
+auth:
+  NEXTAUTH_ENABLED: false
+  # Optional operator-managed Secret containing NEXTAUTH_SECRET and
+  # API_GATEWAY_SESSION_SECRET. Use this for offline/GitOps rendering.
+  existingSessionSecret: ""
+  # Leave empty to generate independent keys on a fresh install and reuse them
+  # on upgrades. Missing stored keys fail upgrades; restore or explicitly supply
+  # them. Upgrading from the legacy fixed defaults requires two new keys.
+  # Explicit keys are used as supplied.
+  # Do not combine these values with existingSessionSecret.
+  NEXTAUTH_SECRET: ""
+  API_GATEWAY_SESSION_SECRET: ""
+  # Required for hostless or wildcard-ingress deployments when auth is enabled.
+  # Concrete ingress_fqdn values derive this as https://<ingress_fqdn>.
+  NEXTAUTH_URL: ""
+
+  azure:
+    enabled: false
+    azureAdSecretName: nvidia-recovery-azure-ad-secret
+    azureAdClientIdKey: AZURE_AD_CLIENT_ID
+    azureAdClientSecretKey: AZURE_AD_CLIENT_SECRET
+    azureAdTenantIdKey: AZURE_AD_TENANT_ID
+    createSecret: false
+    azureAdClientIdValue:
+    azureAdClientSecretValue:
+    azureAdTenantIdValue:
+  starfleet:
+    enabled: false
+    starfleetSecretName: nvidia-recovery-starfleet-secret
+    starfleetOpenIdConfigUrlKey: STARFLEET_OPENID_CONFIG_URL
+    starfleetClientIdKey: STARFLEET_CLIENT_ID
+    starfleetClientSecretKey: STARFLEET_CLIENT_SECRET
+    createSecret: false
+    starfleetOpenIdConfigUrlValue:
+    starfleetClientIdValue:
+    starfleetClientSecretValue:
+  ldap:
+    enabled: false
+    LDAP_URI: ldaps://master:636
+    LDAP_MOUNT_PATH: "/app/certs"
+    LDAP_BIND_DN: "" #ldapbind_test,dc=cm,dc=cluster
+    LDAP_BIND_PASSWORD: "" #test
+    LDAP_SEARCH_BASE: dc=cm,dc=cluster
+
+    ldapCASecretName: "ldap-ca"
+    keyName: "ldap.key"
+    certName: "ldap.pem"
+    caName: "ca.pem"
+    createSecret: false
+    keyValue: "" #"/cm/local/apps/openldap/etc/certs/ldap.key"
+    certValue: "" #"/cm/local/apps/openldap/etc/certs/ldap.pem"
+    caValue: "" #"/cm/local/apps/openldap/etc/certs/ca.pem"
+
+service:
+  type: ClusterIP
+
+imagePullSecrets: []
+
+nodeSelector: {}
+
+tolerations: []
+
+volumes: []
+
+volumeMounts: []
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+gateway:
+  parentRef:
+    name: ""
+    namespace: ""
+    sectionName: ""
+
+# Look at the README.md at ./deploy/helm/README.md
+enableExtendedLabelSelectors: false

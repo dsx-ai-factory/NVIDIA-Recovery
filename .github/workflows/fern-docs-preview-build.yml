@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Workflow 1 of 2 for hosted Fern documentation previews.
+#
+# Stages the curated guides exactly as the documentation check does, then
+# uploads the Fern inputs and pull request metadata as an artifact. This
+# workflow runs reviewed-but-not-yet-trusted source, so it holds no secrets.
+# The companion workflow (fern-docs-preview-comment.yml) builds the preview
+# with the Fern token and never checks out the pull request.
+#
+# Like the other workflows in this repository, it runs only on the
+# pull-request/<n> branches that copy-pr-bot creates after a maintainer
+# approves the source, never directly on a fork pull request.
+
+name: "Preview Fern Docs: Build"
+
+on:
+  push:
+    branches:
+      - "pull-request/[0-9]+"
+    paths:
+      - "fern/**"
+      - "docs/**"
+      - "README.md"
+      - "ARCHITECTURE.md"
+      - "scripts/docs/**"
+      - "api-gateway/gen/openapiv2/**"
+      - ".github/workflows/fern-docs-preview-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    name: Collect Fern preview inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out copied pull request source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # The curated guides are authored in the repository root and docs/; Fern
+      # only sees the staged copies under fern/generated/, so the preview job
+      # must receive them already prepared. The script uses only the standard
+      # library and needs no dependency installation.
+      - name: Stage curated guides for Fern
+        run: python3 scripts/docs/prepare.py
+
+      - name: Save pull request metadata
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          mkdir -p preview-metadata
+          echo "${GITHUB_REF_NAME#pull-request/}" > preview-metadata/pr_number
+          echo "${GITHUB_REF_NAME}" > preview-metadata/head_ref
+
+          # Changed Markdown is reported as links to the pages it renders on.
+          # Only guides listed in scripts/docs/pages.json are on the site, and
+          # Fern identifies them by their staged fern/generated/<slug>.mdx file.
+          git diff --name-only "origin/${DEFAULT_BRANCH}...HEAD" -- '*.md' '*.mdx' \
+            | python3 -c '
+          import json, sys
+          slugs = {p["source"]: p["slug"] for p in json.load(open("scripts/docs/pages.json"))}
+          for path in sys.stdin.read().split():
+              if path in slugs:
+                  print(f"fern/generated/{slugs[path]}.mdx")
+          ' > preview-metadata/changed_md_files
+
+      - name: Upload Fern docs inputs and metadata
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: fern-preview
+          # The Gateway reference reads its authoritative Swagger file from
+          # outside fern/, so it travels with the Fern directory.
+          path: |
+            fern/
+            api-gateway/gen/openapiv2/
+            preview-metadata/
+          retention-days: 1
+          if-no-files-found: error

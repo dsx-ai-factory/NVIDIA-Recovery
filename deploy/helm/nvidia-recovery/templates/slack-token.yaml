@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.global.slack.create_token_secret }}
+apiVersion: v1
+data:
+  token: "{{ .Values.global.slack.token | b64enc }}"
+kind: Secret
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: nvidia-recovery-slack-token
+{{ end }}

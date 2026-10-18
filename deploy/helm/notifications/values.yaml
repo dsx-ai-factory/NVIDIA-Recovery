@@ -1,0 +1,86 @@
+global: {}
+applicationName: notifications
+replicas: 1
+
+## Resources
+##
+resources:
+  limits:
+    memory: 256Mi
+    cpu: 100m
+  requests:
+    memory: 256Mi
+    cpu: 100m
+
+port: 8080
+
+## Readiness probe timing against /readyz.
+readinessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+## Liveness probe timing against /healthz. Allow enough time for startup migrations.
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+image:
+  repository: ""
+  name: notifications
+  tag: ""
+  pullPolicy: Always
+command: []
+args: []
+service:
+  type: ClusterIP
+app:
+  defaultConfigPath: /app/opt
+  cockpitProtocol: https
+  cockpitFQDN: ""
+  cockpitBasePath: ""
+  callbackEnabled: false
+  callbackUrl: ""  # This should include the `https://` bit too
+  callbackMethod: "POST"
+  callbackPayloadJq: "."
+
+db:
+  url: ""
+  protocol: "mysql+pymysql"
+  user: ""
+  host: "nvidia-recovery-mysql"
+  port: "3306"
+  database: ""
+  mysql_secret_name: nvidia-recovery-mysql
+  mysql_secret_key: MYSQL_PASSWORD
+  # Verify the server certificate over TLS using ssl_ca_path. Off by
+  # default; deployments against a TLS-required database must set this
+  # true and mount a CA bundle at ssl_ca_path (see values.volumeMounts).
+  ssl_enabled: false
+  ssl_ca_path: "/etc/mysql-ca/ca.pem"
+
+imagePullSecrets: []
+
+nodeSelector: {}
+
+tolerations: []
+
+volumes: []
+
+volumeMounts: []
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Look at the README.md at ./deploy/helm/README.md
+enableExtendedLabelSelectors: false

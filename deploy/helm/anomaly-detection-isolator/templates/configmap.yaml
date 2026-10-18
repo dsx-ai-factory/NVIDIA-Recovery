@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "anomaly-detection-isolator.fullname" . }}-config
+  labels:
+    {{- include "anomaly-detection-isolator.labels" . | nindent 4 }}
+data:
+  settings.env: |
+    fact_non_isolated_errors={{ .Values.fact.non_isolated_errors }}
+    fact_isolated_errors={{ .Values.fact.isolated_errors }}
+    fact_ambiguous_errors={{ .Values.fact.ambiguous_errors }}
+    fact_non_isolated_errors_env={{ .Values.fact.non_isolated_errors_env }}
+    fact_isolated_errors_env={{ .Values.fact.isolated_errors_env }}
+    fact_ambiguous_errors_env={{ .Values.fact.ambiguous_errors_env }}
+    root_path="{{ .Values.root_path }}"
+    queue_name="{{ .Values.event_bus.queue_name }}"
+    routing_key="{{ .Values.event_bus.routing_key }}"
+    exchange_name="{{ .Values.event_bus.exchange }}"
+    rabbitmq_user="{{ .Values.event_bus.username }}"
+    rabbitmq_port={{ .Values.event_bus.port }}
+    rabbitmq_url="{{ .Values.event_bus.host }}"
+    rabbitmq_vhost="{{ .Values.event_bus.vhost }}"
+    attribution_request_exchange="{{ .Values.event_bus.attribution_request_exchange }}"
+    attribution_request_queue="{{ .Values.event_bus.attribution_request_queue }}"
+    isolator_completed_exchange="{{ .Values.event_bus.isolator_completed_exchange }}"
+    slow_signals_exchange="{{ .Values.event_bus.slow_signals_exchange }}"
+    slow_signals_queue="{{ .Values.event_bus.slow_signals_queue }}"
+    epilogue_started_wait_seconds={{ .Values.epilogue_started_wait_seconds }}
+    slow_signals_enabled={{ .Values.slow_signals_enabled }}
+    slow_signals_delay_seconds={{ .Values.slow_signals_delay_seconds }}
+    epilog_query_duration_minutes={{ .Values.epilog_query_duration_minutes }}
+    num_worker_threads={{ .Values.num_worker_threads }}
+    jobmanager_host="{{ .Values.job_manager.host }}"
+    jobmanager_port={{ .Values.job_manager.port }}
+    jobmanager_status_path="{{ .Values.job_manager.status_path }}"
+    max_isolated_nodes={{ .Values.max_isolated_nodes }}
+    {{- if .Values.rack_aware_isolation_enabled }}
+    rack_aware_isolation_enabled={{ .Values.rack_aware_isolation_enabled }}
+    {{- end }}
+    {{- if .Values.max_isolated_nodes_per_rack }}
+    max_isolated_nodes_per_rack={{ .Values.max_isolated_nodes_per_rack }}
+    {{- end }}
+    {{- if .Values.max_racks_to_isolate }}
+    max_racks_to_isolate={{ .Values.max_racks_to_isolate }}
+    {{- end }}
+    {{- if .Values.rack_extraction_pattern }}
+    rack_extraction_pattern="{{ .Values.rack_extraction_pattern }}"
+    {{- end }}
+    jobmanager_http_timeout_seconds={{ .Values.jobmanager_http_timeout_seconds }}
+    attribution_enabled={{ .Values.attribution_enabled }}
+    {{- if .Values.attribution_enabled }}
+    attribution_service_url={{ include "anomaly-detection-isolator.attributionURL" . | quote }}
+    {{- end }}
+    attribution_fast_http_timeout_seconds={{ .Values.attribution_fast_http_timeout_seconds }}
+    attribution_slow_http_timeout_seconds={{ .Values.attribution_slow_http_timeout_seconds }}
+    {{- $auditTrail := deepCopy .Values.audit_trail }}
+    {{- if not (hasKey $auditTrail "destination") }}
+    {{- /* Match the sibling Notifications chart's default fullname; custom names
+         and ports require an explicit audit destination. */}}
+    {{- $notificationsName := .Release.Name }}
+    {{- if not (contains "notifications" .Release.Name) }}
+    {{- $notificationsName = printf "%s-notifications" .Release.Name }}
+    {{- end }}
+    {{- $_ := set $auditTrail "destination" (printf "http://%s:8080/v1/audit/events" ($notificationsName | trunc 63 | trimSuffix "-")) }}
+    {{- else if not $auditTrail.destination }}
+    {{- $auditTrail = omit $auditTrail "destination" }}
+    {{- end }}
+    audit_trail={{ $auditTrail | toJson | quote }}

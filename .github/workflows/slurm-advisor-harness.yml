@@ -1,0 +1,60 @@
+name: Slurm Advisor Harness
+
+on:
+  push:
+    branches:
+      - main
+      - "pull-request/[0-9A-Za-z]+"
+    paths:
+      - "slurm-advisor-controller/**"
+      - "Makefile"
+      - "scripts/ci/**"
+      - ".github/workflows/slurm-advisor-harness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GO_VERSION: "1.27.1"
+
+jobs:
+  slurm-advisor-harness:
+    name: Slurm Advisor Harness
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go with cache
+        uses: ./.github/actions/setup-go-cache
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            api-gateway/go.mod
+            api-gateway/go.sum
+            slurm-advisor-controller/go.mod
+            slurm-advisor-controller/go.sum
+
+      - name: Docker preflight
+        run: |
+          docker version
+          docker info >/dev/null
+
+      - name: Set inotify limits
+        run: |
+          sudo sysctl -w fs.inotify.max_user_watches=524288
+          sudo sysctl -w fs.inotify.max_user_instances=512
+
+      - name: Check standalone watchdog dependencies
+        run: make check-slurm-watchdog-deps
+
+      - name: Run Slurm advisor harness
+        run: make test-slurm-advisor-harness

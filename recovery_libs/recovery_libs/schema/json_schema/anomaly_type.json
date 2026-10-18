@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "definitions": {
+    "anomaly_type": {
+      "type": "string",
+      "enum": [
+        "CHECKPOINTLOAD",
+        "CHECKPOINTSAVE",
+        "CRASH",
+        "CRASHAPPEXCEPTION",
+        "CRASHOOM",
+        "CRASHSEGV",
+        "FLTINJECTION",
+        "FLTINJECTIONINFRA",
+        "HANG",
+        "HANGAPP",
+        "HANGCOMM",
+        "HANGNOOUTPUT",
+        "HANGPUSHRECV",
+        "LOWTHROUGHPUT",
+        "LOWTHROUGHPUTEWNET",
+        "LOWTHROUGHPUTGPU",
+        "LOWTHROUGHPUTNSNET",
+        "LOWTHROUGHPUTSTORAGE",
+        "STRAGGLER",
+        "UNKNOWN"
+      ]
+    }
+  }
+}

@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+global:
+  log_query:
+    backend: loki
+    providers:
+      loki:
+        application:
+          url: http://loki-gateway.monitoring.svc.cluster.local
+          tenants: ""
+          org_id: ""
+        system:
+          url: http://loki-gateway.monitoring.svc.cluster.local
+          tenants: ""
+          org_id: ""
+        queries:
+          attribution:
+            application: >-
+              {{cluster='slurm', appName='slurm-app-log', job_id='{}'}}
+            system: >-
+              {cluster='slurm', component='journal'}
+            epilogue: >-
+              {{cluster='slurm', component='journal'}} |~ "(^|[^0-9]){}([^0-9]|$)"
+
+attribution-service:
+  enabled: true
+  image:
+    repository: ""
+    name: attribution-service
+    tag: latest
+    pullPolicy: Never
+  imagePullSecrets: []
+
+attribution-adapter:
+  enabled: true
+  image:
+    repository: ""
+    name: attribution-adapter
+    tag: latest
+    pullPolicy: Never
+  imagePullSecrets: []
+  fact_http_timeout_seconds: 5
+  resources:
+    requests:
+      memory: 256Mi
+  loki:
+    loki_cluster: e2e
+  prometheus:
+    prometheus_url: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+    prometheus_cluster: e2e
+    prometheus_checks_enabled: false
+    prometheus_tenants: ""
+
+anomaly-detection-isolator:
+  attribution_enabled: true
+
+watcher:
+  config:
+    datasources:
+      log_query_policy:
+        # Let scheduler state settle while the provider evaluates the evidence.
+        query_delay: 10

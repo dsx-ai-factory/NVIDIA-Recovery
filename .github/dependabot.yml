@@ -1,0 +1,45 @@
+# One updater. Bot changes use the same maintainer SHA approval and checks.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    groups:
+      compatible:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: gomod
+    directories: [/api-gateway, /slurm-advisor-controller]
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    groups:
+      compatible:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directories: [/dashboard, /scripts/docs]
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    groups:
+      compatible:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/helm-release
+      - /.github/actions/setup-go-cache
+      - /.github/actions/setup-pnpm-cache
+      - /.github/actions/setup-uv-cache
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    groups:
+      compatible:
+        patterns: ["*"]
+        update-types: [minor, patch]
+# Chart pins and image inputs require explicit owner review; see RELEASE.md.

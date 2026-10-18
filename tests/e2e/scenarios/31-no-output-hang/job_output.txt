@@ -1,0 +1,12 @@
+[init] Heimdall e2e synthetic training job starting
+[init] world_size=8 rank=0 local_rank=0
+[train] step 1 loss=10.40 tokens/s=18210 step_ms=540
+[train] step 2 loss=10.10 tokens/s=18533 step_ms=545
+[train] step 3 loss=9.84 tokens/s=18102 step_ms=612
+[train] step 4 loss=9.50 tokens/s=17940 step_ms=559
+[train] step 5 loss=9.22 tokens/s=18080 step_ms=552
+[train] step 6 loss=8.99 tokens/s=18120 step_ms=548
+3: [2026-09-09 12:00:00] iteration 10/100 | consumed samples: 80 | elapsed time per iteration (ms): 500.0 | throughput per GPU (TFLOP/s/GPU): 100.0 |
+[train] checkpoint saved
+event.name=training_iterations event.metrics.tflops=1
+[train] beginning next collective

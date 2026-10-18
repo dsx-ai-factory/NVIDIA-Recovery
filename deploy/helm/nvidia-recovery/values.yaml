@@ -1,0 +1,452 @@
+rabbitmq:
+  enabled: false
+  # Installation allocation; Tilt/E2E override this in stack-local.yaml.
+  resources:
+    requests:
+      cpu: "4"
+      memory: 4Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+  image:
+    repository: bitnamilegacy/rabbitmq
+  volumePermissions:
+    image:
+      repository: bitnamilegacy/os-shell
+    enabled: true
+job-manager:
+  enabled: false
+api-gateway:
+  enabled: false
+slurm-advisor-controller:
+  enabled: false
+anomaly-detection-isolator:
+  enabled: false
+  attribution_enabled: true
+attribution-adapter:
+  enabled: true
+attribution-service:
+  enabled: true
+dashboard:
+  enabled: false
+watcher:
+  enabled: false
+notifications:
+  enabled: false
+grafana:
+  enabled: false
+  ingress:
+    enabled: true
+    path: /grafana
+# Optional Slurm log-link collector. A deployment must explicitly provide the
+# Alloy pipeline, exact read-only source/destination mounts, and Loki endpoint
+# when enabling it.
+alloy:
+  enabled: false
+# Turnkey MySQL for quick-start/experimentation only — disabled by default
+# (BYOD is the production path). Enable
+# via deploy/helm/nvidia-recovery/values-quickstart.yaml, not directly in production
+# values files. This is the bitnami mysql chart pinned at 13.0.4 (see
+# Chart.yaml comment on the mysql dependency for why the pin matters).
+mysql:
+  enabled: false
+  fullnameOverride: nvidia-recovery-mysql
+  image:
+    repository: bitnamilegacy/mysql
+  volumePermissions:
+    enabled: true
+    image:
+      repository: bitnamilegacy/os-shell
+  metrics:
+    image:
+      repository: bitnamilegacy/mysqld-exporter
+  primary:
+    extraFlags: "--binlog-expire-logs-seconds=86400"
+    initContainers:
+    - command:
+      - sh
+      - -c
+      - /bin/mkdir -p /bitnami/mysql/data && /bin/chmod -R 777 /bitnami/mysql
+      image: busybox
+      name: create-directory-structure
+      volumeMounts:
+      - mountPath: /bitnami/mysql/data
+        name: data
+    resources:
+      requests:
+        cpu: 1
+        memory: 512Mi
+      limits:
+        cpu: 2
+        memory: 1024Mi
+    podSecurityContext:
+      enabled: false
+    containerSecurityContext:
+      enabled: false
+  secondary:
+    extraFlags: "--binlog-expire-logs-seconds=86400"
+
+# Bundled Grafana Loki — optional centralized log backend, disabled by default.
+# Toggle with global.loki.bundled.enabled independently of query connections.
+# Values mirror the field-tested single-binary install in docs/ops/loki-slurm-runai-logging.md
+# §4: filesystem storage and retention through the compactor. Production
+# guidance (same runbook): object storage (s3/gcs), replication_factor 3, and
+# the distributed/SSD scalable mode instead of this block.
+loki:
+  # Stable names (loki, loki-gateway) independent of the release name. Configure
+  # global.log_query.providers.loki URLs to match the deployed gateway.
+  fullnameOverride: loki
+  deploymentMode: SingleBinary
+  loki:
+    auth_enabled: false        # set true + X-Scope-OrgID for multi-tenant
+    commonConfig:
+      replication_factor: 1
+    storage:
+      type: filesystem         # use s3/gcs in production
+    schemaConfig:
+      configs:
+        - from: "2024-04-01"
+          store: tsdb
+          object_store: filesystem   # keep in sync with storage.type
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
+    limits_config:
+      retention_period: 744h        # 31 days; tune to your needs
+    # retention_period alone does NOT delete data — the compactor must run with
+    # retention enabled, or storage grows unbounded until the PVC fills.
+    compactor:
+      retention_enabled: true
+      delete_request_store: filesystem   # match object_store above
+      compaction_interval: 10m
+  singleBinary:
+    replicas: 1
+    persistence:
+      enabled: true
+      # Preserve log evidence when the release is removed or scaled down.
+      whenDeleted: Retain
+      whenScaled: Retain
+      size: 200Gi              # runbook default for a small/mid cluster; tune
+  # Disable microservice components in single-binary mode.
+  backend:
+    replicas: 0
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+  # The gateway (nginx) fronts Loki on port 80. Chart default is enabled — kept
+  # explicit for documentation.
+  # The access-log metrics sidecar (ghcr.io/jkroepke/access-log-exporter) is
+  # disabled to keep the bundled profile minimal, matching the caches below;
+  # re-enable it if you scrape gateway request metrics.
+  gateway:
+    enabled: true
+    replicas: 1
+    metrics:
+      enabled: false
+  # The memcached caches request ~10Gi memory each by default — oversized for a
+  # single-binary install (same sizing call as scripts/ci/e2e/services/values/loki.yaml).
+  chunksCache:
+    enabled: false
+  resultsCache:
+    enabled: false
+  lokiCanary:
+    enabled: false
+  test:
+    enabled: false
+
+global:
+  routing:
+    type: ingress  # "ingress" (default) | "gateway"
+  gateway:
+    parentRef:
+      name: ""         # required when routing.type=gateway
+      namespace: ""    # optional, defaults to release namespace
+      sectionName: ""  # optional, target a specific Gateway listener
+  security:
+    allowInsecureImages: true
+  # Registry-credential secret config (renamed from global.registry.secret):
+  # `global.registry` is a common cross-chart convention for a *string* image
+  # registry (the loki sub-chart coalesces it into every image reference), so a
+  # map under that name breaks third-party sub-charts (InvalidImageName).
+  registrySecret:
+    create: false
+    type: standard
+    name: regcred
+    username: $oauthtoken
+    url: nvcr.io
+  imagePullSecrets:
+  - name: regcred
+  grafana_dashboard:
+    enabled: false
+  mysql:
+    secret:
+      create: false
+      name: nvidia-recovery-mysql
+      key: MYSQL_PASSWORD
+# If create is true and no password is specified it will be autogenerated
+#     password: ""
+  rabbitmq:
+    secret:
+      create: false
+      name: heimdall-rabbitmq
+      password_key: rabbitmq-password
+      cookie_key: rabbitmq-erlang-cookie
+# If create is true and no password is specified it will be autogenerated
+#     password: ""
+  prometheus:
+    create_token_secret: false
+    pod_monitor_enabled: false
+  # OTLP export settings shared by every Heimdall application container.
+  # The referenced Secret must already exist in the release namespace.
+  otelcollector:
+    enabled: false
+    endpoint: ""
+    protocol: "grpc"
+    auth:
+      enabled: false
+      secretName: ""
+      secretKey: ""
+  loki:
+    create_token_secret: false
+    create_app_write_secret: false
+    # Bundled Loki (the `loki` sub-chart, see docs/ops/loki-slurm-runai-logging.md
+    # §4). Setting bundled.enabled=true deploys the sub-chart. Configure its
+    # query URLs explicitly under global.log_query.providers.loki.
+    bundled:
+      enabled: false
+  # Selects the query implementation only. It does not provision a backend or
+  # change Loki/Alloy write paths. Every selected provider needs explicit
+  # connection and tenant settings for each required domain, including Loki.
+  log_query:
+    backend: loki
+    providers:
+      loki:
+        queries:
+          health:
+            # Executable LogQL selectors, without workload placeholders.
+            application: '{appName="slurm-app-log"}'
+            system: '{component="journal"}'
+        application:
+          # Required when Loki application-log queries are enabled.
+          url: ""
+          tenants: ""
+          org_id: ""
+        system:
+          # Required when Loki system-log queries are enabled.
+          url: ""
+          tenants: ""
+          org_id: ""
+      victorialogs:
+        # VictoriaLogs 1.39.0+ is required for query-window and tenant semantics.
+        queries:
+          health:
+            # Required when dependency checking uses VictoriaLogs. Supply
+            # executable LogsQL selectors, without workload placeholders.
+            application: ""
+            system: ""
+        application:
+          url: ""
+          account_id: ""
+          project_id: ""
+          require_tenant: false
+        system:
+          url: ""
+          account_id: ""
+          project_id: ""
+          require_tenant: false
+  slack:
+    create_token_secret: false
+  tolerations: []
+  nodeSelector: {}
+  # Look at the README.md at ./deploy/helm/README.md
+  enableExtendedLabelSelectors: false
+
+# Optional write-only route for node-local collectors that cannot reach the
+# in-cluster Loki gateway. Disabled by default; deployment profiles must supply
+# an existing ingress basic-auth Secret and keep the route on a private network.
+lokiNodeWrite:
+  enabled: false
+  serviceName: loki-node-write
+  externalName: loki-gateway.loki.svc.cluster.local
+  port: 80
+  ingressClassName: nginx
+  host: ""
+  path: /loki/api/v1/push
+  authSecretName: loki-node-write
+  annotations: {}
+
+grafana_dashboard:
+  enabled: false
+
+# Dependency checker companion app (separate pod)
+dependency_checker:
+  enabled: false
+  image:
+    # Explicitly supply a compatible image when enabling this optional tool.
+    repository: ""
+    tag: ""
+    pullPolicy: IfNotPresent
+  imagePullSecrets:
+  - name: regcred
+  schedule_seconds: 60
+  resources: {}
+  extraEnv: []
+  extraVolumeMounts: []
+  extraVolumes: []
+  # Node exporter sidecar configuration for metrics exposure
+  node_exporter_image:
+    repository: quay.io/prometheus/node-exporter
+    tag: v1.8.1
+    pullPolicy: IfNotPresent
+  metrics_port: 9100
+  textfile_dir: /var/node_exporter/textfile
+  log_query:
+    recent_window_seconds: 300
+    # Native health queries live in
+    # global.log_query.providers.<backend>.queries.health.
+    # Query credentials. Optional application/system SecretRefs override the
+    # shared credential value per domain.
+    # Unselected provider Secrets are never rendered.
+    loki:
+      tokenSecretRef:
+        name: loki-token
+        key: token
+      appTokenSecretRef:
+        name: ""
+        key: token
+      sysTokenSecretRef:
+        name: ""
+        key: token
+    victorialogs:
+      tokenSecretRef:
+        name: ""
+        key: token
+      appTokenSecretRef:
+        name: ""
+        key: token
+      sysTokenSecretRef:
+        name: ""
+        key: token
+      usernameSecretRef:
+        name: ""
+        key: username
+      passwordSecretRef:
+        name: ""
+        key: password
+      appUsernameSecretRef:
+        name: ""
+        key: username
+      appPasswordSecretRef:
+        name: ""
+        key: password
+      sysUsernameSecretRef:
+        name: ""
+        key: username
+      sysPasswordSecretRef:
+        name: ""
+        key: password
+      caCertSecretRef:
+        name: ""
+        key: ca.crt
+      clientCertSecretRef:
+        name: ""
+        key: tls.crt
+      clientKeySecretRef:
+        name: ""
+        key: tls.key
+
+opentelemetry-collector:
+  enabled: false
+  #mode: statefulset
+  #mode: daemonset - no example available yet
+  replicaCount: 1
+
+  resources:
+    limits:
+      cpu: 100m
+      memory: 200M
+
+  livenessProbe:
+    httpGet:
+      port: 13133
+      path: /health
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 13133
+
+  configMap:
+    create: false
+
+  serviceAccount:
+    create: false
+
+  image:
+    # The bundled configuration needs a compatible RabbitMQ exporter.
+    # Select and qualify your collector image before enabling this integration.
+    repository: ""
+    tag: ""
+  imagePullSecrets:
+    - name: regcred
+
+  command:
+    extraArgs: ["--config", "/etc/otelcol/heimdall-otelcol-config.yaml"]
+
+  extraVolumeMounts:
+    - name: heimdall-otelcol-config
+      mountPath: /etc/otelcol
+
+  extraVolumes:
+    - name: heimdall-otelcol-config
+      configMap:
+        name: heimdall-otelcol-config
+        items:
+          - key: heimdall-otelcol-config.yaml
+            path: heimdall-otelcol-config.yaml
+        defaultMode: 420
+
+  extraEnvs:
+    - name: RABBITMQ_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: heimdall-rabbitmq
+          key: rabbitmq-password
+    - name: BASIC_AUTH_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: heimdall-otelc-token
+          key: OTELC_TOKEN
+
+  # this disables all ports except for OTLP gRPC (4317) and HTTP (4318)
+  # TODO - we may need to enable the metrics port (8888) as it is disabled by default
+  ports:
+    jaeger-compact:
+      enabled: false
+    jaeger-thrift:
+      enabled: false
+    jaeger-grpc:
+      enabled: false
+    zipkin:
+      enabled: false
+
+  config:
+    receivers:
+      filelog:
+        enabled: false
+      otlp:
+        enabled: false
+        auth: false
+        environment: null
+    event_bus:
+      host: heimdall-rabbitmq
+      vhost: default-vhost
+      port: 5672
+      username: "rmq_username"
+      password: null
+      watcher:
+        enabled: false
+        exchange: watcher_eventbus_exchange
+        queue: application.logs

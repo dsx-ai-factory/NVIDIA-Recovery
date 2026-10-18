@@ -1,0 +1,85 @@
+name: Nightly
+
+on:
+  schedule:
+    # Nightly at 07:00 UTC (~midnight US Pacific). GitHub runs scheduled
+    # workflows against the default branch.
+    - cron: "0 7 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/e2e-base.yml
+    secrets:
+      BITNAMI_OCI_REGISTRY_MIRROR: ${{ secrets.BITNAMI_OCI_REGISTRY_MIRROR }}
+      DOCKER_HUB_REGISTRY_MIRROR: ${{ secrets.DOCKER_HUB_REGISTRY_MIRROR }}
+
+  publish-chart:
+    name: Publish nightly Helm chart
+    needs:
+      - e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: helm-nightly
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Resolve chart version
+        id: version
+        run: |
+          commit_date="$(git show -s --format=%cd --date=format:%Y%m%d "$GITHUB_SHA")"
+          printf 'version=0.0.0-nightly.%s.sha%s\n' \
+            "$commit_date" "${GITHUB_SHA:0:8}" >> "$GITHUB_OUTPUT"
+
+      - name: Package and publish chart
+        uses: ./.github/actions/helm-release
+        with:
+          version: ${{ steps.version.outputs.version }}
+          skip-existing: "true"
+
+  notify:
+    name: Notify Slack of E2E result
+    needs:
+      - e2e
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      E2E_RESULT: ${{ needs.e2e.result }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Post E2E result to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ "$E2E_RESULT" = "success" ]; then
+            outcome=passed
+          else
+            outcome=failed
+          fi
+          E2E_PROVIDER=GitHub \
+          E2E_OUTCOME="$outcome" \
+          E2E_REPOSITORY="$GITHUB_REPOSITORY" \
+          E2E_SHA="${GITHUB_SHA:0:8}" \
+          E2E_REF="$GITHUB_REF_NAME" \
+          E2E_EVENT="$GITHUB_EVENT_NAME" \
+          E2E_RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            sh scripts/ci/notify-e2e-slack.sh

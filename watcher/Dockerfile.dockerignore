@@ -1,0 +1,11 @@
+*
+!recovery_libs/docs
+!recovery_libs/pyproject.toml
+!recovery_libs/recovery_libs
+!watcher/README.md
+!watcher/pyproject.toml
+!pyproject.toml
+!uv.lock
+!watcher/watcher
+**/__pycache__
+**/*.pyc

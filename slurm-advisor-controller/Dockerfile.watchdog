@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+ARG BASE_IMAGE=ghcr.io/slinkyproject/sackd:25.05-ubuntu24.04@sha256:dd1f0b6030229b3d602e3d80e6d50cc4f9fd17b325312521dfa07376fffc7569
+
+FROM golang:1.27.1@sha256:f44f6e88636cfb311f9ebace870ded69d943f227bb3cb27d32ffd84ea18c43ea AS watchdog-build
+
+WORKDIR /src
+COPY api-gateway ./api-gateway
+COPY slurm-advisor-controller ./slurm-advisor-controller
+
+RUN cd slurm-advisor-controller \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/slurm-watchdog ./cmd/slurm-watchdog
+
+FROM ${BASE_IMAGE}
+ARG BASE_IMAGE
+
+COPY --from=watchdog-build /out/slurm-watchdog /usr/local/bin/slurm-watchdog
+
+ARG REVISION=
+ARG VERSION=dev
+ARG CREATED=
+
+LABEL org.opencontainers.image.title="NVIDIA Recovery Slurm Watchdog" \
+      org.opencontainers.image.description="NVIDIA Recovery Slurm fail-open watchdog" \
+      org.opencontainers.image.source="https://github.com/dsx-ai-factory/NVIDIA-Recovery" \
+      org.opencontainers.image.url="https://github.com/dsx-ai-factory/NVIDIA-Recovery" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.documentation="" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.base.name="${BASE_IMAGE}"
+
+ENTRYPOINT ["/usr/local/bin/slurm-watchdog"]

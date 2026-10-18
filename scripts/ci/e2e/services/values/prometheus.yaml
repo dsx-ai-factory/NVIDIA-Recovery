@@ -1,0 +1,39 @@
+# kube-prometheus-stack base values for the e2e harness.
+# Placeholders (__NAME__) are substituted at install time from env.sh config.
+# The GPU (DCGM) scrape is a separate overlay (prometheus-gpu.yaml), applied
+# only when DEPLOY_GPU_SCRAPE is set.
+
+# Alertmanager is not needed for e2e — disable to keep the install light.
+alertmanager:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    # Scrape ServiceMonitors regardless of the helm release label.
+    serviceMonitorSelectorNilUsesHelmValues: false
+
+prometheus-node-exporter:
+  prometheus:
+    monitor:
+      attachMetadata:
+        node: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: kubernetes_node
+          action: replace
+        - action: replace
+          targetLabel: cluster
+          replacement: __CLUSTER_LABEL__
+
+grafana:
+  additionalDataSources: []
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
+      serve_from_sub_path: true
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: '1'
+      searchNamespace: ALL

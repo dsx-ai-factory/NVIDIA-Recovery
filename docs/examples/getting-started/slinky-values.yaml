@@ -1,0 +1,53 @@
+# Values for the standalone Slurm Advisor Controller installed in the Slinky
+# cluster. The Heimdall backend may run in the same or a different cluster.
+#
+# Before installing, replace:
+#   registry.example.com/acme/nvidia-recovery
+#   v1
+#   customer-slurm
+#   nvidia-recovery-api-gateway.example.internal:9090
+#   slurm-controller:6817
+#
+# Keep the controller, watchdog, sackd, and Slinky Slurm cluster on the same
+# Slurm release.
+
+image:
+  repository: registry.example.com/acme/nvidia-recovery/slurm-advisor-controller
+  tag: v1
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: heimdall-registry
+
+controller:
+  # Use a private address reachable from the Slinky cluster.
+  heimdallEndpoint: nvidia-recovery-api-gateway.example.internal:9090
+  mode: observe
+  acknowledgeSchedulerActions: false
+  environment: customer-slurm
+  partitionAllowlist: []
+
+watchdog:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery/slurm-watchdog
+    tag: v1
+    pullPolicy: IfNotPresent
+  mode: observe
+  acknowledgeSchedulerActions: false
+  # null inherits controller.environment. Use "*" only after a separate
+  # review that authorizes this watchdog for every valid APS environment.
+  environmentPattern: null
+  partitionAllowlist: []
+
+sackd:
+  image:
+    repository: ghcr.io/slinkyproject/sackd
+    tag: 25.05-ubuntu24.04
+    pullPolicy: IfNotPresent
+  confServer: slurm-controller:6817
+
+slurm:
+  authSecret:
+    name: slurm-auth-key
+    key: slurm.key

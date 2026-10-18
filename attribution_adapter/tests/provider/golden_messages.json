@@ -1,0 +1,281 @@
+{
+  "global_single": {
+    "anomaly_type": "CRASHNAN",
+    "anomaly_uuid": "11111111-1111-1111-1111-111111111111",
+    "attribution_type": 2,
+    "global_attributions": {
+      "{\"code\": 0, \"message\": \"{\\\"123\\\": \\\"123\\\"}\", \"description\": \"global error\", \"signature\": \"global symptom\"}": [
+        {
+          "error_attribution": 3,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            2
+          ],
+          "error_attribution_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_id": "12345",
+          "timestamp": "2026-01-01T00:30:00+00:00"
+        }
+      ]
+    },
+    "job_attempt_index": 0,
+    "job_id": "12345",
+    "node_attributions": {}
+  },
+  "node_and_global": {
+    "anomaly_type": "CRASHNAN",
+    "anomaly_uuid": "11111111-1111-1111-1111-111111111111",
+    "attribution_type": 2,
+    "global_attributions": {
+      "{\"code\": 0, \"message\": \"{\\\"123\\\": \\\"123\\\"}\", \"description\": \"node error\", \"signature\": \"global symptom\"}": [
+        {
+          "error_attribution": 2,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            2
+          ],
+          "error_attribution_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_id": "12345",
+          "timestamp": "2026-01-01T00:30:00+00:00"
+        }
+      ]
+    },
+    "job_attempt_index": 0,
+    "job_id": "12345",
+    "node_attributions": {
+      "{\"code\": 0, \"message\": \"{\\\"123\\\": \\\"123\\\"}\", \"description\": \"node error\", \"signature\": \"node symptom\"}": [
+        {
+          "cluster": "",
+          "error_attribution": 2,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            3
+          ],
+          "error_attribution_type": 2,
+          "exclusion_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_end_time": null,
+          "job_id": "12345",
+          "job_start_time": null,
+          "node": "node1",
+          "original_exclusion_type": 2,
+          "timestamp": "2026-01-01T00:30:00+00:00"
+        }
+      ]
+    }
+  },
+  "node_empty_class": {
+    "anomaly_type": "CRASHNAN",
+    "anomaly_uuid": "11111111-1111-1111-1111-111111111111",
+    "attribution_type": 2,
+    "global_attributions": {},
+    "job_attempt_index": 0,
+    "job_id": "12345",
+    "node_attributions": {
+      "{\"code\": 0, \"message\": \"{\\\"123\\\": \\\"123\\\"}\", \"description\": \"empty class\", \"signature\": \"empty\"}": [
+        {
+          "cluster": "",
+          "error_attribution": 0,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            2
+          ],
+          "error_attribution_type": 2,
+          "exclusion_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_end_time": null,
+          "job_id": "12345",
+          "job_start_time": null,
+          "node": "node1",
+          "original_exclusion_type": 2,
+          "timestamp": "2026-01-01T00:30:00+00:00"
+        }
+      ]
+    }
+  },
+  "node_health_check_source": {
+    "anomaly_type": "CRASHNAN",
+    "anomaly_uuid": "11111111-1111-1111-1111-111111111111",
+    "attribution_type": 2,
+    "global_attributions": {},
+    "job_attempt_index": 0,
+    "job_id": "12345",
+    "node_attributions": {
+      "{\"code\": 0, \"message\": \"{\\\"123\\\": \\\"123\\\"}\", \"description\": \"health-check error\", \"signature\": \"health-check symptom\"}": [
+        {
+          "cluster": "",
+          "error_attribution": 2,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            1
+          ],
+          "error_attribution_type": 2,
+          "exclusion_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_end_time": null,
+          "job_id": "12345",
+          "job_start_time": null,
+          "node": "node1",
+          "original_exclusion_type": 2,
+          "timestamp": "2026-01-01T00:30:00+00:00"
+        }
+      ]
+    }
+  },
+  "node_multi_key": {
+    "anomaly_type": "CRASHNAN",
+    "anomaly_uuid": "11111111-1111-1111-1111-111111111111",
+    "attribution_type": 2,
+    "global_attributions": {},
+    "job_attempt_index": 0,
+    "job_id": "12345",
+    "node_attributions": {
+      "{\"code\": 0, \"message\": \"{\\\"123\\\": \\\"123\\\"}\", \"description\": \"error A\", \"signature\": \"symptom A\"}": [
+        {
+          "cluster": "",
+          "error_attribution": 2,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            3
+          ],
+          "error_attribution_type": 2,
+          "exclusion_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_end_time": null,
+          "job_id": "12345",
+          "job_start_time": null,
+          "node": "node1",
+          "original_exclusion_type": 2,
+          "timestamp": "2026-01-01T00:30:00+00:00"
+        }
+      ],
+      "{\"code\": 0, \"message\": \"{\\\"123\\\": \\\"123\\\"}\", \"description\": \"error A\", \"signature\": \"symptom B\"}": [
+        {
+          "cluster": "",
+          "error_attribution": 2,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            2
+          ],
+          "error_attribution_type": 2,
+          "exclusion_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_end_time": null,
+          "job_id": "12345",
+          "job_start_time": null,
+          "node": "node1",
+          "original_exclusion_type": 2,
+          "timestamp": "2026-01-01T00:30:00+00:00"
+        }
+      ]
+    }
+  },
+  "node_no_error_class": {
+    "anomaly_type": "CRASHNAN",
+    "anomaly_uuid": "11111111-1111-1111-1111-111111111111",
+    "attribution_type": 2,
+    "global_attributions": {},
+    "job_attempt_index": 0,
+    "job_id": "12345",
+    "node_attributions": {
+      "{\"code\": 0, \"message\": \"{\\\"123\\\": \\\"123\\\"}\", \"description\": \"no error found\", \"signature\": \"ok\"}": [
+        {
+          "cluster": "",
+          "error_attribution": 0,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            3
+          ],
+          "error_attribution_type": 2,
+          "exclusion_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_end_time": null,
+          "job_id": "12345",
+          "job_start_time": null,
+          "node": "node1",
+          "original_exclusion_type": 2,
+          "timestamp": "2026-01-01T00:30:00+00:00"
+        }
+      ]
+    }
+  },
+  "node_no_sources": {
+    "anomaly_type": "CRASHNAN",
+    "anomaly_uuid": "11111111-1111-1111-1111-111111111111",
+    "attribution_type": 2,
+    "global_attributions": {},
+    "job_attempt_index": 0,
+    "job_id": "12345",
+    "node_attributions": {
+      "{\"code\": 0, \"message\": \"\", \"description\": \"no-source error\", \"signature\": \"no-source symptom\"}": [
+        {
+          "cluster": "",
+          "error_attribution": 2,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            3
+          ],
+          "error_attribution_type": 2,
+          "exclusion_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_end_time": null,
+          "job_id": "12345",
+          "job_start_time": null,
+          "node": "node1",
+          "original_exclusion_type": 2,
+          "timestamp": "2026-01-01T01:00:00+00:00"
+        }
+      ]
+    }
+  },
+  "node_single": {
+    "anomaly_type": "CRASHNAN",
+    "anomaly_uuid": "11111111-1111-1111-1111-111111111111",
+    "attribution_type": 2,
+    "global_attributions": {},
+    "job_attempt_index": 0,
+    "job_id": "12345",
+    "node_attributions": {
+      "{\"code\": 0, \"message\": \"{\\\"123\\\": \\\"123\\\"}\", \"description\": \"Test error\", \"signature\": \"Symptom 1\"}": [
+        {
+          "cluster": "",
+          "error_attribution": 2,
+          "error_attribution_origin": 2,
+          "error_attribution_sources": [
+            3
+          ],
+          "error_attribution_type": 2,
+          "exclusion_type": 2,
+          "fact_status": 2,
+          "job_anomaly_id": "11111111-1111-1111-1111-111111111111",
+          "job_attempt_index": 0,
+          "job_end_time": null,
+          "job_id": "12345",
+          "job_start_time": null,
+          "node": "node1",
+          "original_exclusion_type": 2,
+          "timestamp": "2026-01-01T00:30:00+00:00"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+# Opt-in overlay for the real controller-to-gateway Kubernetes auth smoke.
+# The chart projects this short-lived, audience-bound token into the controller
+# Pod; the controller adds it to its production gRPC Authorization metadata.
+controller:
+  # The production-interface smoke asserts the successful reconciliation log.
+  # Keep this diagnostic verbosity isolated to the dedicated auth smoke.
+  logLevel: debug
+  kubernetesAuth:
+    enabled: true
+    audience: nvidia-recovery-api-gateway
+    expirationSeconds: 3600

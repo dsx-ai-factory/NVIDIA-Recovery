@@ -1,0 +1,137 @@
+name: Public E2E
+
+# Reusable Kind E2E harness (scripts/ci/e2e). Automated trigger policy belongs
+# to the thin caller workflows in this directory.
+on:
+  workflow_call:
+    inputs:
+      allow_failure:
+        description: Make the public E2E lane informational
+        type: boolean
+        default: false
+      skip_nightly:
+        description: Exclude tests marked nightly
+        type: boolean
+        default: false
+    secrets:
+      BITNAMI_OCI_REGISTRY_MIRROR:
+        description: Optional existing OCI chart mirror; unset uses Docker Hub.
+        required: false
+      DOCKER_HUB_REGISTRY_MIRROR:
+        description: Optional existing Kind image mirror; unset uses Docker Hub.
+        required: false
+
+# Serialize e2e per ref: a second run on the same ref queues behind the in-flight
+# one instead of running in parallel. Do not cancel — let the running e2e finish.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PYTEST_ADDOPTS: ${{ inputs.skip_nightly && '-m "not nightly"' || '' }}
+
+jobs:
+  e2e:
+    name: Kind e2e (${{ matrix.profile }}, ${{ matrix.log_backend }})
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    timeout-minutes: 120
+    continue-on-error: ${{ inputs.allow_failure }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: advisor-act
+            cluster_suffix: act-loki
+            log_backend: loki
+          - profile: advisor-act
+            cluster_suffix: act-vl
+            log_backend: victorialogs
+    env:
+      # Tilt builds the Slurm recovery images, installs the shared infrastructure
+      # and selected Slinky stack, then the harness runs tests/e2e.
+      DEPLOY_INFRA: "1"
+      DEPLOY_STACK: "1"
+      HELM_NAMESPACE: "slurm"
+      E2E_STACK_NAMESPACE: "slurm"
+      FORCE_COLOR: "1"
+      # Keep build/deploy progress while suppressing continuous pod log streams.
+      TILT_LOG_SOURCE: "build"
+      # Explicit degraded lane until Attribution source is publicly fetchable.
+      # Public ON qualification remains a release blocker; never pass private keys here.
+      E2E_ATTRIBUTION_MODE: unavailable
+      E2E_PROFILE: ${{ matrix.profile }}
+      E2E_LOG_BACKEND: ${{ matrix.log_backend }}
+      # Unique per run so concurrent refs/reused daemons never collide on the name.
+      CLUSTER_NAME: heimdall-e2e-${{ github.run_id }}-${{ matrix.cluster_suffix }}
+      # Reuse main's optional CI mirrors; public installs retain upstream defaults.
+      BITNAMI_OCI_REGISTRY_MIRROR: ${{ secrets.BITNAMI_OCI_REGISTRY_MIRROR }}
+      DOCKER_HUB_REGISTRY_MIRROR: ${{ secrets.DOCKER_HUB_REGISTRY_MIRROR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up uv with cache
+        uses: ./.github/actions/setup-uv-cache
+        with:
+          cache-role: e2e-${{ matrix.profile }}-${{ matrix.log_backend }}
+
+      - name: Initialize E2E status
+        run: |
+          mkdir -p "reports/e2e/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state"
+          printf 'failed\n' > "reports/e2e/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/status"
+
+      - name: Docker preflight
+        # Fail fast with a clear signal if the dind sidecar's daemon is unreachable,
+        # rather than a confusing Kind error later.
+        run: |
+          docker version
+          docker info >/dev/null
+
+      - name: Set inotify limits
+        run: |
+          sudo sysctl -w fs.inotify.max_user_watches=524288
+          sudo sysctl -w fs.inotify.max_user_instances=512
+
+      - name: Run e2e harness
+        run: |
+          bash scripts/ci/e2e/e2e.sh
+          printf 'passed\n' > "reports/e2e/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/status"
+
+      - name: Upload E2E status
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: e2e-status-${{ matrix.profile }}-${{ matrix.log_backend }}-job_state
+          path: reports/e2e/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/status
+          if-no-files-found: error
+
+      - name: Upload E2E XUnit report
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: e2e-xunit-${{ matrix.profile }}-${{ matrix.log_backend }}-job_state
+          path: reports/e2e/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/junit.xml
+          if-no-files-found: error
+
+      - name: Upload E2E trace
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: e2e-trace-${{ matrix.profile }}-${{ matrix.log_backend }}
+          # Under pytest-xdist each worker writes its own trace-<worker>.json beside trace.json.
+          path: reports/e2e/${{ matrix.profile }}-${{ matrix.log_backend }}/job_state/trace*.json
+          if-no-files-found: warn
+
+      - name: Tear down Kind cluster
+        # Safety net for a hard-cancelled job that skips the harness EXIT trap.
+        if: always()
+        run: |
+          source scripts/ci/e2e/env.sh 2>/dev/null || true
+          kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true

@@ -1,0 +1,360 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ range $backend := list "loki" "victorialogs" -}}
+{{- $legacy := get $.Values.dependency_checker.log_query $backend | default dict -}}
+{{- range $domain := list "application" "system" -}}
+{{- $legacyKey := printf "%s_health_query" $domain -}}
+{{- if hasKey $legacy $legacyKey -}}
+{{- fail (printf "dependency_checker.log_query.%s.%s is no longer supported; use global.log_query.providers.%s.queries.health.%s" $backend $legacyKey $backend $domain) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if .Values.dependency_checker.enabled }}
+{{- $_ := required "dependency_checker.image.repository is required when the dependency checker is enabled" .Values.dependency_checker.image.repository -}}
+{{- $_ := required "dependency_checker.image.tag is required when the dependency checker is enabled" .Values.dependency_checker.image.tag -}}
+{{- $logQueryBackend := include "nvidia-recovery.logQueryBackend" . -}}
+{{- if not (has $logQueryBackend (list "loki" "victorialogs")) -}}
+{{- fail (printf "unsupported global.log_query.backend %q; expected loki or victorialogs" $logQueryBackend) -}}
+{{- end -}}
+{{- $logQueryConfig := .Values.global.log_query | default dict -}}
+{{- $providers := get $logQueryConfig "providers" | default dict -}}
+{{- $selectedProvider := get $providers $logQueryBackend | default dict -}}
+{{- $selectedQueries := get $selectedProvider "queries" | default dict -}}
+{{- $healthQueries := get $selectedQueries "health" | default dict -}}
+{{- $applicationHealthQuery := required (printf "global.log_query.providers.%s.queries.health.application is required when the dependency checker uses backend=%s" $logQueryBackend $logQueryBackend) (get $healthQueries "application") -}}
+{{- $systemHealthQuery := required (printf "global.log_query.providers.%s.queries.health.system is required when the dependency checker uses backend=%s" $logQueryBackend $logQueryBackend) (get $healthQueries "system") -}}
+{{- range $domain := list "application" "system" -}}
+{{- $_ := required (printf "global.log_query.providers.%s.%s.url is required by the dependency checker when backend=%s" $logQueryBackend $domain $logQueryBackend) (include "nvidia-recovery.logQueryProviderValue" (list $ $logQueryBackend $domain "url")) -}}
+{{- end -}}
+{{- if eq $logQueryBackend "victorialogs" -}}
+{{- $victoriaAppAccountID := include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "application" "account_id") -}}
+{{- $victoriaAppProjectID := include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "application" "project_id") -}}
+{{- $victoriaSystemAccountID := include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "system" "account_id") -}}
+{{- $victoriaSystemProjectID := include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "system" "project_id") -}}
+{{- if ne (empty $victoriaAppAccountID) (empty $victoriaAppProjectID) -}}
+{{- fail "global.log_query.providers.victorialogs.application.account_id and project_id must be configured together" -}}
+{{- end -}}
+{{- if ne (empty $victoriaSystemAccountID) (empty $victoriaSystemProjectID) -}}
+{{- fail "global.log_query.providers.victorialogs.system.account_id and project_id must be configured together" -}}
+{{- end -}}
+{{- if eq (include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "application" "require_tenant")) "true" -}}
+{{- $_ := required "global.log_query.providers.victorialogs.application tenant IDs are required by the dependency checker when require_tenant=true" $victoriaAppAccountID -}}
+{{- end -}}
+{{- if eq (include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "system" "require_tenant")) "true" -}}
+{{- $_ := required "global.log_query.providers.victorialogs.system tenant IDs are required by the dependency checker when require_tenant=true" $victoriaSystemAccountID -}}
+{{- end -}}
+{{- $victoriaCredentials := .Values.dependency_checker.log_query.victorialogs -}}
+{{- if ne (empty $victoriaCredentials.usernameSecretRef.name) (empty $victoriaCredentials.passwordSecretRef.name) -}}
+{{- fail "dependency_checker.log_query.victorialogs.usernameSecretRef and passwordSecretRef must be configured together" -}}
+{{- end -}}
+{{- if ne (empty $victoriaCredentials.appUsernameSecretRef.name) (empty $victoriaCredentials.appPasswordSecretRef.name) -}}
+{{- fail "dependency_checker.log_query.victorialogs.appUsernameSecretRef and appPasswordSecretRef must be configured together" -}}
+{{- end -}}
+{{- if ne (empty $victoriaCredentials.sysUsernameSecretRef.name) (empty $victoriaCredentials.sysPasswordSecretRef.name) -}}
+{{- fail "dependency_checker.log_query.victorialogs.sysUsernameSecretRef and sysPasswordSecretRef must be configured together" -}}
+{{- end -}}
+{{- $victoriaAppBearer := or $victoriaCredentials.appTokenSecretRef.name $victoriaCredentials.tokenSecretRef.name -}}
+{{- $victoriaSystemBearer := or $victoriaCredentials.sysTokenSecretRef.name $victoriaCredentials.tokenSecretRef.name -}}
+{{- $victoriaAppBasic := or $victoriaCredentials.appUsernameSecretRef.name $victoriaCredentials.usernameSecretRef.name -}}
+{{- $victoriaSystemBasic := or $victoriaCredentials.sysUsernameSecretRef.name $victoriaCredentials.usernameSecretRef.name -}}
+{{- if and $victoriaAppBearer $victoriaAppBasic -}}
+{{- fail "dependency_checker.log_query.victorialogs application bearer and Basic SecretRefs are mutually exclusive" -}}
+{{- end -}}
+{{- if and $victoriaSystemBearer $victoriaSystemBasic -}}
+{{- fail "dependency_checker.log_query.victorialogs system bearer and Basic SecretRefs are mutually exclusive" -}}
+{{- end -}}
+{{- if ne (empty $victoriaCredentials.clientCertSecretRef.name) (empty $victoriaCredentials.clientKeySecretRef.name) -}}
+{{- fail "dependency_checker.log_query.victorialogs.clientCertSecretRef and clientKeySecretRef must be configured together" -}}
+{{- end -}}
+{{- end -}}
+{{- $watcher := get .Values "watcher" | default dict -}}
+{{- $watcherConfig := get $watcher "config" | default dict -}}
+{{- $watcherQueries := get $selectedQueries "watcher" | default dict -}}
+{{- $watcherQueryPrefix := "" -}}
+{{/* A dormant or RabbitMQ Watcher must not add an unrelated log-query probe. */}}
+{{- if and (get $watcher "enabled") (has (get $watcherConfig "event_source" | default "log_query") (list "log_query" "loki")) -}}
+{{- $watcherQueryPrefix = get $watcherQueries "query_prefix" | default "" -}}
+{{- end -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heimdall-dependency-checker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: dependency-checker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dependency-checker
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.dependency_checker.metrics_port }}"
+      labels:
+        app.kubernetes.io/name: dependency-checker
+    spec:
+      {{- with (default .Values.global.imagePullSecrets .Values.dependency_checker.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: node-exporter
+        image: {{ .Values.dependency_checker.node_exporter_image.repository }}:{{ .Values.dependency_checker.node_exporter_image.tag }}
+        imagePullPolicy: {{ .Values.dependency_checker.node_exporter_image.pullPolicy }}
+        args:
+        - --web.listen-address=:{{ .Values.dependency_checker.metrics_port }}
+        - --web.disable-exporter-metrics
+        - --collector.disable-defaults
+        - --collector.textfile
+        - --collector.textfile.directory={{ .Values.dependency_checker.textfile_dir }}
+        ports:
+        - name: metrics
+          containerPort: {{ .Values.dependency_checker.metrics_port }}
+          protocol: TCP
+        volumeMounts:
+        - name: textfile-dir
+          mountPath: {{ .Values.dependency_checker.textfile_dir }}
+      - name: checker
+        image: {{ .Values.dependency_checker.image.repository }}:{{ .Values.dependency_checker.image.tag | default (default $.Chart.Version .Values.global.appVersion) }}
+        imagePullPolicy: {{ .Values.dependency_checker.image.pullPolicy }}
+        command: ["/bin/bash","-lc"]
+        args:
+        - |
+          chmod +x /scripts/*.sh || true;
+          while true; do /scripts/run.sh; sleep {{ .Values.dependency_checker.schedule_seconds }}; done
+        env:
+        # DB settings default to MySQL subchart/global settings
+        - name: DB_HOST
+          value: "{{ default "nvidia-recovery-mysql" (default (default "" .Values.global.mysql.secret.host) (default "" .Values.mysql.host)) }}"
+        - name: DB_PORT
+          value: "{{ default 3306 (default "" .Values.mysql.port) }}"
+        - name: DB_USER
+          value: "{{ default "root" (default "" .Values.global.mysql.secret.user) }}"
+        - name: DB_NAME
+          value: "{{ default "heimdall" (default "" .Values.global.mysql.secret.db) }}"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ default "nvidia-recovery-mysql" (default "" .Values.global.mysql.secret.name) }}
+              key: {{ default "mysql-root-password" (default "" .Values.global.mysql.secret.key) }}
+        # The selector is independent from backend provisioning and ingestion.
+        - name: LOG_QUERY_BACKEND
+          value: {{ $logQueryBackend | quote }}
+        - name: LOG_QUERY_RECENT_WINDOW_SECONDS
+          value: {{ .Values.dependency_checker.log_query.recent_window_seconds | quote }}
+        # Each domain uses only its explicitly configured provider connection.
+        - name: LOKI_APP_URL
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "loki" "application" "url") }}"
+        - name: LOKI_SYS_URL
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "loki" "system" "url") }}"
+        - name: LOKI_APP_TENANTS
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "loki" "application" "tenants") }}"
+        - name: LOKI_APP_ORG_ID
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "loki" "application" "org_id") }}"
+        - name: LOKI_SYS_TENANTS
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "loki" "system" "tenants") }}"
+        - name: LOKI_SYS_ORG_ID
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "loki" "system" "org_id") }}"
+        {{- if and (eq $logQueryBackend "loki") .Values.dependency_checker.log_query.loki.tokenSecretRef.name }}
+        - name: LOKI_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.loki.tokenSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.loki.tokenSecretRef.key }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.dependency_checker.log_query.loki.appTokenSecretRef.name }}
+        - name: LOKI_APP_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.loki.appTokenSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.loki.appTokenSecretRef.key }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "loki") .Values.dependency_checker.log_query.loki.sysTokenSecretRef.name }}
+        - name: LOKI_SYS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.loki.sysTokenSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.loki.sysTokenSecretRef.key }}
+        {{- end }}
+        - name: LOKI_CLUSTER
+          value: "{{ default "" .Values.global.loki.loki_cluster }}"
+        - name: VICTORIALOGS_APP_URL
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "application" "url") }}"
+        - name: VICTORIALOGS_SYS_URL
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "system" "url") }}"
+        - name: VICTORIALOGS_APP_ACCOUNT_ID
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "application" "account_id") }}"
+        - name: VICTORIALOGS_APP_PROJECT_ID
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "application" "project_id") }}"
+        - name: VICTORIALOGS_APP_REQUIRE_TENANT
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "application" "require_tenant") }}"
+        - name: VICTORIALOGS_SYS_ACCOUNT_ID
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "system" "account_id") }}"
+        - name: VICTORIALOGS_SYS_PROJECT_ID
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "system" "project_id") }}"
+        - name: VICTORIALOGS_SYS_REQUIRE_TENANT
+          value: "{{ include "nvidia-recovery.logQueryProviderValue" (list . "victorialogs" "system" "require_tenant") }}"
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.tokenSecretRef.name }}
+        - name: VICTORIALOGS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.victorialogs.tokenSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.victorialogs.tokenSecretRef.key }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.appTokenSecretRef.name }}
+        - name: VICTORIALOGS_APP_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.victorialogs.appTokenSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.victorialogs.appTokenSecretRef.key }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.sysTokenSecretRef.name }}
+        - name: VICTORIALOGS_SYS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.victorialogs.sysTokenSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.victorialogs.sysTokenSecretRef.key }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.usernameSecretRef.name }}
+        - name: VICTORIALOGS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.victorialogs.usernameSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.victorialogs.usernameSecretRef.key }}
+        - name: VICTORIALOGS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.victorialogs.passwordSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.victorialogs.passwordSecretRef.key }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.appUsernameSecretRef.name }}
+        - name: VICTORIALOGS_APP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.victorialogs.appUsernameSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.victorialogs.appUsernameSecretRef.key }}
+        - name: VICTORIALOGS_APP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.victorialogs.appPasswordSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.victorialogs.appPasswordSecretRef.key }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.sysUsernameSecretRef.name }}
+        - name: VICTORIALOGS_SYS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.victorialogs.sysUsernameSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.victorialogs.sysUsernameSecretRef.key }}
+        - name: VICTORIALOGS_SYS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dependency_checker.log_query.victorialogs.sysPasswordSecretRef.name }}
+              key: {{ .Values.dependency_checker.log_query.victorialogs.sysPasswordSecretRef.key }}
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.caCertSecretRef.name }}
+        - name: VICTORIALOGS_CA_CERT
+          value: /secrets/victorialogs-ca/ca.crt
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.clientCertSecretRef.name }}
+        - name: VICTORIALOGS_CERT_FILE
+          value: /secrets/victorialogs-client-cert/tls.crt
+        - name: VICTORIALOGS_KEY_FILE
+          value: /secrets/victorialogs-client-key/tls.key
+        {{- end }}
+        # Dedicated provider-native probes; Attribution workload templates are
+        # deliberately not reused by the dependency checker.
+        - name: LOG_QUERY_APP_HEALTH_QUERY_B64
+          value: "{{ $applicationHealthQuery | b64enc }}"
+        - name: LOG_QUERY_SYS_HEALTH_QUERY_B64
+          value: "{{ $systemHealthQuery | b64enc }}"
+        # Prometheus from global
+        - name: PROM_URL
+          value: "{{ default "" .Values.global.prometheus.prometheus_url }}"
+        - name: PROM_TENANT
+          value: "{{ default "" .Values.global.prometheus.prometheus_tenants }}"
+        - name: PROM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: heimdall-prometheus-token
+              key: token
+        - name: PROM_CLUSTER
+          value: "{{ default "" .Values.global.prometheus.prometheus_cluster }}"
+        - name: WCH_QUERY_PREFIX_B64
+          value: "{{ $watcherQueryPrefix | b64enc }}"
+        # Slack from global
+        - name: SLACK_CHANNEL
+          value: "{{ default "" (default "" .Values.notifications.app.slackChannel) }}"
+        - name: SLACK_ENABLED
+          value: "{{ if and .Values.notifications .Values.notifications.app .Values.notifications.app.slackEnabled }}true{{ else }}false{{ end }}"
+        - name: SLACK_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: nvidia-recovery-slack-token
+              key: token
+        # FQDN from dashboard
+        - name: FQDN_HOST
+          value: "{{ default "" .Values.dashboard.ingress_fqdn }}"
+        - name: FQDN_PATH
+          value: "/mission-control"
+        - name: TEXTFILE_DIR
+          value: "{{ .Values.dependency_checker.textfile_dir }}"
+        {{- include "heimdall.otelEnv" . | nindent 8 }}
+        volumeMounts:
+        - name: checker-scripts
+          mountPath: /scripts
+        - name: textfile-dir
+          mountPath: {{ .Values.dependency_checker.textfile_dir }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.caCertSecretRef.name }}
+        - name: victorialogs-ca
+          mountPath: /secrets/victorialogs-ca
+          readOnly: true
+        {{- end }}
+        {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.clientCertSecretRef.name }}
+        - name: victorialogs-client-cert
+          mountPath: /secrets/victorialogs-client-cert
+          readOnly: true
+        - name: victorialogs-client-key
+          mountPath: /secrets/victorialogs-client-key
+          readOnly: true
+        {{- end }}
+        {{- with .Values.dependency_checker.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.dependency_checker.resources | nindent 10 }}
+      volumes:
+      - name: checker-scripts
+        configMap:
+          name: dependency-checker-scripts
+          defaultMode: 0755
+      - name: textfile-dir
+        emptyDir: {}
+      {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.caCertSecretRef.name }}
+      - name: victorialogs-ca
+        secret:
+          secretName: {{ .Values.dependency_checker.log_query.victorialogs.caCertSecretRef.name }}
+          items:
+          - key: {{ .Values.dependency_checker.log_query.victorialogs.caCertSecretRef.key }}
+            path: ca.crt
+      {{- end }}
+      {{- if and (eq $logQueryBackend "victorialogs") .Values.dependency_checker.log_query.victorialogs.clientCertSecretRef.name }}
+      - name: victorialogs-client-cert
+        secret:
+          secretName: {{ .Values.dependency_checker.log_query.victorialogs.clientCertSecretRef.name }}
+          items:
+          - key: {{ .Values.dependency_checker.log_query.victorialogs.clientCertSecretRef.key }}
+            path: tls.crt
+      - name: victorialogs-client-key
+        secret:
+          secretName: {{ .Values.dependency_checker.log_query.victorialogs.clientKeySecretRef.name }}
+          items:
+          - key: {{ .Values.dependency_checker.log_query.victorialogs.clientKeySecretRef.key }}
+            path: tls.key
+      {{- end }}
+      {{- with .Values.dependency_checker.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+{{- end }}

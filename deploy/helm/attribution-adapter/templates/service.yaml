@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "attribution-adapter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "attribution-adapter.labels" . | nindent 4 }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "{{ .Values.metrics_port }}"
+    prometheus.io/path: "/metrics"
+spec:
+  type: {{ .Values.service_type | default "ClusterIP" }}
+  selector:
+    {{- include "attribution-adapter.selectorLabels" . | nindent 4 }}
+  ports:
+  # HTTP API for POST /v1/attribution and GET /healthz (called by the Policy Engine).
+  - name: http
+    port: {{ .Values.port }}
+    targetPort: {{ .Values.port }}
+  # Prometheus metrics endpoint (adi_* metrics moved from the Policy Engine, §12.4).
+  - name: metrics
+    port: {{ .Values.metrics_port }}
+    targetPort: {{ .Values.metrics_port }}

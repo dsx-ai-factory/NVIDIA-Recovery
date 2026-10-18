@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.lokiNodeWrite.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.lokiNodeWrite.serviceName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: loki-node-write
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: heimdall-oss
+spec:
+  type: ExternalName
+  externalName: {{ required "lokiNodeWrite.externalName is required" .Values.lokiNodeWrite.externalName }}
+  ports:
+    - name: http
+      port: {{ .Values.lokiNodeWrite.port }}
+      protocol: TCP
+      targetPort: {{ .Values.lokiNodeWrite.port }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.lokiNodeWrite.serviceName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: loki-node-write
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: heimdall-oss
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: {{ required "lokiNodeWrite.authSecretName is required" .Values.lokiNodeWrite.authSecretName | quote }}
+    nginx.ingress.kubernetes.io/auth-realm: "Heimdall node log writer"
+    {{- with .Values.lokiNodeWrite.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ required "lokiNodeWrite.ingressClassName is required" .Values.lokiNodeWrite.ingressClassName }}
+  rules:
+    - host: {{ required "lokiNodeWrite.host is required" .Values.lokiNodeWrite.host | quote }}
+      http:
+        paths:
+          - path: {{ required "lokiNodeWrite.path is required" .Values.lokiNodeWrite.path }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $.Values.lokiNodeWrite.serviceName }}
+                port:
+                  number: {{ $.Values.lokiNodeWrite.port }}
+{{- end }}

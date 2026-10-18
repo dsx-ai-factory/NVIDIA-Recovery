@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if and .Values.ingress.enabled (ne (default "ingress" ((.Values.global).routing).type) "gateway") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "api-gateway.fullname" . }}
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+{{- if or .Values.ingress.annotations .Values.ingress.grpc.enabled }}
+  annotations:
+    {{- if .Values.ingress.grpc.enabled }}
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    {{- end }}
+    {{- if .Values.ingress.annotations }}
+    {{- tpl (toYaml .Values.ingress.annotations) . | nindent 4 }}
+    {{- end }}
+{{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  rules:
+    - host: {{ .Values.ingress.fqdn }}
+      http:
+        paths:
+          {{- if .Values.ingress.grpc.enabled }}
+          - path: {{ .Values.ingress.grpc.base_path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "api-gateway.fullname" . }}
+                port:
+                  name: grpc
+          {{- else }}
+          - path: {{ .Values.ingress.base_path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "api-gateway.fullname" . }}
+                port:
+                  name: rest
+          {{- end }}
+  tls:
+  - hosts:
+    - {{ .Values.ingress.fqdn }}
+    {{- if .Values.ingress.tls.secretName }}
+    secretName: {{ .Values.ingress.tls.secretName | quote }}
+    {{- end }}
+{{ end }}

@@ -1,0 +1,32 @@
+anomaly:
+  host: localhost
+  port: 5672
+  virtual_host: "/"
+  username: guest
+  password: guest
+
+  exchange: anomaly_exchange
+  queue: test_anomaly_queue
+  routing_key: job.anomaly.crash
+
+job_update:
+  host: localhost
+  port: 5672
+  virtual_host: "/"
+  username: guest
+  password: guest
+
+  exchange: test_wc_eventbus_exchange
+  queue: test_job_queue
+  routing_key: test.job.updates
+
+anomaly_attribution:
+  host: localhost
+  port: 5672
+  virtual_host: "/"
+  username: guest
+  password: guest
+
+  exchange: anomaly_isolator_exchange
+  queue: anomaly_attribution_queue
+  routing_key: anomaly_isolator.attribution

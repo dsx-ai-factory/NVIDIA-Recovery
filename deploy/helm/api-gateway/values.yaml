@@ -1,0 +1,172 @@
+# Default values for API Gateway.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+global: {}
+
+replicaCount: 1
+
+image:
+  repository: ""
+  name: api-gateway
+  pullPolicy: Always
+  tag: ""
+
+logging:
+  format: "json"
+
+# OTel SDK configuration. `otel.enabled` initialises the OTel SDK (tracing,
+# metrics, logging). OTLP export settings come from the umbrella chart's
+# `global.otelcollector` section.
+otel:
+  enabled: false
+  serviceName: "nvidia-recovery-api-gateway"
+  serviceVersion: "1.0.0"
+  insecure: false
+  sampleRate: 1.0
+
+metricsTelemetry:
+  enabled: false
+  port: 9092
+  serverEndpoint: "0.0.0.0:9092"
+
+ingress:
+  enabled: false
+  fqdn: ""
+  base_path: "/mission-control/recovery-engine-api"
+  ingressClassName: nginx
+  annotations: {}
+  tls:
+    # Name of a Secret containing tls.crt and tls.key. Leave empty to retain
+    # the existing Ingress-controller default-certificate behavior.
+    secretName: ""
+    certManager:
+      # Requires an existing cert-manager installation. This chart never
+      # installs cert-manager or creates a certificate authority.
+      enabled: false
+      issuerRef:
+        name: ""
+        kind: ClusterIssuer
+        group: cert-manager.io
+  grpc:
+    enabled: false
+    base_path: "/"
+
+gateway:
+  parentRef:
+    name: ""
+    namespace: ""
+    sectionName: ""
+
+externalService:
+  enabled: true
+  # Annotations for the Service exposing the public REST and gRPC listeners.
+  annotations: {}
+internalService:
+  # Annotations for the always-present Service exposing the internal listeners.
+  annotations: {}
+# Applies to both Services. For LoadBalancer, configure private networking
+# annotations for both externalService and internalService.
+service_type: ClusterIP
+
+# On busy clusters it can be useful to delay shutdown of the server
+# https://freecontent.manning.com/handling-client-requests-properly-with-kubernetes/
+prestopDelay: 5
+
+ports:
+  rest: 8080
+  grpc: 9090
+  restInternal: 8081
+  grpcInternal: 9091
+
+urlPrefix: "/mission-control/recovery-engine-api"
+internalUrlPrefix: ""
+publicBaseUrl: "http://localhost:8080"
+
+auth:
+  insecure: false
+  secureCookie: true
+  cookieSecretName: "heimdall-cookie-secret"
+  cookieSecretKey: "HEIMDALL_OIDC_COOKIE_KEY"
+
+  oidc:
+    enabled: false
+    providerUrl: ""
+    clientId: ""
+    clientSecretName: "oidc-client-secret"
+    clientSecretKey: "HEIMDALL_OIDC_CLIENT_SECRET"
+    scopes: "openid,profile,email"
+    subjectClaim: "sub"
+    clientIdClaim: "client_id"
+    scopesClaim: "scope"
+
+  jwt:
+    enabled: false
+    issuer: ""
+    audiences: ""
+    jwksUrl: ""
+    subjectClaim: "sub"
+    # Exact allowed values of subjectClaim for this issuer; empty permits any subject.
+    allowedSubjects: []
+    clientIdClaim: "client_id"
+    scopesClaim: "scope"
+
+  kubernetes:
+    # Enables Kubernetes TokenReview authentication for the internal endpoint.
+    enabled: false
+    audience: ""
+    expectedServiceAccount: ""
+
+
+nameOverride: ""
+fullnameOverride: ""
+
+jobs:
+  source: "jobmanager"
+  endpoint: "http://job-manager:8080"
+
+audit:
+  # The Notifications Kubernetes Service keeps its name until the service rename.
+  endpoint: "http://notifications:8080"
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  automount: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+imagePullSecrets: []
+
+nodeSelector: {}
+
+tolerations: []
+
+volumes: []
+
+volumeMounts: []

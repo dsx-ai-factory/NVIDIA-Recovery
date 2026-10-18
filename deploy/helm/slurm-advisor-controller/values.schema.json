@@ -1,0 +1,526 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Slurm advisor controller chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "annotations": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "duration": {
+      "type": "string",
+      "minLength": 1
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "minLength": 1 },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "resourceList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu", "memory"],
+      "properties": {
+        "cpu": { "type": "string", "minLength": 1 },
+        "memory": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": { "$ref": "#/definitions/resourceList" },
+        "limits": { "$ref": "#/definitions/resourceList" }
+      }
+    },
+    "metricsEndpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "bindAddress", "port"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "bindAddress": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "partitionAllowlist": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "auditTrail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["destination", "maxBatchSize", "bufferSize", "flushInterval"],
+      "properties": {
+        "destination": { "type": "string", "enum": ["", "logging", "gateway"] },
+        "maxBatchSize": { "type": "integer" },
+        "bufferSize": { "type": "integer" },
+        "flushInterval": { "$ref": "#/definitions/duration" }
+      }
+    },
+    "logLinkStorage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mountPath"],
+      "properties": {
+        "mountPath": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/"
+        },
+        "claimName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+        },
+        "hostPath": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["claimName"],
+          "not": { "required": ["hostPath"] }
+        },
+        {
+          "required": ["hostPath"],
+          "not": { "required": ["claimName"] }
+        }
+      ]
+    },
+    "logLinks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "destination",
+        "sources",
+        "applicationPatterns",
+        "scanInterval",
+        "cleanupInterval",
+        "retention",
+        "scanTimeout",
+        "maxPathLength",
+        "maxPathsPerSync",
+        "maxPatterns",
+        "maxScanDirectories",
+        "maxEntriesPerDirectory",
+        "maxMatchesPerScan",
+        "maxOwnedLinks"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "destination": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "maxProperties": 0
+            },
+            { "$ref": "#/definitions/logLinkStorage" }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/logLinkStorage" }
+        },
+        "applicationPatterns": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "scanInterval": { "$ref": "#/definitions/duration" },
+        "cleanupInterval": { "$ref": "#/definitions/duration" },
+        "retention": { "$ref": "#/definitions/duration" },
+        "scanTimeout": { "$ref": "#/definitions/duration" },
+        "maxPathLength": { "type": "integer", "minimum": 1 },
+        "maxPathsPerSync": { "type": "integer", "minimum": 1 },
+        "maxPatterns": { "type": "integer", "minimum": 1 },
+        "maxScanDirectories": { "type": "integer", "minimum": 1 },
+        "maxEntriesPerDirectory": { "type": "integer", "minimum": 1 },
+        "maxMatchesPerScan": { "type": "integer", "minimum": 1 },
+        "maxOwnedLinks": { "type": "integer", "minimum": 1 }
+      }
+    }
+  },
+  "required": [
+    "nameOverride",
+    "fullnameOverride",
+    "image",
+    "imagePullSecrets",
+    "serviceAccount",
+    "podLabels",
+    "podAnnotations",
+    "podSecurityContext",
+    "containerSecurityContext",
+    "controller",
+    "watchdog",
+    "sackd",
+    "slurm",
+    "metrics",
+    "service",
+    "serviceMonitor",
+    "networkPolicy",
+    "initContainer",
+    "terminationGracePeriodSeconds",
+    "nodeSelector",
+    "tolerations",
+    "affinity"
+  ],
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "global": { "type": "object" },
+    "nameOverride": { "type": "string", "maxLength": 63 },
+    "fullnameOverride": { "type": "string", "maxLength": 63 },
+    "image": { "$ref": "#/definitions/image" },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "name", "annotations"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string", "maxLength": 63 },
+        "annotations": { "$ref": "#/definitions/annotations" }
+      }
+    },
+    "podLabels": { "$ref": "#/definitions/labels" },
+    "podAnnotations": { "$ref": "#/definitions/annotations" },
+    "podSecurityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runAsNonRoot",
+        "runAsUser",
+        "runAsGroup",
+        "fsGroup",
+        "fsGroupChangePolicy",
+        "seccompProfile"
+      ],
+      "properties": {
+        "runAsNonRoot": { "const": true },
+        "runAsUser": { "const": 401 },
+        "runAsGroup": { "const": 401 },
+        "fsGroup": { "const": 401 },
+        "fsGroupChangePolicy": { "const": "OnRootMismatch" },
+        "seccompProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "RuntimeDefault" }
+          }
+        }
+      }
+    },
+    "containerSecurityContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowPrivilegeEscalation", "readOnlyRootFilesystem", "capabilities"],
+      "properties": {
+        "allowPrivilegeEscalation": { "const": false },
+        "readOnlyRootFilesystem": { "const": true },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["drop"],
+          "properties": {
+            "drop": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": { "const": "ALL" }
+            }
+          }
+        }
+      }
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "heimdallEndpoint",
+        "mode",
+        "acknowledgeSchedulerActions",
+        "logLevel",
+        "pollInterval",
+        "slurmExecTimeout",
+        "logMetadataRefreshInterval",
+        "logMetadataEnrichmentTimeout",
+        "jobUpsertWorkerPoolSize",
+        "accountingWorkerPoolSize",
+        "accountingTimeout",
+        "failedJobRecoveryTimeout",
+        "adviceLoopTimeout",
+        "adviceItemTimeout",
+        "adviceMaxAge",
+        "requeueHoldDelay",
+        "enableEagerRequeue",
+        "bootstrapFailureLookback",
+        "environment",
+        "userAllowlist",
+        "partitionAllowlist",
+        "versionedSqueueJSON",
+        "updateEligibleTimeAfterRequeue",
+        "auditTrail",
+        "kubernetesAuth",
+        "logLinks",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+        },
+        "heimdallEndpoint": { "type": "string", "minLength": 1 },
+        "gatewayTLS": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "serverName", "caConfigMap"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "serverName": { "type": "string" },
+            "caConfigMap": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "key"],
+              "properties": {
+                "name": { "type": "string" },
+                "key": { "type": "string", "minLength": 1, "pattern": "^[a-zA-Z0-9._-]+$" }
+              }
+            }
+          }
+        },
+        "mode": { "type": "string", "enum": ["ignore", "observe", "act"] },
+        "acknowledgeSchedulerActions": { "type": "boolean" },
+        "logLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error", "dpanic", "panic", "fatal"]
+        },
+        "pollInterval": { "$ref": "#/definitions/duration" },
+        "slurmExecTimeout": { "$ref": "#/definitions/duration" },
+        "logMetadataRefreshInterval": { "$ref": "#/definitions/duration" },
+        "logMetadataEnrichmentTimeout": { "$ref": "#/definitions/duration" },
+        "jobUpsertWorkerPoolSize": { "type": "integer", "minimum": 1 },
+        "accountingWorkerPoolSize": { "type": "integer", "minimum": 1 },
+        "accountingTimeout": { "$ref": "#/definitions/duration" },
+        "failedJobRecoveryTimeout": { "$ref": "#/definitions/duration" },
+        "adviceLoopTimeout": { "$ref": "#/definitions/duration" },
+        "adviceItemTimeout": { "$ref": "#/definitions/duration" },
+        "adviceMaxAge": { "$ref": "#/definitions/duration" },
+        "requeueHoldDelay": { "$ref": "#/definitions/duration" },
+        "enableEagerRequeue": { "type": "boolean" },
+        "bootstrapFailureLookback": { "$ref": "#/definitions/duration" },
+        "environment": { "type": "string", "minLength": 1 },
+        "userAllowlist": {
+          "description": "Temporary initial internal rollout action selection shared by SAC and watchdog; explicit job mode takes precedence and monitoring is unchanged. Will be deprecated soon and may be removed without notice.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "pattern": "^[^,\\s]+$" },
+          "uniqueItems": true
+        },
+        "partitionAllowlist": { "$ref": "#/definitions/partitionAllowlist" },
+        "versionedSqueueJSON": { "type": "boolean" },
+        "updateEligibleTimeAfterRequeue": { "type": "boolean" },
+        "auditTrail": { "$ref": "#/definitions/auditTrail" },
+        "kubernetesAuth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "audience", "expirationSeconds"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "audience": { "type": "string" },
+            "expirationSeconds": { "type": "integer", "minimum": 600, "maximum": 31536000 }
+          }
+        },
+        "logLinks": { "$ref": "#/definitions/logLinks" },
+        "resources": { "$ref": "#/definitions/resources" }
+      }
+    },
+    "watchdog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "image",
+        "mode",
+        "acknowledgeSchedulerActions",
+        "pollInterval",
+        "releaseTimeout",
+        "cleanupGracePeriod",
+        "slurmExecTimeout",
+          "partitionAllowlist",
+          "versionedSqueueJSON",
+          "logLevel",
+          "auditTrail",
+          "resources",
+          "replicas"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicas": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+        },
+        "image": { "$ref": "#/definitions/image" },
+        "mode": { "type": "string", "enum": ["observe", "act"] },
+        "acknowledgeSchedulerActions": { "type": "boolean" },
+        "environmentPattern": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        },
+        "pollInterval": { "$ref": "#/definitions/duration" },
+        "releaseTimeout": { "$ref": "#/definitions/duration" },
+        "cleanupGracePeriod": { "$ref": "#/definitions/duration" },
+        "slurmExecTimeout": { "$ref": "#/definitions/duration" },
+        "partitionAllowlist": { "$ref": "#/definitions/partitionAllowlist" },
+        "versionedSqueueJSON": { "type": "boolean" },
+        "logLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error", "dpanic", "panic", "fatal"]
+        },
+        "auditGatewayEndpoint": { "type": "string" },
+        "auditTrail": { "$ref": "#/definitions/auditTrail" },
+        "resources": { "$ref": "#/definitions/resources" }
+      }
+    },
+    "sackd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "confServer", "runtimeDirectory", "resources"],
+      "properties": {
+        "image": { "$ref": "#/definitions/image" },
+        "confServer": { "type": "string", "minLength": 1 },
+        "runtimeDirectory": { "const": "/run/slurm" },
+        "resources": { "$ref": "#/definitions/resources" }
+      }
+    },
+    "slurm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authSecret"],
+      "properties": {
+        "authSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "key"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+            },
+            "key": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["controller", "watchdog"],
+      "properties": {
+        "controller": { "$ref": "#/definitions/metricsEndpoint" },
+        "watchdog": { "$ref": "#/definitions/metricsEndpoint" }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotations"],
+      "properties": {
+        "annotations": { "$ref": "#/definitions/annotations" }
+      }
+    },
+    "serviceMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "labels", "interval", "scrapeTimeout"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "labels": { "$ref": "#/definitions/labels" },
+        "interval": { "$ref": "#/definitions/duration" },
+        "scrapeTimeout": { "$ref": "#/definitions/duration" }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "ingress", "egress"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "ingress": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "egress": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        }
+      }
+    },
+    "initContainer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resources"],
+      "properties": {
+        "replicas": {
+            "type": "integer",
+            "minimum": 0
+        },
+        "resources": { "$ref": "#/definitions/resources" }
+      }
+    },
+    "terminationGracePeriodSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "affinity": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

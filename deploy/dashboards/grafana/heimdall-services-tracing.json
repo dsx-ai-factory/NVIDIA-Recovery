@@ -1,0 +1,440 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 6806,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 3,
+      "panels": [],
+      "title": "Span Explorer",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "${tempo}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace Name"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace Service"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "${tempo}"
+          },
+          "limit": 50,
+          "query": "{resource.service.name=~\"${service:pipe}\" && resource.cluster=~\"${cluster:pipe}\" && resource.k8s.environment.name=~\"${environment:pipe}\"} && {name=~\"${operation:pipe}\"} | select(span.job_id, span.environment, span.service)",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "spans"
+        }
+      ],
+      "title": "Spans by Service",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Trace Name": true,
+              "Trace Service": true
+            },
+            "indexByName": {
+              "Span ID": 0,
+              "span.job_id": 1,
+              "job_id": 1,
+              "service.name": 2,
+              "Name": 3,
+              "Start time": 4,
+              "cluster": 5,
+              "k8s.environment.name": 6,
+              "span.environment": 7,
+              "environment": 7,
+              "span.service": 8,
+              "service": 8,
+              "Duration": 9,
+              "traceIdHidden": 10
+            },
+            "renameByName": {
+              "span.job_id": "Job ID",
+              "job_id": "Job ID",
+              "service.name": "Service",
+              "cluster": "Cluster",
+              "k8s.environment.name": "Environment",
+              "span.environment": "Environment (span)",
+              "environment": "Environment (span)",
+              "span.service": "Service (span)",
+              "service": "Service (span)"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "${tempo}"
+      },
+      "gridPos": {
+        "h": 18,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 7,
+      "options": {},
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "${tempo}"
+          },
+          "query": "${traceID}",
+          "queryType": "traceql",
+          "refId": "A"
+        }
+      ],
+      "title": "Trace Detail",
+      "type": "traces"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "id": 1,
+      "panels": [],
+      "title": "Trace Explorer",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "${tempo}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace ID"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 310
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace Name"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "id": 2,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "pluginVersion": "12.3.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "${tempo}"
+          },
+          "limit": 50,
+          "query": "{resource.service.name=~\"${service:pipe}\" && resource.cluster=~\"${cluster:pipe}\" && resource.k8s.environment.name=~\"${environment:pipe}\"} && {name=~\"${operation:pipe}\"}",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "traces"
+        }
+      ],
+      "title": "Recent Traces",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Trace Name": true
+            },
+            "indexByName": {
+              "Trace ID": 0,
+              "Trace Service": 1,
+              "Start time": 2,
+              "Duration": 3,
+              "traceIdHidden": 4
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 42,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "name": "tempo",
+        "label": "Tempo datasource",
+        "type": "datasource",
+        "query": "tempo",
+        "current": {},
+        "options": [],
+        "refresh": 1,
+        "regex": ""
+      },
+      {
+        "name": "cluster",
+        "label": "Cluster",
+        "type": "textbox",
+        "query": "",
+        "current": {},
+        "options": [],
+        "description": "Enter the cluster label value for your deployment."
+      },
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "textbox",
+        "query": "",
+        "current": {},
+        "options": [],
+        "description": "Enter the environment label value for your deployment."
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "text": [
+            "watcher",
+            "job_manager",
+            "anomaly_detection_isolator"
+          ],
+          "value": [
+            "watcher",
+            "job_manager",
+            "anomaly_detection_isolator"
+          ]
+        },
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "service",
+        "options": [
+          {
+            "selected": true,
+            "text": "watcher",
+            "value": "watcher"
+          },
+          {
+            "selected": true,
+            "text": "job_manager",
+            "value": "job_manager"
+          },
+          {
+            "selected": true,
+            "text": "anomaly_detection_isolator",
+            "value": "anomaly_detection_isolator"
+          }
+        ],
+        "query": "watcher,job_manager,anomaly_detection_isolator",
+        "type": "custom"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "$__all",
+          "value": "$__all"
+        },
+        "includeAll": true,
+        "label": "Operation",
+        "multi": true,
+        "name": "operation",
+        "options": [
+          {
+            "selected": false,
+            "text": "job_event.detection",
+            "value": "job_event.detection"
+          },
+          {
+            "selected": false,
+            "text": "job_anomaly.attribution",
+            "value": "job_anomaly.attribution"
+          }
+        ],
+        "query": "job_event.detection,job_anomaly.attribution",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "description": "Paste a Trace ID to view its waterfall",
+        "label": "Trace ID",
+        "name": "traceID",
+        "options": [],
+        "query": "",
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
+  "timezone": "browser",
+  "title": "Heimdall Traces",
+  "uid": "mm6vqfv",
+  "version": 12
+}

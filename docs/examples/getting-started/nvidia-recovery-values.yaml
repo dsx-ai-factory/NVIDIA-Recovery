@@ -1,0 +1,233 @@
+# Attribution-enabled evaluation values for the NVIDIA Recovery umbrella chart.
+#
+# Before installing, replace:
+#   registry.example.com/acme/nvidia-recovery
+#   v1
+#   customer-slurm
+#
+# These values deliberately use bundled, single-instance MySQL, RabbitMQ, and
+# Loki. They are not a production deployment.
+
+global:
+  security:
+    allowInsecureImages: true
+  imagePullSecrets:
+    - name: heimdall-registry
+  loki:
+    bundled:
+      enabled: true
+  # This walkthrough intentionally uses Loki for both queries and ingestion.
+  # Query selection is independent from the bundled backend above.
+  log_query:
+    backend: loki
+    providers:
+      loki:
+        application:
+          url: http://loki-gateway
+          tenants: ""
+          org_id: ""
+        system:
+          url: http://loki-gateway
+          tenants: ""
+          org_id: ""
+        queries:
+          attribution:
+            application: >-
+              {{cluster='customer-slurm', appName='slurm-app-log', job_id='{}'}}
+            system: >-
+              {cluster='customer-slurm', component='journal'}
+            epilogue: >-
+              {{cluster='customer-slurm', component='journal'}} |= `epilog_slurmd_{}`
+          watcher:
+            query_prefix: '{cluster="customer-slurm", appName="slurm-app-log"}'
+  rabbitmq:
+    secret:
+      create: true
+      name: heimdall-rabbitmq
+      password_key: rabbitmq-password
+      cookie_key: rabbitmq-erlang-cookie
+
+rabbitmq:
+  enabled: true
+  image:
+    repository: bitnamilegacy/rabbitmq
+    tag: 4.0.4-debian-12-r1
+  auth:
+    username: heimdall
+    existingPasswordSecret: heimdall-rabbitmq
+    existingErlangSecret: heimdall-rabbitmq
+  extraConfiguration: |
+    default_vhost = default-vhost
+    default_permissions.configure = .*
+    default_permissions.read = .*
+    default_permissions.write = .*
+
+api-gateway:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+  externalService:
+    enabled: true
+  service_type: ClusterIP
+  auth:
+    # Evaluation only. Configure an authentication mode before production.
+    insecure: true
+  jobs:
+    source: jobmanager
+    endpoint: http://job-manager:8080
+  audit:
+    endpoint: http://heimdall-notifications:8080
+
+dashboard:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+  ingress_fqdn: ""
+  db:
+    protocol: mysql
+    user: heimdall
+    host: nvidia-recovery-mysql
+    port: "3306"
+    database: heimdall_database
+  app:
+    DATADOG_ENABLED: false
+    FACT_ENABLED: false   # Separate browser integration; keep disabled.
+    datadogWatcherURL: ""
+    apiGatewayURL: http://heimdall-api-gateway:8080
+    METRICS_ENABLED: false
+    API_KEYS_ENABLED: false
+    JOB_NODE_ANALYSIS_ENABLED: false
+    JOB_GROUPS_ENABLED: false
+
+notifications:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+  app:
+    callbackEnabled: false
+    cockpitProtocol: http
+    cockpitFQDN: localhost:3001
+  db:
+    protocol: mysql+pymysql
+    user: heimdall
+    host: nvidia-recovery-mysql
+    port: "3306"
+    database: heimdall_database
+    mysql_secret_name: nvidia-recovery-mysql
+    mysql_secret_key: mysql-password
+
+watcher:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: 384Mi
+  credentials:
+    rabbitmq:
+      secret_name: heimdall-rabbitmq
+      secret_key_name: rabbitmq-password
+  config:
+    environment: customer-slurm
+    datasources:
+      log_query_policy:
+        query_delay: 0
+        label_remapping_enabled: true
+      rabbitmq:
+        publisher:
+          host: heimdall-rabbitmq
+          username: heimdall
+          vhost: default-vhost
+          exchange: watcher_eventbus_exchange
+
+anomaly-detection-isolator:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: 384Mi
+  credentials:
+    rabbitmq:
+      secret_name: heimdall-rabbitmq
+      secret_key_name: rabbitmq-password
+  event_bus:
+    host: heimdall-rabbitmq
+    username: heimdall
+    port: 5672
+    vhost: default-vhost
+  job_manager:
+    host: http://job-manager
+    port: 8080
+  attribution_enabled: true
+  # This walkthrough does not configure scheduler epilog health-check logs.
+  slow_signals_enabled: false
+
+job-manager:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+  credentials:
+    rabbitmq:
+      secret_name: heimdall-rabbitmq
+      secret_key_name: rabbitmq-password
+    mysql_secret_name: nvidia-recovery-mysql
+    mysql_secret_key_name: mysql-password
+  event_bus:
+    host: heimdall-rabbitmq
+    username: heimdall
+    vhost: default-vhost
+  storage:
+    mode: MYSQL
+    sql:
+      host: nvidia-recovery-mysql
+      port: 3306
+      username: heimdall
+      database_name: heimdall_database
+# Helm owns the provider and adapter; their URLs follow this release's names.
+attribution-adapter:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: 384Mi
+  lepton_base_url: ""
+  loki:
+    loki_cluster: customer-slurm
+  prometheus:
+    prometheus_url: ""
+    prometheus_cluster: customer-slurm
+    prometheus_checks_enabled: false
+attribution-service:
+  enabled: true
+  image:
+    repository: registry.example.com/acme/nvidia-recovery
+    tag: v1
+    pullPolicy: IfNotPresent
+kpis-service:
+  enabled: false
+metrics-service:
+  enabled: false
+grafana:
+  enabled: false
+opentelemetry-collector:
+  enabled: false
+dependency_checker:
+  enabled: false
+slurm-advisor-controller:
+  enabled: false

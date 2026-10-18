@@ -1,0 +1,41 @@
+[Unit]
+Description=Heimdall OSS Slurm Watchdog (observe-only)
+Wants=network-online.target
+After=network-online.target munge.service
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=slurm
+EnvironmentFile=/etc/heimdall-oss/slurm-watchdog.env
+ExecStart=/usr/bin/env SLURM_WATCHDOG_MODE=observe SLURM_WATCHDOG_ACKNOWLEDGE_SCHEDULER_ACTIONS=false /usr/local/libexec/heimdall-oss/slurm-watchdog
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=45s
+KillMode=control-group
+SyslogIdentifier=slurm-watchdog
+UMask=0077
+
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

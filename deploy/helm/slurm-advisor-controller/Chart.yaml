@@ -1,0 +1,16 @@
+apiVersion: v2
+name: slurm-advisor-controller
+description: NVIDIA Recovery Slurm Advisor Controller and fail-open watchdog for Slinky Slurm.
+type: application
+version: 0.1.1
+appVersion: "0.1.0"
+home: https://github.com/dsx-ai-factory/NVIDIA-Recovery
+sources:
+  - https://github.com/dsx-ai-factory/NVIDIA-Recovery
+keywords:
+  - nvidia-recovery
+  - slurm
+  - slinky
+  - advisor
+maintainers:
+  - name: NVIDIA Recovery maintainers

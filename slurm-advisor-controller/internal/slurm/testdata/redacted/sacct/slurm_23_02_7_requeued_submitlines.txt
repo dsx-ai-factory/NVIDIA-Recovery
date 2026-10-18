@@ -1,0 +1,12 @@
+9402|901|1790932999|1790932999|/redacted/work|sbatch workflow-redacted.sh
+9402.batch|901|1790932999|1790932999||
+9402.extern|901|1790932999|1790932999||
+9402.0|901|1790933002|1790933002||srun --output=/redacted/work/logs/%x_%j_date_26-10-02_time_02-23-22.log bash -c echo 'Start time: date_26-10-02_time_02-23-22' && echo 'Sleeping 30 seconds' &&         sleep 30 && echo 'Rank0: (1) segmentation fault: artificial segfault' &&         echo 'Sleep another 60 seconds' &&         sleep 60 && exit 1
+9402|902|1790933420|1790934471|/redacted/work|sbatch workflow-redacted.sh
+9402.batch|902|1790934471|1790934471||
+9402.extern|902|1790934471|1790934471||
+9402.0|902|1790934472|1790934472||srun --output=/redacted/work/logs/%x_%j_date_26-10-02_time_02-47-52.log bash -c echo 'Start time: date_26-10-02_time_02-47-52' && echo 'Sleeping 30 seconds' &&         sleep 30 && echo 'Rank0: (1) segmentation fault: artificial segfault' &&         echo 'Sleep another 60 seconds' &&         sleep 60 && exit 1
+9402|903|1790934738|1790934863|/redacted/work|sbatch workflow-redacted.sh
+9402.batch|903|1790934863|1790934863||
+9402.extern|903|1790934863|1790934863||
+9402.0|903|1790934866|1790934866||srun --output=/redacted/work/logs/%x_%j_date_26-10-02_time_02-54-26.log bash -c echo 'Start time: date_26-10-02_time_02-54-26' && echo 'Sleeping 30 seconds' &&         sleep 30 && echo 'Rank0: (1) segmentation fault: artificial segfault' &&         echo 'Sleep another 60 seconds' &&         sleep 60 && exit 1

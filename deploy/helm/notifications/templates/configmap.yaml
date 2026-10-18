@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "notifications.fullname" . }}-config
+  labels:
+    {{- include "notifications.labels" . | nindent 4 }}
+data:
+  settings.toml: |
+    DATABASE_PROTOCOL="{{ .Values.db.protocol }}"
+    DATABASE_USER="{{ .Values.db.user }}"
+    DATABASE_HOST="{{ .Values.db.host }}"
+    DATABASE_PORT="{{ .Values.db.port }}"
+    DATABASE_DATABASE="{{ .Values.db.database }}"
+    {{- if .Values.db.ssl_enabled }}
+    DATABASE_SSL_ENABLED=true
+    DATABASE_SSL_CA_PATH="{{ .Values.db.ssl_ca_path }}"
+    {{- end }}
+
+    COCKPIT_PROTOCOL="{{ .Values.app.cockpitProtocol }}"
+    COCKPIT_FQDN="{{ .Values.app.cockpitFQDN }}{{ .Values.app.cockpitBasePath }}"
+
+    {{- if .Values.app.callbackEnabled }}
+    CALLBACK_ENABLED="TRUE"
+    {{- else }}
+    CALLBACK_ENABLED="FALSE"
+    {{- end }}
+    CALLBACK_URL="{{ .Values.app.callbackUrl }}"
+    CALLBACK_METHOD="{{ .Values.app.callbackMethod }}"
+    CALLBACK_PAYLOAD_JQ={{ quote .Values.app.callbackPayloadJq }}

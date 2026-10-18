@@ -1,0 +1,61 @@
+# Grafana Alloy — node-local syslog only, one instance per Slinky worker.
+# Provision the dedicated positions directory as 401:401 before installation.
+alloy:
+  configMap:
+    create: false
+    name: alloy-config
+    key: config.alloy
+  storagePath: /var/lib/alloy-positions
+  enableReporting: false
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  mounts:
+    extra:
+      - name: positions
+        mountPath: /var/lib/alloy-positions
+        readOnly: false
+      - name: node-syslog
+        mountPath: /var/log/syslog
+        readOnly: true
+
+controller:
+  type: daemonset
+  nodeSelector:
+    heimdall.nvidia.com/slurm-worker: "true"
+  volumes:
+    extra:
+      - name: positions
+        hostPath:
+          path: /var/lib/alloy-system-positions
+          type: Directory
+      - name: node-syslog
+        hostPath:
+          path: /var/log/syslog
+          type: FileOrCreate
+
+global:
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 401
+    runAsGroup: 401
+    fsGroup: 401
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+rbac:
+  create: false
+
+configReloader:
+  enabled: false
+
+serviceMonitor:
+  enabled: false

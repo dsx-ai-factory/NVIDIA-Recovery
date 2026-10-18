@@ -1,0 +1,30 @@
+{
+  "schema": "heimdall-go-engineering-contract-v1",
+  "libraries": {
+    "configuration": "github.com/kelseyhightower/envconfig",
+    "errors": "github.com/cockroachdb/errors",
+    "interaction_mocks": "go.uber.org/mock/mockgen",
+    "logging": "go.uber.org/zap"
+  },
+  "logging": {
+    "error_field": "zap.Error",
+    "parallel_verbose_stack": false
+  },
+  "errors": {
+    "standard_is_as_compatible": true
+  },
+  "testing": {
+    "behavioral_fakes": "stateful_simulations",
+    "interaction_mock_generator": "MockGen"
+  },
+  "verification": {
+    "allowed_direct_tool_reasons": [
+      "focused_diagnosis",
+      "no_owning_make_target"
+    ],
+    "completion_interface": "Make",
+    "cross_module_or_shared_target": "make verify-go",
+    "direct_tool_followup": "owning_make_target",
+    "single_module_target": "make GO_PACKAGES=<module> verify-go"
+  }
+}

@@ -1,0 +1,272 @@
+global: {}
+port: 8080
+resources:
+  limits:
+    memory: 10Gi
+  requests:
+    memory: 10Gi
+replicas: 1
+image:
+  repository: ""
+  name: anomaly-detection-isolator
+  tag: ""
+  pullPolicy: IfNotPresent
+service_type: ClusterIP
+command: ["anomaly-detection-isolator"]
+attribution_engines: "FACT"
+
+# Attribution adapter — the Policy Engine calls it over HTTP; it fronts the attribution engine (FACT).
+# Omit attribution_service_url to use the same-release adapter on port 8000.
+# Set it explicitly for an external adapter or a custom Service name/port.
+attribution_enabled: true
+attribution_fast_http_timeout_seconds: 90
+attribution_slow_http_timeout_seconds: 180
+
+audit_trail:
+  # Omit destination to use the same-release Notifications Service on port 8080.
+  # Set a URL for a custom Service/receiver, or ""/null for logging only.
+  max_batch_size: 100
+  max_buffer_size: 1000
+  flush_interval_seconds: 30
+
+fact:
+  isolated_errors: "[
+    \"Call to ibv_modify_qp failed: eno 110 timeout\",
+    \"Call to ibv_modify_qp failed: eno 110 timeout(Overwrite NCCL parameters)\",
+    \"Call to ibv_modify_qp failed: eno 22 invalid argument\",
+    \"Call to ibv_modify_qp failed: eno 22 invalid argument(Mismatched GID)\",
+    \"cudaErrorECCUncorrectable\",
+    \"cudaErrorNvlinkUncorrectable\",
+    \"DriverBug-XID-64\",
+    \"ECC Error\",
+    \"ec2 instance retirement\",
+    \"FATAL_LINK_FLAP\",
+    \"general protection fault\",
+    \"GspRmAlloc failed\",
+    \"Mellanox links are down\",
+    \"NMI watchdog hard LOCKUP\",
+    \"NS network connection lost\",
+    \"NV_ERR_INVALID_STATE\",
+    \"Node failure reported by slurm\",
+    \"Node unexpectedly rebooted\",
+    \"Page Retirement\",
+    \"Power Supply Unit failure\",
+    \"Row Remap\",
+    \"Silent Data Corruption\",
+    \"System is powering down\",
+    \"XID-46\",
+    \"XID-48\",
+    \"XID-62-PMU_HALT_ERROR\",
+    \"XID-64-INFOROM_DRAM_RETIREMENT_FAILURE\",
+    \"XID-79\",
+    \"XID-79-GPU_HAS_FALLEN_OFF_THE_BUS\",
+    \"XID-95\",
+    \"XID-110\",
+    \"XID-119\",
+    \"XID-120\",
+    \"XID-136\",
+    \"XID-140\",
+    \"XID_143\",
+    \"XID-145-InfraHW\",
+    \"XID-149\",
+    \"XID-155\",
+    \"XID-156\",
+    \"XID-158\",
+    \"XID-159\",
+    \"XID-171-\",
+    \"XID-172-\"
+  ]"
+  ambiguous_errors: "[
+    \"Address already in use\",
+    \"bad kernel stack frame pointer\",
+    \"bad kernel stack frame pointer in CudaGpuInfoDump\",
+    \"bad kernel stack frame pointer in nsys\",
+    \"BrokenPipeError\",
+    \"Call to ibv_modify_qp failed\",
+    \"Call to ibv_set_ece failed\",
+    \"CE deadlock DETECTED\",
+    \"client socket has timed out\",
+    \"CMDaemon: not ready for scheduling\",
+    \"Connection closed\",
+    \"Connection reset by peer\",
+    \"cudaError\",
+    \"cudaError out of memory\",
+    \"cudaErrorDevicesUnavailable\",
+    \"cudaErrorIllegalAddress\",
+    \"cudaErrorInvalidResourceHandle\",
+    \"cudaErrorLaunchFailure\",
+    \"cudaErrorNotPermitted\",
+    \"cudaErrorUnknown\",
+    \"cudaErrorUnsupportedPtxVersion\",
+    \"Disk quota exceeded\",
+    \"EAP authentication failed\",
+    \"EFA Error-\",
+    \"EOFError: Ran out of input\",
+    \"error running nvidia-smi\",
+    \"failed to import docker image\",
+    \"file write failed\",
+    \"Gloo connectFullMesh failed\",
+    \"gpu unavailable\",
+    \"gpu_idle\",
+    \"GPU is lost reported by slurm\",
+    \"http.client.RemoteDisconnected\",
+    \"IB Error-\",
+    \"IB Error-10\",
+    \"IB Error-12\",
+    \"IB Error-12 Vendor-129\",
+    \"IB Error-5\",
+    \"ibv_open_device failed\",
+    \"NaN reported by Megatron\",
+    \"NCCL ibv_modify_qp failure connection time out: eno 110(ETIMEOUT)\",
+    \"NCCL ibv_modify_qp failure invalid arg: eno 22(EINVAL)\",
+    \"NCCL WARN Cuda failure\",
+    \"ncclInternalError\",
+    \"ncclInvalidArgument\",
+    \"ncclInvalidUsage\",
+    \"ncclRemoteError\",
+    \"ncclSystemError\",
+    \"ncclUnhandledCudaError\",
+    \"network address cannot be retrieved\",
+    \"No CUDA runtime is found\",
+    \"No route to host\",
+    \"Not responding\",
+    \"performance_phy_effective_errors_high\",
+    \"pmix collective timeout\",
+    \"pyxis: couldn't start container\",
+    \"RDMA fabric flap\",
+    \"RuntimeError: Numpy is not available\",
+    \"S3 Exception\",
+    \"Segmentation fault\",
+    \"Software caused connection abort\",
+    \"Stale file handle\",
+    \"Stopping cuda profiler\",
+    \"System-out of memory\",
+    \"Unconvertible NCCL type\",
+    \"Unexpected error from cudaGetDeviceCount()\",
+    \"UserBuffer timeout\",
+    \"ValueError: Tasks not found\",
+    \"wandb.errors.CommError: Run initialization has timed out\",
+    \"XID-13\",
+    \"XID-13-GR_EXCEPTION / GR_ERROR_SW_NOTIFY\",
+    \"XID-31\",
+    \"XID-31-MMU_ERR_FLT\",
+    \"XID-32-PBDMA_ERROR\",
+    \"XID-38\",
+    \"XID-43\",
+    \"XID-45-PREEMPTIVE_REMOVAL\",
+    \"XID-74\",
+    \"XID-74-NVLINK_ERROR\",
+    \"XID-92-EXCESSIVE_SBE_INTERRUPTS\",
+    \"XID-94-CONTAINED_ERROR\",
+    \"XID-145\"
+  ]"
+  non_isolated_errors: "[
+    \"assert number_image_tags <= number_of_images\",
+    \"Cancelled by APS\",
+    \"Cancelled by PyTorch NCCL watchdog\",
+    \"Cancelled by Timeout\",
+    \"Cancelled by user\",
+    \"cudaErrorContained\",
+    \"DataLoader Exception\",
+    \"DriverBug-\",
+    \"EAP authentication recovery\",
+    \"error: pyxis\",
+    \"exit code signal\",
+    \"FalsePositive-XID-63\",
+    \"FalsePositive-XID-64\",
+    \"fatal\",
+    \"job failed\",
+    \"Job didn't start\",
+    \"JSONDecodeError\",
+    \"log file not found\",
+    \"log file too large\",
+    \"log permission error\",
+    \"log unrecognized\",
+    \"log unrecognized from interactive job\",
+    \"LustreError\",
+    \"megatron.core.dist_checkpointing.core.CheckpointingException\",
+    \"Missing key in checkpoint\",
+    \"NCCL IB device incompatibility\",
+    \"No such file or directory\",
+    \"placeholder\",
+    \"PyTorch NCCL watchdog\",
+    \"Python Exception\",
+    \"pyxis: couldn't start container\",
+    \"sigkill_handler] Killing subprocess\",
+    \"srun didn't happen\",
+    \"terminate called\",
+    \"the process completes\",
+    \"XID-44-\",
+    \"XID-63-\",
+    \"XID-63-INFOROM_DRAM_RETIREMENT_EVENT\",
+    \"XID-137-\"
+  ]"
+  isolated_errors_env: "[]"
+  ambiguous_errors_env: "[]"
+  non_isolated_errors_env: "[]"
+credentials:
+  rabbitmq:
+    secret_name: null
+    secret_key_name: rabbitmq-password
+
+event_bus:
+  attribution_request_exchange: attribution_request_exchange
+  attribution_request_queue: job_updates_attribution_request
+  isolator_completed_exchange: aie_eventbus_exchange
+  slow_signals_exchange: aie_eventbus_exchange
+  slow_signals_queue: slow_signals_queue
+  exchange: "test_exchange"
+  host: nvidia-recovery-rabbitmq
+  username: rabbitmq
+  port: 5672
+  vhost: default-vhost
+  queue_name: HANG-QUEUE
+  routing_key: "wart.hkey"
+root_path: "/wadi"
+num_worker_threads: 20
+epilogue_started_wait_seconds: 0
+slow_signals_enabled: true
+slow_signals_delay_seconds: 600
+epilog_query_duration_minutes: 3
+max_isolated_nodes: 3
+# Rack-aware isolation feature flag (default: false, uses per-cluster limits)
+# Set to true to enable per-rack isolation limits
+rack_aware_isolation_enabled: false
+# Per-rack isolation limits (only applies when rack_aware_isolation_enabled=true)
+max_isolated_nodes_per_rack: 2
+# Maximum number of racks that can have isolated nodes simultaneously (default: 9)
+# If exceeded, prioritizes racks with more confirmed nodes
+max_racks_to_isolate: 9
+# Custom rack extraction pattern (optional, uses default patterns if not set)
+# Default pattern supports: nvl72[dD]010-T12 -> "nvl72010"
+# rack_extraction_pattern: "nvl72[dD]?(\\d+)-T\\d+"
+# HTTP request timeouts (seconds) for downstream service calls.
+# These prevent indefinite hangs on unresponsive services.
+jobmanager_http_timeout_seconds: 30
+job_manager:
+  host: http://job-manager
+  port: 8080
+  status_path: "/job_status/"
+grafana_dashboard:
+  enabled: false
+
+imagePullSecrets: []
+
+nodeSelector: {}
+
+tolerations: []
+
+volumes: []
+
+volumeMounts: []
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  name: ""
+
+# Look at the README.md at ./deploy/helm/README.md
+enableExtendedLabelSelectors: false

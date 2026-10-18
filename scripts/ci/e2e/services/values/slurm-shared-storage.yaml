@@ -1,0 +1,112 @@
+# Host-backed implementation of the Slinky E2E shared-filesystem contract.
+# Workloads consume only the claims; __SLURM_SHARED_HOME__ is Kind-specific
+# backing substituted by 04-install-slurm.sh.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: heimdall-e2e-slurm-home
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: heimdall-e2e-host
+  hostPath:
+    path: __SLURM_SHARED_HOME__
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: slurm-shared-home
+  namespace: slurm
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: heimdall-e2e-host
+  volumeName: heimdall-e2e-slurm-home
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: heimdall-e2e-slurm-job-logs
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: heimdall-e2e-host
+  hostPath:
+    path: __SLURM_SHARED_HOME__/logs
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: slurm-job-logs
+  namespace: slurm
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: heimdall-e2e-host
+  volumeName: heimdall-e2e-slurm-job-logs
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: heimdall-e2e-slurm-log-links
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: heimdall-e2e-host
+  hostPath:
+    path: __SLURM_SHARED_HOME__/log-links
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: slurm-log-links
+  namespace: slurm
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: heimdall-e2e-host
+  volumeName: heimdall-e2e-slurm-log-links
+  resources:
+    requests:
+      storage: 10Gi
+---
+# This claim survives application collector replacement. Never share it with
+# a second reader; position persistence is not a distributed ownership lock.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: heimdall-e2e-alloy-application-positions
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: heimdall-e2e-host
+  hostPath:
+    path: __SLURM_SHARED_HOME__/alloy-application-positions
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alloy-application-positions
+  namespace: slurm
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: heimdall-e2e-host
+  volumeName: heimdall-e2e-alloy-application-positions
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,4 @@
+internal/slurm/testdata/raw/
+internal/slurm/testdata/capture/
+internal/slurm/testdata/captures/
+internal/slurm/testdata/**/*.raw.json

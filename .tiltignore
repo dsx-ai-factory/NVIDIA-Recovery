@@ -1,0 +1,4 @@
+deploy/helm/nvidia-recovery/charts
+deploy/helm/nvidia-recovery/tmpcharts
+deploy/helm/nvidia-recovery/tmpcharts-*
+deploy/tilt/tmp

@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+api:
+  specs:
+    - openapi: ../../../api-gateway/gen/openapiv2/heimdall/v1/heimdall.swagger.yaml

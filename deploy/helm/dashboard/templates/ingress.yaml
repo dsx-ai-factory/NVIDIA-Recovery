@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if and .Values.ingress_fqdn (ne (default "ingress" ((.Values.global).routing).type) "gateway") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+{{- if .Values.ingress.annotations }}
+  annotations:
+    {{- tpl (toYaml .Values.ingress.annotations) . | nindent 4 }}
+{{- end }}
+  name: {{ include "dashboard.name" . }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingressClassName }}
+  rules:
+    {{- if eq (toString .Values.ingress_fqdn) "*" }}
+    - http:
+    {{- else }}
+    - host: {{ .Values.ingress_fqdn }}
+      http:
+    {{- end }}
+        paths:
+          - path: {{ default "/" .Values.app.base_path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "dashboard.fullname" . }}
+                port:
+                  number: {{ .Values.port }}
+  tls:
+  {{- if eq (toString .Values.ingress_fqdn) "*" }}
+  - hosts: []
+  {{- else }}
+  - hosts:
+    - {{ .Values.ingress_fqdn }}
+  {{- end }}
+    {{- if .Values.ingress.tls.secretName }}
+    secretName: {{ .Values.ingress.tls.secretName }}
+    {{- end }}
+{{ end }}

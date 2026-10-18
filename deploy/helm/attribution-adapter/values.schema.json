@@ -1,0 +1,476 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Attribution adapter chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "providerQueries": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attribution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["application", "system", "epilogue"],
+          "properties": {
+            "application": { "type": "string" },
+            "system": { "type": "string" },
+            "epilogue": { "type": "string" }
+          }
+        },
+        "watcher": { "type": "object" },
+        "health": { "type": "object" }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "name", "tag", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string" },
+        "name": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "resourceList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["memory"],
+      "properties": {
+        "cpu": { "type": "string", "minLength": 1 },
+        "memory": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": { "$ref": "#/definitions/resourceList" },
+        "limits": { "$ref": "#/definitions/resourceList" }
+      }
+    },
+    "tenantID": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        { "type": "string", "pattern": "^$|^[0-9]+$" }
+      ]
+    },
+    "victoriaLogsCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api_token_secret_name",
+        "api_token_secret_key_name",
+        "username_secret_name",
+        "username_secret_key_name",
+        "password_secret_name",
+        "password_secret_key_name",
+        "app_api_token_secret_name",
+        "app_api_token_secret_key_name",
+        "app_username_secret_name",
+        "app_username_secret_key_name",
+        "app_password_secret_name",
+        "app_password_secret_key_name",
+        "app_ca_cert_secret_name",
+        "app_ca_cert_secret_key_name",
+        "app_cert_secret_name",
+        "app_cert_secret_key_name",
+        "app_key_secret_name",
+        "app_key_secret_key_name",
+        "sys_api_token_secret_name",
+        "sys_api_token_secret_key_name",
+        "sys_username_secret_name",
+        "sys_username_secret_key_name",
+        "sys_password_secret_name",
+        "sys_password_secret_key_name",
+        "sys_ca_cert_secret_name",
+        "sys_ca_cert_secret_key_name",
+        "sys_cert_secret_name",
+        "sys_cert_secret_key_name",
+        "sys_key_secret_name",
+        "sys_key_secret_key_name"
+      ],
+      "properties": {
+        "api_token_secret_name": { "type": "string" },
+        "api_token_secret_key_name": { "type": "string", "minLength": 1 },
+        "username_secret_name": { "type": "string" },
+        "username_secret_key_name": { "type": "string", "minLength": 1 },
+        "password_secret_name": { "type": "string" },
+        "password_secret_key_name": { "type": "string", "minLength": 1 },
+        "app_api_token_secret_name": { "type": "string" },
+        "app_api_token_secret_key_name": { "type": "string", "minLength": 1 },
+        "app_username_secret_name": { "type": "string" },
+        "app_username_secret_key_name": { "type": "string", "minLength": 1 },
+        "app_password_secret_name": { "type": "string" },
+        "app_password_secret_key_name": { "type": "string", "minLength": 1 },
+        "app_ca_cert_secret_name": { "type": "string" },
+        "app_ca_cert_secret_key_name": { "type": "string", "minLength": 1 },
+        "app_cert_secret_name": { "type": "string" },
+        "app_cert_secret_key_name": { "type": "string", "minLength": 1 },
+        "app_key_secret_name": { "type": "string" },
+        "app_key_secret_key_name": { "type": "string", "minLength": 1 },
+        "sys_api_token_secret_name": { "type": "string" },
+        "sys_api_token_secret_key_name": { "type": "string", "minLength": 1 },
+        "sys_username_secret_name": { "type": "string" },
+        "sys_username_secret_key_name": { "type": "string", "minLength": 1 },
+        "sys_password_secret_name": { "type": "string" },
+        "sys_password_secret_key_name": { "type": "string", "minLength": 1 },
+        "sys_ca_cert_secret_name": { "type": "string" },
+        "sys_ca_cert_secret_key_name": { "type": "string", "minLength": 1 },
+        "sys_cert_secret_name": { "type": "string" },
+        "sys_cert_secret_key_name": { "type": "string", "minLength": 1 },
+        "sys_key_secret_name": { "type": "string" },
+        "sys_key_secret_key_name": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "required": [
+    "port",
+    "metrics_port",
+    "resources",
+    "replicas",
+    "image",
+    "service_type",
+    "command",
+    "fact",
+    "fact_http_timeout_seconds",
+    "credentials",
+    "loki",
+    "prometheus",
+    "syslog_formatter",
+    "kernel_logs_only",
+    "ib_metrics_query",
+    "eth_metrics_query",
+    "health_check_query",
+    "victorialogs_http_timeout_seconds",
+    "logql_lookback_timewindow_duration_minutes",
+    "logql_applog_grace_time_seconds",
+    "syslogindex_enabled",
+    "log_fetch_optimization_enabled",
+    "loki_http_timeout_seconds",
+    "is_lepton_enabled",
+    "lepton_worker_cluster_name",
+    "lepton_base_url",
+    "grafana_dashboard",
+    "networkPolicy",
+    "imagePullSecrets",
+    "nodeSelector",
+    "tolerations",
+    "volumes",
+    "volumeMounts",
+    "serviceAccount",
+    "enableExtendedLabelSelectors"
+  ],
+  "properties": {
+    "global": {
+      "type": "object",
+      "properties": {
+        "log_query": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["backend", "providers"],
+          "properties": {
+            "backend": {
+              "type": "string",
+              "enum": ["loki", "victorialogs"]
+            },
+            "providers": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "loki": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "queries": { "$ref": "#/definitions/providerQueries" },
+                    "application": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["url"],
+                      "properties": {
+                        "url": { "type": "string" },
+                        "tenants": { "type": "string" },
+                        "org_id": { "type": "string" }
+                      }
+                    },
+                    "system": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["url"],
+                      "properties": {
+                        "url": { "type": "string" },
+                        "tenants": { "type": "string" },
+                        "org_id": { "type": "string" }
+                      }
+                    }
+                  }
+                },
+                "victorialogs": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "queries": { "$ref": "#/definitions/providerQueries" },
+                    "application": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["url", "account_id", "project_id", "require_tenant"],
+                      "properties": {
+                        "url": { "type": "string" },
+                        "account_id": { "$ref": "#/definitions/tenantID" },
+                        "project_id": { "$ref": "#/definitions/tenantID" },
+                        "require_tenant": { "type": "boolean" }
+                      }
+                    },
+                    "system": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["url", "account_id", "project_id", "require_tenant"],
+                      "properties": {
+                        "url": { "type": "string" },
+                        "account_id": { "$ref": "#/definitions/tenantID" },
+                        "project_id": { "$ref": "#/definitions/tenantID" },
+                        "require_tenant": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "enabled": { "type": "boolean" },
+    "attribution_enabled": { "type": "boolean" },
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "metrics_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "resources": { "$ref": "#/definitions/resources" },
+    "replicas": { "type": "integer", "minimum": 0 },
+    "image": { "$ref": "#/definitions/image" },
+    "service_type": {
+      "type": "string",
+      "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+    },
+    "command": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string" }
+      }
+    },
+    "fact_http_timeout_seconds": { "type": "integer", "minimum": 1 },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["loki", "victorialogs", "prometheus"],
+      "properties": {
+        "loki": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "api_token_secret_name",
+            "api_token_secret_key_name",
+            "app_api_token_secret_name",
+            "app_ca_cert_secret_name",
+            "app_ca_cert_secret_key_name",
+            "app_cert_secret_name",
+            "app_cert_secret_key_name",
+            "app_key_secret_name",
+            "app_key_secret_key_name",
+            "sys_api_token_secret_name",
+            "sys_ca_cert_secret_name",
+            "sys_ca_cert_secret_key_name",
+            "sys_cert_secret_name",
+            "sys_cert_secret_key_name",
+            "sys_key_secret_name",
+            "sys_key_secret_key_name"
+          ],
+          "properties": {
+            "api_token_secret_name": { "type": "string" },
+            "api_token_secret_key_name": { "type": "string" },
+            "app_api_token_secret_name": { "type": "string" },
+            "app_ca_cert_secret_name": { "type": "string" },
+            "app_ca_cert_secret_key_name": { "type": "string", "minLength": 1 },
+            "app_cert_secret_name": { "type": "string" },
+            "app_cert_secret_key_name": { "type": "string", "minLength": 1 },
+            "app_key_secret_name": { "type": "string" },
+            "app_key_secret_key_name": { "type": "string", "minLength": 1 },
+            "sys_api_token_secret_name": { "type": "string" },
+            "sys_ca_cert_secret_name": { "type": "string" },
+            "sys_ca_cert_secret_key_name": { "type": "string", "minLength": 1 },
+            "sys_cert_secret_name": { "type": "string" },
+            "sys_cert_secret_key_name": { "type": "string", "minLength": 1 },
+            "sys_key_secret_name": { "type": "string" },
+            "sys_key_secret_key_name": { "type": "string", "minLength": 1 }
+          }
+        },
+        "victorialogs": {
+          "$ref": "#/definitions/victoriaLogsCredentials"
+        },
+        "prometheus": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "api_token_secret_name",
+            "ca_cert_secret_name",
+            "ca_cert_secret_key_name",
+            "cert_secret_name",
+            "cert_secret_key_name",
+            "key_secret_name",
+            "key_secret_key_name"
+          ],
+          "properties": {
+            "api_token_secret_name": { "type": "string" },
+            "ca_cert_secret_name": { "type": "string" },
+            "ca_cert_secret_key_name": { "type": "string", "minLength": 1 },
+            "cert_secret_name": { "type": "string" },
+            "cert_secret_key_name": { "type": "string", "minLength": 1 },
+            "key_secret_name": { "type": "string" },
+            "key_secret_key_name": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "loki": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["loki_cluster"],
+      "properties": {
+        "loki_url": {
+          "type": "string",
+          "description": "Retired; nonempty values fail with migration guidance to global.log_query.providers.loki."
+        },
+        "loki_cluster": { "type": "string" },
+        "loki_tenants": {
+          "type": "string",
+          "description": "Retired; configure tenants separately in each Loki provider domain."
+        },
+        "loki_app_url": {
+          "type": "string",
+          "description": "Retired; configure global.log_query.providers.loki.application.url."
+        },
+        "loki_sys_url": {
+          "type": "string",
+          "description": "Retired; configure global.log_query.providers.loki.system.url."
+        }
+      }
+    },
+    "prometheus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prometheus_url",
+        "prometheus_cluster",
+        "prometheus_checks_enabled",
+        "prometheus_hostname_label",
+        "prometheus_tenants"
+      ],
+      "properties": {
+        "prometheus_url": { "type": "string" },
+        "prometheus_cluster": { "type": "string" },
+        "prometheus_checks_enabled": { "type": "boolean" },
+        "prometheus_hostname_label": { "type": "string" },
+        "prometheus_tenants": { "type": "string" }
+      }
+    },
+    "syslog_formatter": { "type": "string" },
+    "kernel_logs_only": { "type": "boolean" },
+    "ib_metrics_query": { "type": "string" },
+    "eth_metrics_query": { "type": "string" },
+    "health_check_query": { "type": "string" },
+    "victorialogs_http_timeout_seconds": { "type": "integer", "minimum": 1 },
+    "logql_lookback_timewindow_duration_minutes": { "type": "integer", "minimum": 0 },
+    "logql_applog_grace_time_seconds": { "type": "integer", "minimum": 0 },
+    "syslogindex_enabled": { "type": "boolean" },
+    "log_fetch_optimization_enabled": { "type": "boolean" },
+    "log_fetch_direction": { "type": "string" },
+    "log_fetch_timeout_syslogs_seconds": { "type": "integer", "minimum": 0 },
+    "log_fetch_timeout_applogs_seconds": { "type": "integer", "minimum": 0 },
+    "log_fetch_timeout_slow_signals_seconds": { "type": "integer", "minimum": 0 },
+    "nvrx_straggler_threshold": { "type": "number" },
+    "nvrx_straggler_score_types": { "type": "string" },
+    "megatron_straggler_threshold": { "type": "number" },
+    "megatron_straggler_score_types": { "type": "string" },
+    "megatron_straggler_infer_threshold_from_data": { "type": "boolean" },
+    "loki_http_timeout_seconds": { "type": "integer", "minimum": 1 },
+    "use_x_scope_org_id": {
+      "type": "boolean",
+      "description": "Retired; each Loki provider domain uses its explicit org_id."
+    },
+    "is_lepton_enabled": { "type": "boolean" },
+    "lepton_worker_cluster_name": { "type": "string" },
+    "lepton_base_url": { "type": "string" },
+    "x_scope_org_id": {
+      "type": "string",
+      "description": "Retired; configure org_id separately in each Loki provider domain."
+    },
+    "grafana_dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "policyEngineName"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "policyEngineName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumes": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumeMounts": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "automount", "annotations", "name"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "automount": { "type": "boolean" },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "name": { "type": "string" }
+      }
+    },
+    "enableExtendedLabelSelectors": { "type": "boolean" }
+  }
+}

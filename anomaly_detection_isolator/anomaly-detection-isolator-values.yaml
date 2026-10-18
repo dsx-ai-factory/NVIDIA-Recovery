@@ -1,0 +1,49 @@
+global:
+  imagePullSecrets: []
+  mysql:
+    database: &mysql_database heimdall
+    username: &mysql_username heimdall
+    password: &mysql_password heimdall
+  rabbitmq:
+    username: &rabbitmq_username heimdall
+    vhost: &rabbitmq_vhost default-vhost
+
+enableExtendedLabelSelectors: true
+enabled: true
+service_type: ClusterIP
+resources:
+  limits:
+    memory: 256Mi
+  requests:
+    memory: 256Mi
+credentials: {}
+event_bus:
+  username: heimdall
+  attribution_request_exchange: attribution_request_exchange
+  attribution_request_queue: job_updates_attribution_request
+  isolator_completed_exchange: aie_eventbus_exchange
+  vhost: default-vhost
+num_worker_threads: 20
+epilogue_started_wait_seconds: 0
+slow_signals_delay_seconds: 0
+max_isolated_nodes: 3
+# Rack-aware isolation feature flag (default: false, uses per-cluster limits)
+# Set to true to enable per-rack isolation limits
+rack_aware_isolation_enabled: false
+# Per-rack isolation limits (only applies when rack_aware_isolation_enabled=true)
+max_isolated_nodes_per_rack: 2
+# Maximum number of racks that can have isolated nodes simultaneously (default: 9)
+# If exceeded, prioritizes racks with more confirmed nodes
+max_racks_to_isolate: 9
+# Custom rack extraction pattern (optional, uses default patterns if not set)
+# Default pattern supports: nvl72[dD]010-T12 -> "nvl72010"
+# rack_extraction_pattern: "nvl72[dD]?(\\d+)-T\\d+"
+# Attribution uses the same-release adapter by default. Override the URL for an
+# external adapter; set attribution_enabled=false only for degraded operation.
+attribution_enabled: true
+attribution_fast_http_timeout_seconds: 90
+attribution_slow_http_timeout_seconds: 180
+job_manager:
+  host: http://job-manager
+  port: 8080
+  status_path: /job_status/

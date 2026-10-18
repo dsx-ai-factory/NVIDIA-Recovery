@@ -1,0 +1,62 @@
+# Quick-start / experimentation overlay.
+#
+# Configures bundled MySQL for evaluation. This is a database overlay, not a
+# complete installation: default-on Attribution also requires log-provider
+# connections and queries from the installation values.
+#
+# Follow docs/operators/installation.md for image builds, registry credentials,
+# release/namespace variables, and chart dependencies. From the repository root:
+#
+#   cp docs/examples/getting-started/nvidia-recovery-values.yaml nvidia-recovery-values.yaml
+#   # Edit the copied registry, image tags, and environment for your deployment.
+#   helm install "$RELEASE_NAME" deploy/helm/nvidia-recovery \
+#     --namespace "$RELEASE_NAMESPACE" --create-namespace \
+#     --values deploy/helm/nvidia-recovery/values-quickstart.yaml \
+#     --values nvidia-recovery-values.yaml
+#
+# For explicit degraded OFF operation, build images with ATTRIBUTION_ENABLED=false
+# and append this final override to both Helm render and install commands:
+#   --values docs/examples/getting-started/attribution-disabled-values.yaml
+#
+# NOT FOR PRODUCTION. The bundled MySQL has no HA, backup, or tuned SLOs. For
+# production, omit this file and configure `storage`/`db`/`credentials` for
+# each service against your own managed MySQL-compatible database.
+
+mysql:
+  enabled: true
+  auth:
+    username: heimdall
+    database: heimdall_database
+    # Reuse the secret the umbrella's mysql-secret.yaml template generates
+    # (keys mysql-root-password/mysql-password), instead of the bitnami
+    # chart generating and owning its own.
+    existingSecret: nvidia-recovery-mysql
+
+global:
+  mysql:
+    secret:
+      create: true
+
+job-manager:
+  enabled: true
+  storage:
+    mode: MYSQL
+    sql:
+      host: nvidia-recovery-mysql
+      port: 3306
+      username: heimdall
+      database_name: heimdall_database
+  credentials:
+    mysql_secret_name: nvidia-recovery-mysql
+    mysql_secret_key_name: mysql-password
+
+notifications:
+  enabled: true
+  db:
+    protocol: "mysql+pymysql"
+    user: heimdall
+    host: nvidia-recovery-mysql
+    port: "3306"
+    database: heimdall_database
+    mysql_secret_name: nvidia-recovery-mysql
+    mysql_secret_key: mysql-password

@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+WORKFLOW_CONTROLLER = "workflow_controller"
+WATCHER = "watcher"
+ANOMALY_ISOLATOR = "anomaly_isolator"
+MESSAGE_PRODUCERS = [WORKFLOW_CONTROLLER, WATCHER]
+
+DEFAULT_SYSTEM_MAX_REQUEUE_TIMES = 50
+INFINITE_SYSTEM_REQUEUE_LIMIT = -1

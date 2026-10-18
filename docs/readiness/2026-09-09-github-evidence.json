@@ -1,0 +1,274 @@
+{
+  "observed_at_utc": "2026-09-09T16:07:42.284590+00:00",
+  "reviewed_commit": "1f4e235ebe53a90327f1fbd0b1b306f239aa9e90",
+  "source_report_sha256": "15f70bc5eaabd4d6da14b0b9dec3293b0e14a90b6356b166658486e39db3709d",
+  "repository": {
+    "full_name": "NVIDIA/NVIDIA-Recovery",
+    "visibility": "internal",
+    "default_branch": "main",
+    "security_and_analysis": {
+      "advanced_security": {
+        "status": "disabled"
+      },
+      "secret_scanning": {
+        "status": "disabled"
+      },
+      "secret_scanning_push_protection": {
+        "status": "disabled"
+      },
+      "dependabot_security_updates": {
+        "status": "disabled"
+      },
+      "secret_scanning_non_provider_patterns": {
+        "status": "disabled"
+      },
+      "secret_scanning_validity_checks": {
+        "status": "disabled"
+      }
+    }
+  },
+  "main_ruleset": {
+    "id": 22603728,
+    "name": "Main Branch Protection",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "NVIDIA/NVIDIA-Recovery",
+    "enforcement": "evaluate",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "~DEFAULT_BRANCH"
+        ]
+      }
+    },
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "type": "update"
+      },
+      {
+        "type": "creation"
+      },
+      {
+        "type": "required_linear_history"
+      },
+      {
+        "type": "required_signatures"
+      },
+      {
+        "type": "pull_request",
+        "parameters": {
+          "required_approving_review_count": 1,
+          "dismiss_stale_reviews_on_push": true,
+          "required_reviewers": [],
+          "require_code_owner_review": true,
+          "dismissal_restriction": {
+            "enabled": true,
+            "allowed_actors": [
+              {
+                "id": 5,
+                "type": "RepositoryRole"
+              }
+            ]
+          },
+          "require_last_push_approval": true,
+          "required_review_thread_resolution": false,
+          "require_extra_approval_for_unattributed_changes": true,
+          "allowed_merge_methods": [
+            "squash"
+          ]
+        }
+      },
+      {
+        "type": "required_status_checks",
+        "parameters": {
+          "strict_required_status_checks_policy": true,
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "DCO",
+              "integration_id": 1861
+            },
+            {
+              "context": "CodeRabbit",
+              "integration_id": 347564
+            }
+          ]
+        }
+      }
+    ],
+    "node_id": "RRS_lACqUmVwb3NpdG9yec5OhiLCzgFY59A",
+    "created_at": "2026-09-08T22:11:34.843-04:00",
+    "updated_at": "2026-09-08T22:11:34.935-04:00",
+    "bypass_actors": [],
+    "current_user_can_bypass": "never",
+    "_links": {
+      "self": {
+        "href": "https://api.github.com/repos/NVIDIA/NVIDIA-Recovery/rulesets/22603728"
+      },
+      "html": {
+        "href": "https://github.com/NVIDIA/NVIDIA-Recovery/rules/22603728"
+      }
+    }
+  },
+  "release_tag_ruleset": {
+    "id": 20813689,
+    "name": "Release Tag",
+    "target": "tag",
+    "source_type": "Repository",
+    "source": "NVIDIA/NVIDIA-Recovery",
+    "enforcement": "active",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/tags/v*"
+        ]
+      }
+    },
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "type": "creation"
+      },
+      {
+        "type": "update"
+      }
+    ],
+    "node_id": "RRS_lACqUmVwb3NpdG9yec5OhiLCzgE9l3k",
+    "created_at": "2026-08-13T15:13:33.432-04:00",
+    "updated_at": "2026-08-13T15:13:33.483-04:00",
+    "bypass_actors": [
+      {
+        "actor_id": 18776197,
+        "actor_type": "Team",
+        "bypass_mode": "always"
+      }
+    ],
+    "current_user_can_bypass": "always",
+    "_links": {
+      "self": {
+        "href": "https://api.github.com/repos/NVIDIA/NVIDIA-Recovery/rulesets/20813689"
+      },
+      "html": {
+        "href": "https://github.com/NVIDIA/NVIDIA-Recovery/rules/20813689"
+      }
+    }
+  },
+  "actions_workflow_permissions": {
+    "default_workflow_permissions": "write",
+    "can_approve_pull_request_reviews": true
+  },
+  "helm_release_environment": {
+    "id": 19847715743,
+    "node_id": "EN_kwDOToYiws8AAAAEnwQbnw",
+    "name": "helm-release",
+    "url": "https://api.github.com/repos/NVIDIA/NVIDIA-Recovery/environments/helm-release",
+    "html_url": "https://github.com/NVIDIA/NVIDIA-Recovery/deployments/activity_log?environments_filter=helm-release",
+    "created_at": "2026-08-13T20:51:49Z",
+    "updated_at": "2026-08-13T20:51:49Z",
+    "can_admins_bypass": true,
+    "protection_rules": [],
+    "deployment_branch_policy": null
+  },
+  "releases": [],
+  "main_checks": [
+    {
+      "name": "Go Unit Test",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Python Unit Test (notifications)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Python Unit Test (recovery-libs)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Python Unit Test (job-manager)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Python Unit Test (anomaly-detection-isolator)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Python Unit Test (watcher)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Python Integration Test (notifications)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Python Integration Test (recovery-libs)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "TypeScript Unit Test",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Package Matrix",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Python Static check",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "SPDX Source Headers",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go Buf Lint",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Go Lint",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "TypeScript Lint",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "E2E / Attribution e2e (advisor-act)",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "name": "E2E / Kind e2e (advisor-act)",
+      "status": "in_progress",
+      "conclusion": null
+    }
+  ],
+  "bot_source_commit": "28c02d3f98140e5bf347efe38b79f5864186404b"
+}

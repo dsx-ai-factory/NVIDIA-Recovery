@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.rbac.enable -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ template "job-manager.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ template "job-manager.fullname" . }}
+    helm.sh/chart: {{ template "job-manager.chart" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ template "job-manager.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ template "job-manager.fullname" . }}
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

@@ -1,0 +1,108 @@
+apiVersion: v2
+name: nvidia-recovery
+description: NVIDIA Recovery umbrella chart that deploys all services.
+
+# A chart can be either an 'application' or a 'library' chart.
+#
+# Application charts are a collection of templates that can be packaged into versioned archives
+# to be deployed.
+#
+# Library charts provide useful utilities or functions for the chart developer. They're included as
+# a dependency of application charts to inject those utilities and functions into the rendering
+# pipeline. Library charts do not define any templates and therefore cannot be deployed.
+type: application
+
+# This is the chart version. This version number should be incremented each time you make changes
+# to the chart and its templates, including the app version.
+# Versions are expected to follow Semantic Versioning (https://semver.org/)
+version: 1.0.0-beta.7
+
+# This is the version number of the application being deployed. This version number should be
+# incremented each time you make changes to the application. Versions are not expected to
+# follow Semantic Versioning. They should reflect the version the application is using.
+# It is recommended to use it with quotes.
+appVersion: "v1.0.0-beta.7"
+home: https://github.com/dsx-ai-factory/NVIDIA-Recovery
+sources:
+  - https://github.com/dsx-ai-factory/NVIDIA-Recovery
+keywords:
+  - nvidia-recovery
+maintainers:
+  - name: NVIDIA Recovery maintainers
+
+dependencies:
+- name: rabbitmq
+  version: "16.0.5"
+  repository: "oci://registry-1.docker.io/bitnamicharts"
+  condition: rabbitmq.enabled
+- name: job-manager
+  version: "0.1.1"
+  repository: "file://../job-manager"
+  condition: job-manager.enabled
+- name: anomaly-detection-isolator
+  version: "0.1.1"
+  repository: "file://../anomaly-detection-isolator"
+  condition: anomaly-detection-isolator.enabled
+- name: attribution-adapter
+  version: "0.1.3"
+  repository: "file://../attribution-adapter"
+  condition: attribution-adapter.enabled
+- name: dashboard
+  version: "0.1.2"
+  repository: "file://../dashboard"
+  condition: dashboard.enabled
+- name: watcher
+  version: "0.1.4"
+  repository: "file://../watcher"
+  condition: watcher.enabled
+# Pinned deliberately at 13.0.4 — do NOT bump to latest. Newer bitnami mysql
+# chart versions (checked: 14.0.3) reference `bitnami/mysql`, which Docker Hub
+# now serves only via a paid Bitnami Secure Images subscription (zero free
+# tags). This pinned version still references the frozen-but-currently-free
+# `bitnamilegacy/mysql` image. See values-quickstart.yaml for configuration.
+- name: mysql
+  version: 13.0.4
+  repository: "oci://registry-1.docker.io/bitnamicharts"
+  condition: mysql.enabled
+- name: notifications
+  version: "0.1.1"
+  repository: "file://../notifications"
+  condition: notifications.enabled
+- name: attribution-service
+  version: "0.1.0"
+  repository: "file://../attribution-service"
+  condition: attribution-service.enabled
+- name: grafana
+  version: "9.0.0"
+  repository: "https://grafana.github.io/helm-charts"
+  condition: grafana.enabled
+# Optional file collector for the Slurm log-link reference integration. The
+# generic chart keeps it disabled; deployment profiles that opt into Advisor
+# log-link materialization must configure the matching source/destination
+# mounts and Loki endpoint.
+- name: alloy
+  version: "1.10.1"
+  repository: "https://grafana.github.io/helm-charts"
+  condition: alloy.enabled
+# Bundled Grafana Loki log backend (optional, off by default). Configuration
+# follows docs/ops/loki-slurm-runai-logging.md §4 (single-binary mode). The OSS
+# Loki chart moved to the grafana-community repo (~March 2026) — the grafana
+# repo above still hosts grafana/alloy, but not current loki releases.
+# Installation is independent of log-query selection. Consumers must explicitly
+# configure the gateway in global.log_query.providers.loki.<domain>.url.
+- name: loki
+  version: "17.2.0"
+  repository: "https://grafana-community.github.io/helm-charts"
+  condition: global.loki.bundled.enabled
+- name: api-gateway
+  version: "0.1.1"
+  repository: "file://../api-gateway"
+  condition: api-gateway.enabled
+- name: slurm-advisor-controller
+  version: "0.1.1"
+  repository: "file://../slurm-advisor-controller"
+  condition: slurm-advisor-controller.enabled
+- name: opentelemetry-collector
+  version: "0.124.0"
+  repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
+  condition: opentelemetry-collector.enabled

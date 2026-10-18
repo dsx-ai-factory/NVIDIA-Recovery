@@ -1,0 +1,27 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  relative-path-mode: gomod
+
+linters:
+  default: standard
+  exclusions:
+    generated: strict
+    rules:
+      # Retain the API compatibility assignment until the deprecated field is removed.
+      - path: ^internal/server/job/synthetic_source\.go$
+        text: AdditionalProperties is deprecated
+        linters:
+          - staticcheck
+      # Zap Sync commonly returns platform-specific stdout/stderr flush errors at exit.
+      - path: ^cmd/
+        text: Error return value of `.*[Ll]ogger\.Sync` is not checked
+        linters:
+          - errcheck
+      # Keep the existing telemetry API until observability is changed deliberately.
+      - path: ^internal/telemetry/telemetry\.go$
+        text: prometheus\.New(Go|Process)Collector is deprecated
+        linters:
+          - staticcheck

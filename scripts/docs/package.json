@@ -1,0 +1,18 @@
+{
+  "name": "nvidia-recovery-docs",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "npm run prepare && cd ../.. && node scripts/docs/check.mjs && fern docs md check",
+    "dev": "npm run prepare && cd ../.. && fern docs dev",
+    "render": "node render.mjs",
+    "test": "node --test validation.test.mjs",
+    "prepare": "python3 prepare.py"
+  },
+  "devDependencies": {
+    "fern-api": "5.152.0",
+    "pnpm": "10.8.0"
+  }
+}

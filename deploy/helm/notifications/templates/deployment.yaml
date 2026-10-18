@@ -1,0 +1,89 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "notifications.fullname" . }}
+  labels:
+    {{- include "notifications.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "notifications.selectorLabels" . | nindent 6 }}
+  replicas: {{ .Values.replicas }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "notifications.labels" . | nindent 8 }}
+    spec:
+      volumes:
+        - name: settings
+          configMap:
+            name: {{ template "notifications.fullname" . }}-config
+        {{- with .Values.volumes }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      serviceAccountName: {{ template "notifications.serviceAccountName" . }}
+      automountServiceAccountToken: {{- if eq (include "notifications.serviceAccountName" . | trim) "default" }} false{{- else }} true{{- end }}
+      {{- with (default .Values.global.imagePullSecrets .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: notifications
+          image: {{ include "notifications.image" . }}
+          command: {{ .Values.command | toYaml | nindent 12 }}
+          args: {{ .Values.args | toYaml | nindent 12 }}
+          volumeMounts:
+            - mountPath: {{ .Values.app.defaultConfigPath }}
+              name: settings
+        {{- with .Values.volumeMounts }}
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.port }}
+              protocol: TCP
+          readinessProbe:
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+            httpGet:
+              path: /readyz
+              port: http
+          livenessProbe:
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+            httpGet:
+              path: /healthz
+              port: http
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: DEFAULT_CONFIG_PATH
+              value: {{ .Values.app.defaultConfigPath }}
+            - name: DYNACONF_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.mysql_secret_name }}
+                  key: {{ .Values.db.mysql_secret_key }}
+            {{- if (((.Values.global).otelcollector).enabled) }}
+            {{- include "heimdall.otelEnv" . | nindent 12 }}
+            {{- end }}
+          resources:
+{{ .Values.resources | toYaml | indent 12 }}
+
+      {{- with (default .Values.global.nodeSelector .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.global.tolerations .Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

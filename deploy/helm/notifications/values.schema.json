@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Notifications chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "name", "tag", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string" },
+        "name": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["initialDelaySeconds", "periodSeconds", "timeoutSeconds", "failureThreshold"],
+      "properties": {
+        "initialDelaySeconds": { "type": "integer", "minimum": 0 },
+        "periodSeconds": { "type": "integer", "minimum": 1 },
+        "timeoutSeconds": { "type": "integer", "minimum": 1 },
+        "failureThreshold": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "resourceList": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu": { "type": "string", "minLength": 1 },
+        "memory": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": { "$ref": "#/definitions/resourceList" },
+        "limits": { "$ref": "#/definitions/resourceList" }
+      }
+    }
+  },
+  "required": [
+    "applicationName",
+    "replicas",
+    "resources",
+    "port",
+    "image",
+    "command",
+    "args",
+    "service",
+    "app",
+    "db",
+    "imagePullSecrets",
+    "nodeSelector",
+    "tolerations",
+    "volumes",
+    "volumeMounts",
+    "serviceAccount",
+    "enableExtendedLabelSelectors"
+  ],
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "global": { "type": "object" },
+    "applicationName": { "type": "string", "minLength": 1 },
+    "replicas": { "type": "integer", "minimum": 0 },
+    "resources": { "$ref": "#/definitions/resources" },
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "readinessProbe": { "$ref": "#/definitions/probe" },
+    "livenessProbe": { "$ref": "#/definitions/probe" },
+    "image": { "$ref": "#/definitions/image" },
+    "command": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "args": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"]
+        }
+      }
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "defaultConfigPath",
+        "cockpitProtocol",
+        "cockpitFQDN",
+        "cockpitBasePath",
+        "callbackEnabled",
+        "callbackUrl",
+        "callbackMethod",
+        "callbackPayloadJq"
+      ],
+      "properties": {
+        "defaultConfigPath": { "type": "string", "minLength": 1, "pattern": "^/" },
+        "cockpitProtocol": { "type": "string", "enum": ["http", "https"] },
+        "cockpitFQDN": { "type": "string" },
+        "cockpitBasePath": { "type": "string" },
+        "callbackEnabled": { "type": "boolean" },
+        "callbackUrl": { "type": "string" },
+        "callbackMethod": { "type": "string", "minLength": 1 },
+        "callbackPayloadJq": { "type": "string", "minLength": 1 },
+        "slackEnabled": { "type": "boolean" },
+        "emailEnabled": { "type": "boolean" }
+      }
+    },
+    "db": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "protocol",
+        "user",
+        "host",
+        "port",
+        "database",
+        "mysql_secret_name",
+        "mysql_secret_key",
+        "ssl_enabled",
+        "ssl_ca_path"
+      ],
+      "properties": {
+        "url": { "type": "string" },
+        "protocol": { "type": "string", "minLength": 1 },
+        "user": { "type": "string" },
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "string", "minLength": 1 },
+        "database": { "type": "string" },
+        "mysql_secret_name": { "type": "string", "minLength": 1 },
+        "mysql_secret_key": { "type": "string", "minLength": 1 },
+        "ssl_enabled": { "type": "boolean" },
+        "ssl_ca_path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumes": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumeMounts": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "automount", "annotations", "name"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "automount": { "type": "boolean" },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "name": { "type": "string" }
+      }
+    },
+    "enableExtendedLabelSelectors": { "type": "boolean" }
+  }
+}

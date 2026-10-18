@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if or .Values.grafana_dashboard.enabled ((.Values.global).grafana_dashboard).enabled }}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "watcher.fullname" . }}-db-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    {{- include "watcher.labels" . | nindent 4 }}
+  annotations:
+    k8s-sidecar-target-directory: ./nvidia-recovery
+data:
+  watcher.json: |
+{{ .Files.Get "files/grafana-db-watcher.json" | indent 4 }}
+
+{{- end }}

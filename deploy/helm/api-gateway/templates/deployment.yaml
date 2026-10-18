@@ -1,0 +1,203 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ include "api-gateway.validate" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "api-gateway.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "api-gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- if and .Values.otel.enabled .Values.metricsTelemetry.enabled }}
+      annotations:
+        prometheus.io/port: "{{ .Values.metricsTelemetry.port }}"
+        prometheus.io/path: "/metrics"
+        prometheus.io/scrape: "true"
+      {{- end }}
+      labels:
+        {{- include "api-gateway.labels" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      {{- with (default .Values.global.imagePullSecrets .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ template "api-gateway.serviceAccountName" . }}
+      automountServiceAccountToken: {{- if or .Values.auth.kubernetes.enabled (ne (include "api-gateway.serviceAccountName" . | trim) "default") }} true{{- else }} false{{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: api-gateway
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "api-gateway.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["./api-gateway"]
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep {{ .Values.prestopDelay }}"]
+          ports:
+          {{- if .Values.externalService.enabled }}
+            - name: rest
+              containerPort: {{ .Values.ports.rest }}
+              protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.ports.grpc }}
+              protocol: TCP
+          {{- end }}
+            - name: rest-internal
+              containerPort: {{ .Values.ports.restInternal }}
+              protocol: TCP
+            - name: grpc-internal
+              containerPort: {{ .Values.ports.grpcInternal }}
+              protocol: TCP
+          {{- if and .Values.otel.enabled .Values.metricsTelemetry.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metricsTelemetry.port }}
+              protocol: TCP
+          {{- end }}
+          env:
+            - name: HEIMDALL_LOG_FORMAT
+              value: {{ .Values.logging.format }}
+            - name: HEIMDALL_OTEL_ENABLED
+              value: {{ .Values.otel.enabled | quote }}
+            - name: HEIMDALL_OTEL_SERVICE_NAME
+              value: {{ .Values.otel.serviceName }}
+            - name: HEIMDALL_OTEL_SERVICE_VERSION
+              value: {{ .Values.otel.serviceVersion }}
+            - name: HEIMDALL_OTEL_INSECURE
+              value: {{ .Values.otel.insecure | quote }}
+            - name: HEIMDALL_OTEL_SAMPLE_RATE
+              value: {{ .Values.otel.sampleRate | quote }}
+            - name: HEIMDALL_METRICS_TELEMETRY_ENABLED
+              value: {{ .Values.metricsTelemetry.enabled | quote }}
+            - name: HEIMDALL_METRICS_TELEMETRY_SERVER_ENDPOINT
+              value: {{ .Values.metricsTelemetry.serverEndpoint | quote }}
+          {{- if .Values.externalService.enabled }}
+            - name: HEIMDALL_ENABLE_EXTERNAL_ENDPOINTS
+              value: "true"
+          {{- else }}
+            - name: HEIMDALL_ENABLE_EXTERNAL_ENDPOINTS
+              value: "false"
+          {{- end }}
+            - name: HEIMDALL_URL_PREFIX
+              value: {{ .Values.urlPrefix | quote }}
+            - name: HEIMDALL_INTERNAL_URL_PREFIX
+              value: {{ .Values.internalUrlPrefix | quote }}
+            - name: HEIMDALL_JOB_SOURCE
+              value: {{ .Values.jobs.source | quote }}
+            - name: HEIMDALL_JOB_MANAGER_ENDPOINT
+              value: {{ .Values.jobs.endpoint | quote }}
+            - name: HEIMDALL_AUDIT_ENDPOINT
+              value: {{ .Values.audit.endpoint | quote }}
+          {{ if .Values.auth.insecure }}
+            - name: HEIMDALL_INSECURE
+              value: "true"
+          {{- end -}}
+          {{- if .Values.auth.oidc.enabled }}
+            - name: HEIMDALL_OIDC_ENABLED
+              value: "true"
+            - name: HEIMDALL_OIDC_PROVIDER_URL
+              value: {{ .Values.auth.oidc.providerUrl | quote }}
+            - name: HEIMDALL_OIDC_CLIENT_ID
+              value: {{ .Values.auth.oidc.clientId | quote }}
+            - name: HEIMDALL_OIDC_SCOPES
+              value: {{ .Values.auth.oidc.scopes | quote }}
+            - name: HEIMDALL_OIDC_SUBJECT_CLAIM
+              value: {{ .Values.auth.oidc.subjectClaim | quote }}
+            - name: HEIMDALL_OIDC_CLIENT_ID_CLAIM
+              value: {{ .Values.auth.oidc.clientIdClaim | quote }}
+            - name: HEIMDALL_OIDC_SCOPES_CLAIM
+              value: {{ .Values.auth.oidc.scopesClaim | quote }}
+            - name: HEIMDALL_OIDC_SECURE_COOKIE
+              value: {{ .Values.auth.secureCookie | quote }}
+            - name: HEIMDALL_LOGIN_REDIRECT_URL
+              value: {{ printf "%s/v1/auth/callback" .Values.publicBaseUrl | quote }}
+            - name: HEIMDALL_OIDC_COOKIE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.cookieSecretName }}
+                  key: {{ .Values.auth.cookieSecretKey }}
+            - name: HEIMDALL_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.oidc.clientSecretName }}
+                  key: {{ .Values.auth.oidc.clientSecretKey }}
+          {{- else }}
+            - name: HEIMDALL_OIDC_ENABLED
+              value: "false"
+          {{- end }}
+          {{- if .Values.auth.jwt.enabled }}
+            - name: HEIMDALL_JWT_ENABLED
+              value: "true"
+            - name: HEIMDALL_JWT_ISSUER
+              value: {{ .Values.auth.jwt.issuer | quote }}
+            - name: HEIMDALL_JWT_AUDIENCES
+              value: {{ .Values.auth.jwt.audiences | quote }}
+            - name: HEIMDALL_JWT_JWKS_URL
+              value: {{ .Values.auth.jwt.jwksUrl | quote }}
+            - name: HEIMDALL_JWT_SUBJECT_CLAIM
+              value: {{ .Values.auth.jwt.subjectClaim | quote }}
+            - name: HEIMDALL_JWT_ALLOWED_SUBJECTS
+              value: {{ join "," .Values.auth.jwt.allowedSubjects | quote }}
+            - name: HEIMDALL_JWT_CLIENT_ID_CLAIM
+              value: {{ .Values.auth.jwt.clientIdClaim | quote }}
+            - name: HEIMDALL_JWT_SCOPES_CLAIM
+              value: {{ .Values.auth.jwt.scopesClaim | quote }}
+          {{- end }}
+          {{- if .Values.auth.kubernetes.enabled }}
+            - name: HEIMDALL_KUBERNETES_AUTH_ENABLED
+              value: "true"
+            - name: HEIMDALL_KUBERNETES_AUTH_AUDIENCE
+              value: {{ .Values.auth.kubernetes.audience | quote }}
+            - name: HEIMDALL_KUBERNETES_AUTH_EXPECTED_SERVICE_ACCOUNT
+              value: {{ .Values.auth.kubernetes.expectedServiceAccount | quote }}
+          {{- end }}
+          {{- if (((.Values.global).otelcollector).enabled) }}
+          {{- include "heimdall.otelEnv" . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: rest-internal
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: rest-internal
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 1
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.global.nodeSelector .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default .Values.global.tolerations .Values.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+      {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

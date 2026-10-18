@@ -1,0 +1,63 @@
+exclude: '^notifications/tests/golden_values/'
+default_language_version:
+  golang: '1.27.1'
+repos:
+-   repo: local
+    hooks:
+    -   id: action-sha-pins
+        name: Require immutable GitHub Actions references
+        entry: python scripts/ci/check-action-pins.py
+        language: python
+        additional_dependencies: [PyYAML==6.0.3]
+        files: ^\.github/(workflows/.*\.ya?ml|actions/.*/action\.ya?ml)$
+        stages: [pre-commit, manual]
+    -   id: license-eye-header-fix
+        name: Add or repair SPDX source headers
+        entry: license-eye -c .licenserc.yaml header fix
+        language: golang
+        additional_dependencies:
+        - github.com/apache/skywalking-eyes/cmd/license-eye@v0.8.0
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+    -   id: license-eye-header-check
+        name: Check SPDX source headers
+        entry: license-eye -c .licenserc.yaml header check
+        language: golang
+        additional_dependencies:
+        - github.com/apache/skywalking-eyes/cmd/license-eye@v0.8.0
+        pass_filenames: false
+        always_run: true
+        stages: [manual]
+    -   id: helm-chart-check
+        name: helm chart lint and template
+        entry: deploy/helm/scripts/check-charts.sh
+        language: script
+        files: ^deploy/helm/[^/]+/
+        stages: [pre-commit, manual]
+    -   id: python-format
+        name: python format check
+        entry: scripts/ci/format-python.sh
+        language: script
+        types_or: [python]
+        stages: [pre-commit, manual]
+    -   id: python-lint
+        name: python lint check
+        entry: scripts/ci/lint-python.sh
+        language: script
+        types_or: [python]
+        stages: [pre-commit, manual]
+
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 2c9f875913ee60ca25ce70243dc24d5b6415598c  # v4.6.0
+    hooks:
+    -   id: check-yaml
+        args: [--allow-multiple-documents]
+        exclude: ^deploy/|dashboard/pnpm-lock.yaml
+    -   id: end-of-file-fixer
+        exclude: '(\.(yml|yaml|json)$|^dashboard/src/gen/|^recovery_libs/recovery_libs/notifications_client/)'
+    -   id: trailing-whitespace
+        exclude: ^(deploy/|dashboard/src/gen/|notifications/openapi\.yaml$|recovery_libs/recovery_libs/notifications_client/)
+    -   id: check-json
+        exclude: ^dashboard/tsconfig.json
+    -   id: check-added-large-files

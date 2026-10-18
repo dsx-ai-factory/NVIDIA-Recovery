@@ -1,0 +1,7 @@
+# Explicit degraded operation: recovery continues without provider diagnosis.
+anomaly-detection-isolator:
+  attribution_enabled: false
+attribution-adapter:
+  enabled: false
+attribution-service:
+  enabled: false

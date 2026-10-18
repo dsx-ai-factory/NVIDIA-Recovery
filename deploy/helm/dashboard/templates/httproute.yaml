@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if and .Values.ingress_fqdn (eq (default "ingress" ((.Values.global).routing).type) "gateway") }}
+{{- $parentRefName := default "" (default (dict) (default (dict) (.Values.global).gateway).parentRef).name -}}
+{{- $parentRefNs := default "" (default (dict) (default (dict) (.Values.global).gateway).parentRef).namespace -}}
+{{- $parentRefSection := default "" (default (dict) (default (dict) (.Values.global).gateway).parentRef).sectionName -}}
+{{- $localParentRefName := default $parentRefName .Values.gateway.parentRef.name -}}
+{{- $localParentRefNs := default $parentRefNs .Values.gateway.parentRef.namespace -}}
+{{- $localParentRefSection := default $parentRefSection .Values.gateway.parentRef.sectionName -}}
+{{- if not $localParentRefName }}
+  {{- fail "global.gateway.parentRef.name is required when global.routing.type is 'gateway'" }}
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "dashboard.fullname" . }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ $localParentRefName }}
+      {{- if $localParentRefNs }}
+      namespace: {{ $localParentRefNs }}
+      {{- end }}
+      {{- if $localParentRefSection }}
+      sectionName: {{ $localParentRefSection }}
+      {{- end }}
+  {{- if and .Values.ingress_fqdn (ne (toString .Values.ingress_fqdn) "*") }}
+  hostnames:
+    - {{ .Values.ingress_fqdn | quote }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ default "/" .Values.app.base_path }}
+      backendRefs:
+        - name: {{ include "dashboard.fullname" . }}
+          port: {{ .Values.port }}
+{{- end }}

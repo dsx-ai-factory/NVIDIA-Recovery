@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.ingress.tls.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.ingress.tls.secretName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+spec:
+  secretName: {{ .Values.ingress.tls.secretName }}
+  dnsNames:
+    - {{ .Values.ingress.fqdn | quote }}
+  issuerRef:
+    name: {{ .Values.ingress.tls.certManager.issuerRef.name | quote }}
+    kind: {{ .Values.ingress.tls.certManager.issuerRef.kind | quote }}
+    group: {{ .Values.ingress.tls.certManager.issuerRef.group | quote }}
+{{- end }}

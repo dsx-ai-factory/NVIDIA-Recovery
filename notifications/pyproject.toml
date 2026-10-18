@@ -1,0 +1,68 @@
+[project]
+name = "notifications"
+version = "0.1.0"
+description = "Notification service for NVIDIA Mission Control autonomous recovery engine."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.125.0",
+    "starlette>=0.50.0",
+    "pydantic>=2.10.6",
+    "sqlmodel>=0.0.22",
+    "uvicorn>=0.34.0",
+    "dynaconf>=3.2.6",
+    "sqlalchemy>=2.0.37",
+    "pymysql[rsa]>=1.2.0",
+    "prometheus-client>=0.20.0",
+    "prometheus-fastapi-instrumentator>=7.0.0",
+    "alembic>=1.14.1",
+    "taskiq>=0.11.11",
+    "chevron-blue>=0.2.1",
+    "jq>=1.8.0",
+    "httpx>=0.28.1",
+    "uuid6>=2024.1.12",
+    "recovery-libs",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-mock>=3.14.0",
+    "freezegun>=1.5.1",
+    "httpx>=0.28.1",
+    "mypy>=2.4.0",
+    "pytest-cov>=6.0.0",
+    "ruamel-yaml>=0.18.10",
+    "respx>=0.22.0",
+    "testcontainers[mysql]>=4,<5",
+]
+
+[project.scripts]
+notifications = "notifications.main:main"
+
+[tool.uv.sources]
+recovery-libs = { workspace = true }
+
+[tool.pytest.ini_options]
+markers = [
+    "nightly: tests excluded from pull requests and main pushes; included in nightly and tagged-release suites",
+    "regression: tests that reproduce a specific fixed bug, guarding against reintroduction",
+]
+filterwarnings = [
+    "ignore:.*signature of athrow\\(\\) is deprecated.*:DeprecationWarning:taskiq_dependencies.ctx",
+]
+
+[tool.coverage.run]
+omit = ["tests/*", "notifications/_migrations/*"]
+
+[tool.mypy]
+explicit_package_bases = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+plugins = ["pydantic.mypy"]
+exclude = [
+    "tests/",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

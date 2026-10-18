@@ -1,0 +1,13 @@
+apiVersion: v2
+name: watcher
+description: NVIDIA Recovery Watcher detects anomaly signals in observability data and publishes events to the event bus.
+type: application
+version: 0.1.4
+appVersion: "0.0.1"
+home: https://github.com/dsx-ai-factory/NVIDIA-Recovery
+sources:
+  - https://github.com/dsx-ai-factory/NVIDIA-Recovery
+keywords:
+  - nvidia-recovery
+maintainers:
+  - name: NVIDIA Recovery maintainers

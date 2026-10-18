@@ -1,0 +1,11 @@
+*
+!anomaly_detection_isolator/README.md
+!anomaly_detection_isolator/anomaly_detection_isolator
+!anomaly_detection_isolator/pyproject.toml
+!pyproject.toml
+!uv.lock
+!recovery_libs/docs
+!recovery_libs/pyproject.toml
+!recovery_libs/recovery_libs
+**/__pycache__
+**/*.pyc

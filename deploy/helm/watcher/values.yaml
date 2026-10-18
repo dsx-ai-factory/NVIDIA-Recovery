@@ -1,0 +1,539 @@
+global:
+  # Query selection is independent from bundled Loki and collector/write
+  # configuration. The umbrella chart may replace this block for all consumers.
+  log_query:
+    backend: loki
+    providers:
+      loki:
+        application:
+          # Required for polling, including deployments with bundled Loki.
+          url: ""
+          tenants: ""
+          org_id: ""
+        queries:
+          watcher:
+            query_prefix: ""
+            workflows:
+              straggler:
+                query:
+                - '|= "per GPU" |~ "(?i)(approx flops per GPU)|(throughput per GPU)"'
+              noprogress:
+                query:
+                - PRE_TRAINING: '|= "before the start of training step"'
+                - PRE_TRAINING: '|= "using world size"'
+                - PRE_TRAINING: '|= "Initialized distributed training" |~ "RANK 0.*Initialized distributed training"'
+                - PRE_TRAINING: '|= "main_function" |~ "type=(start|event).*name=main_function.*event.metrics.world_size"'
+                - PRE_TRAINING: '|= "distributed_code_initialization" |~ "type=complete.*stop_event.name=span_stop.*name=distributed_code_initialization"'
+                - PRE_TRAINING: '|= "rendezvous_started" |~ "(Cycle:.*Event:.*rendezvous_started)"'
+                - PRE_TRAINING: '|= "Executing the training task"'
+                - PRE_TRAINING: '|= "Running TrainingRunner on device"'
+                - PRE_TRAINING: '|= "JobTracker initialized" |~ "JobTracker initialized.*job_id"'
+                - TRAINING_LOOP: '|= "approx flops per GPU"'
+                - TRAINING_LOOP: '|= "Activation Checkpointing Information"'
+                - TRAINING_LOOP: '|= "throughput per GPU"'
+                - TRAINING_LOOP: '|= "on_train_start"'
+                - TRAINING_LOOP: '|= "tflops" |~ "event.name=training_iterations.*event.metrics.tflops"'
+                - TRAINING_LOOP: '|= "training_metrics_update" |~ "event.name=training_metrics_update.*event.attributes.total_flops"'
+                - TRAINING_LOOP: '|= "average_iteration_time" |~ "event.name=training_iterations.*event.metrics.average_iteration_time"'
+                - TRAINING_LOOP: '|= "checkpoint_load" |~ "type=complete.*stop_event.name=span_stop.*name=checkpoint_load"'
+                - TRAINING_LOOP: '|= "checkpoint_save_" |~ "type=complete.*stop_event.name=span_stop.*name=checkpoint_save_"'
+                nooutput_validation_query: '| job_id = "{job_id}"'
+              hangpushrecv:
+                query:
+                - '|= "expect" |~ "(?i)(pushrecv: expected)|(]: expecting )"'
+              hang_app:
+                query:
+                - '|~ "(?i)(botocore.*exceptions)|(Disk quota exceeded)"'
+                - '|= "NCCL" |~ "(?i)(NCCL WARN.*status=5)|(NCCL WARN.*with error 5)|(NCCL Error 5)"'
+                - '|= "NCCL" |~ "(?i)(NCCL WARN.*status=12)|(NCCL WARN.*with error 12)|(NCCL Error 12)"'
+              crash:
+                query:
+                - '|~ `(?i)(segmentation fault)|(illegal memory access was encountered)|(illegal instruction was encountered)`'
+                # "rror: " is intentional: case-sensitive substring shared by both "Error: " (PascalCase) and "error: " (lowercase) variants
+                - '|= "rror: " |~ `(?i)(RuntimeError: )|(CUDA error: )|(NCCL error: )`'
+                - '|~ `(?i)(Signal: Aborted [(]6[)])|(NCCL WARN Cuda failure 2.*out of memory)|(: AssertionError[(]Rank)`'
+                - '|~ `(?i)(Exited with exit code 1)|(Watchdog caught collective operation timeout: WorkNCCL)`'
+                # "rror: " is intentional: case-sensitive substring shared by both "Error: " (PascalCase) and "error: " (lowercase) variants
+                - '|= "rror: " |~ `(?i)(torch.distributed..*Error: )|(error: Prolog hung on node)`'
+                - '|~ `(?i)(AssertionError.*found NaN)|(lm_loss: NAN)`'
+                - '|~ `(?i)(slurmstepd: error: pyxis: child.*failed with error code: 1)|(nvidia_resiliency_ext.*InjectedException$)`'
+                - '|= "uncorrectable" |~ `(?i)(CUDA error.*uncorrectable|NVLink error.*uncorrectable|uncorrectable.*NVLink error|uncorrectable.*CUDA error)`'
+              chkpt_load:
+                query:
+                - '|= "checkpoint" |~ "(?i)(load-checkpoint)|(Loaded checkpoint from)"'
+                - '|= "checkpoint_load" |~ "type=complete.*stop_event.name=span_stop.*name=checkpoint_load"'
+                - '|= "restoring checkpoint" |~ "(?i)(Done restoring checkpoint)"'
+              chkpt_save:
+                query:
+                - '|~ "(?i)(save-checkpoint)|(SAVE_CHECKPOINT: iteration:.*, ckpt saving takes .* seconds)|(Saved checkpoint to)"'
+                - '|= "checkpoint_save_" |~ "type=complete.*stop_event.name=span_stop.*name=checkpoint_save_"'
+                - '|= "saving distributed checkpoint" |~ "(?i)(Done saving distributed checkpoint)"'
+              synthetic_application_log_events:
+                query:
+                - '|= "heartbeat_application_logs"'
+      victorialogs:
+        # VictoriaLogs 1.39.0+ is required for query-window and tenant semantics.
+        application:
+          url: ""
+          account_id: ""
+          project_id: ""
+          require_tenant: false
+
+name: watcher
+
+## Resources
+##
+resources:
+  limits:
+    memory: 2Gi
+  requests:
+    memory: 2Gi
+
+replicas: 1
+
+## Image
+##
+image:
+  repository: ""
+  name: watcher
+  tag: ""
+  pullPolicy: Always
+
+## Rule Configuration
+ruleConfig:
+  # Where the rules file is mounted and how RULES_PATH is set. The mount
+  # directory and expected file name are both derived from this path.
+  rulePath: "/rules/rules.yaml"
+  # Optional: mount a pre-existing ConfigMap and use its contents in place of
+  # config.anomaly_workflow_definitions below. No auto rolling-restart on
+  # changes to the external ConfigMap's content.
+  existingConfigMap: ""
+  # Data key inside existingConfigMap. Override if your ConfigMap uses a
+  # different key (e.g. test-rules.yaml).
+  configMapKey: "rules.yaml"
+
+## App Configuration
+##
+config_path: config/local.yaml
+log_level: INFO
+port: 8080
+loki_cert_file: ""
+loki_key_file: ""
+loki_ca_cert: ""
+use_lepton: false
+lepton_worker_cluster_name: ""
+lepton_base_url: "http://lepton-cluster-api-server-service.cluster-api-server.svc.cluster.local:20864/api/v2/admin"
+
+credentials:
+  loki:
+    app_secret_name: null
+    secret_key_name: token
+    api_token_secret_name: null
+    api_token_secret_key_name: token
+  victorialogs:
+    # Bearer token or Basic-auth username/password for a query proxy, supplied
+    # through existing Secrets. Tenant selection remains explicit provider
+    # config. Bearer and Basic modes are mutually exclusive.
+    api_token_secret_name: null
+    api_token_secret_key_name: token
+    username_secret_name: null
+    username_secret_key_name: username
+    password_secret_name: null
+    password_secret_key_name: password
+    ca_cert_secret_name: null
+    ca_cert_secret_key_name: ca.crt
+    cert_secret_name: null
+    cert_secret_key_name: tls.crt
+    key_secret_name: null
+    key_secret_key_name: tls.key
+  rabbitmq:
+    secret_name: null
+    secret_key_name: rabbitmq-password
+
+## Config
+## [OPTIONAL] - overrides configuration in `config_file_path`
+##
+config:
+  metrics_cleanup_threshold_secs: 600
+  event_source: log_query  # [log_query, rabbitmq; loki is a compatibility alias]
+  service:
+    host: "0.0.0.0"
+    port: 8080
+    http_log_level: "WARNING"
+    num_threads: 5
+    max_queue_size: 1024
+    maintenance_tasks_interval_secs: 30
+    audit_trail:
+      # Omit destination to use the same-release Notifications Service on port 8080.
+      # Set a URL for a custom Service/receiver, or ""/null for logging only.
+      max_batch_size: 100
+      max_buffer_size: 1000
+      flush_interval_seconds: 30
+  datasources:
+    # Backend-neutral query connection. Helm sets backend from the single
+    # global.log_query.backend selector and maps that provider's application
+    # connection into this block. Common polling and normalization controls
+    # remain backend-neutral in log_query_policy.
+    log_query:
+      backend: loki
+      providers: {}
+    log_query_policy:
+      query_delay: 60  # seconds
+      query_max_lookback: 900  # seconds (15 minutes)
+      # Label to Event.Attributes remapping
+      label_remapping_enabled: false
+      label_remapping:
+        # Simple remaps: attribute_name -> provider field
+        simple:
+          job_id: slurm_job_id
+        # Composite remaps: combine multiple labels using template syntax
+        composite:
+          - attribute: log.file.name
+            template: "{slurm_job_name}_{slurm_job_id}_{slurm_job_attempt}"
+            labels: [slurm_job_name, slurm_job_id, slurm_job_attempt]
+          - attribute: log.file.path
+            template: "/var/log/slurm/{slurm_job_name}_{slurm_job_id}_{slurm_job_attempt}"
+            labels: [slurm_job_name, slurm_job_id, slurm_job_attempt]
+    rabbitmq:
+      publisher:
+        routing_prefix: anomaly.detected.
+        host: ""
+        username: rabbitmq
+        vhost: default-vhost
+        exchange: watcher_eventbus_exchange_dev
+        queues:
+          - anomaly_detected_job_manager
+        routing_keys:
+          anomaly_detected:
+          - anomaly.detected.CHECKPOINTLOAD
+          - anomaly.detected.CHECKPOINTSAVE
+          - anomaly.detected.CRASH
+          - anomaly.detected.CRASHAPPEXCEPTION
+          - anomaly.detected.CRASHOOM
+          - anomaly.detected.CRASHSEGV
+          - anomaly.detected.FLTINJECTION
+          - anomaly.detected.FLTINJECTIONINFRA
+          - anomaly.detected.HANG
+          - anomaly.detected.HANGAPP
+          - anomaly.detected.HANGCOMM
+          - anomaly.detected.HANGNOOUTPUT
+          - anomaly.detected.HANGPUSHRECV
+          - anomaly.detected.LOWTHROUGHPUT
+          - anomaly.detected.LOWTHROUGHPUTGPU
+          - anomaly.detected.LOWTHROUGHPUTNSNET
+          - anomaly.detected.LOWTHROUGHPUTSTORAGE
+          - anomaly.detected.STRAGGLER
+          - anomaly.detected.UNKNOWN
+    job_manager:
+      endpoint: http://job-manager:8080
+  environment: test
+  # Optional workflow overrides keyed by workflow name.
+  #
+  # Examples:
+  # anomaly_workflows:
+  #   straggler:
+  #     enabled: false
+  #   noprogress:
+  #     preTrainingTimeoutSecs: 180
+  #     trainingLoopTimeoutSecs: 120
+  #
+  # For backward compatibility, this can also be a legacy full workflow list:
+  # anomaly_workflows:
+  #   - name: custom_workflow
+  #     type: log_query
+  anomaly_workflows: null
+  anomaly_workflow_options_defaults:
+    straggler:
+      enabled: true
+    noprogress:
+      enabled: true
+      preTrainingTimeoutSecs: 960
+      trainingLoopTimeoutSecs: 840
+      false_positive_scan_timer: 600
+    hangpushrecv:
+      enabled: true
+    hang_app:
+      enabled: true
+    crash:
+      enabled: true
+    chkpt_load:
+      enabled: true
+    chkpt_save:
+      enabled: true
+    synthetic_application_log_events:
+      enabled: true
+  anomaly_workflow_definitions:
+    ## STRAGGLER configuration
+    ##
+    - name: straggler
+      type: log_query
+      bucket_by:
+      - job_id
+      - log_file_name
+      attributes:
+        query:
+          regex:
+          - 'event.name=training_iterations.*event.metrics.tflops'
+      children:
+        - name: get_tflop
+          type: regex_parser
+          attributes:
+            regex: 'throughput per GPU \(TFLOP/s/GPU\): (\d+\.\d+)'
+        - name: detect_straggler
+          type: moving_avg
+          attributes:
+            cache_key: tflop_straggler
+            # See watcher/docs/ANOMALY_DETECTION.md for more information
+            window_size: 100
+            base_percentile_threshold: 35
+            anomaly_percent_threshold: 10
+            alert_smoothing_count: 5
+            warmup_grace_period_secs: 600
+            min_window_size_for_detection: 10
+            min_interval_between_datapoints_secs: 30
+            skip_too_close_datapoints: False
+            reset_after_good_values: 5
+            notify_once: true
+            action:
+              send_message_eventbus: STRAGGLER
+              unique: True
+        - name: emit_tflop
+          type: emit_metric
+          attributes:
+            metric_name: WORKFLOW_JOB_THROUGHPUT
+            metric_type: gauge
+            enable_metric_cleanup: True
+    ## HANG NOOUTPUT configuration
+    ##
+    - name: noprogress
+      type: nooutput
+      bucket_by:
+      - job_id
+      - log_file_name
+      attributes:
+        cache_key: hang_nooutput
+        query:
+          regex:
+          - PRE_TRAINING: 'type=(start|event).*name=main_function.*event.metrics.world_size'
+          - PRE_TRAINING: 'type=complete.*stop_event.name=span_stop.*name=distributed_code_initialization'
+          - PRE_TRAINING: '(Cycle:.*Event:.*rendezvous_started)'
+          - PRE_TRAINING: '(Executing the training task)|(Running TrainingRunner on device)|(JobTracker initialized.*job_id)'
+          - TRAINING_LOOP: 'event.name=training_iterations.*event.metrics.tflops'
+          - TRAINING_LOOP: 'event.name=training_metrics_update.*event.attributes.total_flops'
+          - TRAINING_LOOP: 'event.name=training_iterations.*event.metrics.average_iteration_time'
+          - TRAINING_LOOP: 'type=complete.*stop_event.name=span_stop.*name=checkpoint_load'
+          - TRAINING_LOOP: 'type=complete.*stop_event.name=span_stop.*name=checkpoint_save_'
+        interval:
+          PRE_TRAINING: 960   # (seconds) - 16 minutes
+          TRAINING_LOOP: 840  # (seconds) - 14 minutes
+        last_iteration_enabled: True
+        last_iteration_regex: 'iteration\s*(\d+)\s*\/\s*(\d+)\s*\|'
+        last_iteration_operation_schema: '{current} > 0.99 * {total}'
+        false_positive_scan_cache_key: false_positive
+        false_positive_scan_timer: 600
+        action:
+          send_message_eventbus: HANGNOOUTPUT
+    ## HANG configuration
+    ##
+    - name: hangpushrecv
+      type: log_query
+      bucket_by:
+      - job_id
+      - log_file_name
+      attributes:
+        filter_events_by_jobid_before_processing: True
+        query:
+          regex:
+          - 'pushrecv: expected'
+          - ']: expecting'
+      children:
+        - name: hangpushrecv_action
+          type: simple_action
+          attributes:
+            action:
+              send_message_eventbus: HANGPUSHRECV
+              unique: True # [Optional] guarantees action runs only once per event/job_id
+    - name: hang_app
+      type: log_query
+      bucket_by:
+      - job_id
+      - log_file_name
+      attributes:
+        filter_events_by_jobid_before_processing: True
+        query:
+          regex:
+          - 'botocore.*exceptions'
+          - 'Disk quota exceeded'
+          - 'with error 5'
+          - 'NCCL WARN.*status=5'
+          - 'NCCL WARN.*with error 5'
+          - 'with error 12'
+          - 'NCCL WARN.*status=12'
+          - 'NCCL WARN.*with error 12'
+      children:
+        - name: hang_app_action
+          type: simple_action
+          attributes:
+            action:
+              send_message_eventbus: HANGAPP
+              unique: True # [Optional] guarantees action runs only once per event/job_id
+    ## CRASH configuration
+    ##
+    - name: crash
+      type: log_query
+      bucket_by:
+      - job_id
+      - log_file_name
+      attributes:
+        filter_events_by_jobid_before_processing: True
+        query:
+          regex:
+          - 'segmentation fault'
+          - 'illegal memory access was encountered'
+          - 'illegal instruction was encountered'
+          - 'Exited with exit code 1'
+          - 'Watchdog caught collective operation timeout: WorkNCCL'
+          - 'RuntimeError: '
+          - 'CUDA error: '
+          - 'NCCL error: '
+          - 'torch.distributed..*Error: '
+          - 'error: Prolog hung on node'
+          - 'Signal: Aborted [(]6[)]'
+          - 'NCCL WARN Cuda failure 2.*out of memory'
+          - 'AssertionError.*found NaN'
+          - 'lm_loss: NAN'
+          - 'slurmstepd: error: pyxis: child.*failed with error code: 1'
+          - 'nvidia_resiliency_ext.*InjectedException$'
+          - 'CUDA error.*uncorrectable'
+          - 'NVLink error.*uncorrectable'
+          - 'uncorrectable.*NVLink error'
+          - 'uncorrectable.*CUDA error'
+      children:
+        - name: crash_action
+          type: simple_action
+          attributes:
+            action:
+              send_message_eventbus: CRASH
+              unique: True # [Optional] guarantees action runs only once per event/job_id
+    ## Checkpoint load configuration
+    ##
+    - name: chkpt_load
+      type: log_query
+      bucket_by:
+      - job_id
+      - log_file_name
+      attributes:
+        query:
+          regex:
+          - 'type=complete.*stop_event.name=span_stop.*name=checkpoint_load'
+          - 'Done restoring checkpoint'
+      children:
+      - name: chkpt_load_action
+        type: simple_action
+        attributes:
+          action:
+            send_message_eventbus: CHECKPOINTLOAD
+            unique: False
+    ## Checkpoint save configuration
+    ##
+    - name: chkpt_save
+      type: log_query
+      bucket_by:
+      - job_id
+      - log_file_name
+      attributes:
+        query:
+          regex:
+          - 'type=complete.*stop_event.name=span_stop.*name=checkpoint_save_'
+          - 'Done saving distributed checkpoint'
+      children:
+      - name: chkpt_save_action
+        type: simple_action
+        attributes:
+          action:
+            send_message_eventbus: CHECKPOINTSAVE
+            unique: False
+    ## Synthetic Log Events - E2E app logs alerting
+    ##
+    - name: synthetic_application_log_events
+      type: log_query
+      attributes:
+        query:
+          regex:
+          - 'heartbeat_application_logs'
+      children:
+      - name: emit_synthetic_application_log_metric
+        type: emit_metric
+        attributes:
+          metric_name: E2E_SYNTHETIC_APPLICATION_LOG_RCVD
+          metric_type: counter
+
+## Ingress
+## [OPTIONAL]
+##
+ingress:
+  enabled: false
+  ingressClassName: nginx
+  apiVersion: networking.k8s.io/v1
+  annotations: {}
+  labels: {}
+
+  ## Override ingress to a different defined port on the service
+  # servicePort: 8081
+
+  ## Hosts must be provided if Ingress is enabled.
+  ##
+  hosts: []
+    # - eventbusforwarder.domain.com
+
+  ## Paths to use for ingress rules
+  ##
+  paths: []
+  # - /
+
+  ## For Kubernetes >= 1.18 you should specify the pathType (determines how Ingress paths should be matched)
+  ## See https://kubernetes.io/blog/2020/04/02/improvements-to-the-ingress-api-in-kubernetes-1.18/#better-path-matching-with-path-types
+  # pathType: ImplementationSpecific
+
+  ## TLS configuration for Ingress
+  ## Secret must be manually created in the namespace
+  ##
+  tls: []
+  # - secretName: eventbusforwarder-general-tls
+  #   hosts:
+  #   - eventbusforwarder.domain.com
+
+gateway:
+  parentRef:
+    name: ""
+    namespace: ""
+    sectionName: ""
+
+fluentbit:
+  enabled: false
+  otlpHost: ""
+grafana_dashboard:
+  enabled: false
+
+imagePullSecrets: []
+
+nodeSelector: {}
+
+tolerations: []
+
+volumes: []
+
+volumeMounts: []
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Look at the README.md at ./deploy/helm/README.md
+enableExtendedLabelSelectors: false

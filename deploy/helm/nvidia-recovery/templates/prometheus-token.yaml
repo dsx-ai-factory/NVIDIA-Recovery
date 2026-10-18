@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+{{ if .Values.global.prometheus.create_token_secret }}
+apiVersion: v1
+data:
+  token: "{{ .Values.global.prometheus.token | b64enc }}"
+kind: Secret
+metadata:
+  name: heimdall-prometheus-token
+  namespace: {{ .Release.Namespace }}
+type: Opaque
+{{ end }}

@@ -1,0 +1,30 @@
+name: Release Packaging
+
+on:
+  # Evaluate every trusted CI push: workflow path filters can miss large stacks.
+  push:
+    branches: [main, "pull-request/[0-9A-Za-z]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Release Packaging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: v3.17.3
+      - name: Test packaging contracts
+        run: python3 -m unittest discover -s scripts/release -p 'test_*.py'
+      - name: Validate reproducible source and chart archives
+        run: |
+          version="$(awk '/^version:/{print $2; exit}' deploy/helm/nvidia-recovery/Chart.yaml)"
+          python3 scripts/release/package.py package "$version" dist/release
+          python3 scripts/release/package.py package "$version" dist/reproduce
+          diff -r dist/release dist/reproduce

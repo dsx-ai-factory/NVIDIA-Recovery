@@ -1,0 +1,53 @@
+# Kind topology for node-local syslog qualification. The shared-home token is
+# rendered by cluster.sh so every Kind node sees the same disposable backing
+# directory while each worker retains its own /var/log/syslog.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+# Enable containerd's per-registry certs.d directory so registry mirrors can be
+# added as hosts.toml drop-ins after the cluster is up. This is the upstream
+# kind pattern (https://kind.sigs.k8s.io/docs/user/local-registry/) and replaces
+# the [registry.mirrors] config, which containerd deprecated in v1.5 and removes
+# in v2.1. Note the two are mutually exclusive: when config_path is set,
+# containerd ignores [registry.mirrors] entirely, so every mirror must be a
+# hosts.toml drop-in.
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          taints:
+            - key: "node-role.kubernetes.io/control-plane"
+              effect: "NoSchedule"
+            - key: "node-role.kubernetes.io/control-plane-exclusive"
+              effect: "NoSchedule"
+      - |
+        kind: KubeletConfiguration
+        kubeReserved:
+          cpu: "1000m"
+          memory: "512Mi"
+    extraMounts:
+      - hostPath: __SLURM_SHARED_HOME__
+        containerPath: __SLURM_SHARED_HOME__
+  - role: worker
+    labels:
+      heimdall.nvidia.com/slurm-worker: "true"
+      heimdall.nvidia.com/slurm-node: e2e-a-0
+    extraMounts:
+      - hostPath: __SLURM_SHARED_HOME__
+        containerPath: __SLURM_SHARED_HOME__
+  - role: worker
+    labels:
+      heimdall.nvidia.com/slurm-worker: "true"
+      heimdall.nvidia.com/slurm-node: e2e-b-0
+    extraMounts:
+      - hostPath: __SLURM_SHARED_HOME__
+        containerPath: __SLURM_SHARED_HOME__
+  - role: worker
+    extraMounts:
+      - hostPath: __SLURM_SHARED_HOME__
+        containerPath: __SLURM_SHARED_HOME__

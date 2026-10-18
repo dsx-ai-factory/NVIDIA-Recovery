@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Anomaly detection isolator chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "name", "tag", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 0 },
+        "name": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "minLength": 0 },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "resourceList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["memory"],
+      "properties": {
+        "cpu": { "type": "string", "minLength": 1 },
+        "memory": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": { "$ref": "#/definitions/resourceList" },
+        "limits": { "$ref": "#/definitions/resourceList" }
+      }
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "errorList": {
+      "type": "string",
+      "minLength": 1
+    },
+    "errorListEnv": {
+      "type": "string",
+      "minLength": 0
+    },
+    "auditTrail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_batch_size",
+        "max_buffer_size",
+        "flush_interval_seconds"
+      ],
+      "properties": {
+        "destination": {
+          "oneOf": [
+            { "type": "null" },
+            { "const": "" },
+            {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://(\\[[^\\]]+\\]|[^/?#:\\s]+)(:[0-9]+)?([/?#]|$)"
+            }
+          ]
+        },
+        "max_batch_size": { "type": "integer", "minimum": 1 },
+        "max_buffer_size": { "type": "integer", "minimum": 1 },
+        "flush_interval_seconds": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  },
+  "required": [
+    "port",
+    "resources",
+    "replicas",
+    "image",
+    "service_type",
+    "command",
+    "attribution_engines",
+    "attribution_enabled",
+    "attribution_fast_http_timeout_seconds",
+    "attribution_slow_http_timeout_seconds",
+    "audit_trail",
+    "fact",
+    "credentials",
+    "event_bus",
+    "root_path",
+    "num_worker_threads",
+    "epilogue_started_wait_seconds",
+    "slow_signals_enabled",
+    "slow_signals_delay_seconds",
+    "epilog_query_duration_minutes",
+    "max_isolated_nodes",
+    "rack_aware_isolation_enabled",
+    "max_isolated_nodes_per_rack",
+    "max_racks_to_isolate",
+    "jobmanager_http_timeout_seconds",
+    "job_manager",
+    "grafana_dashboard",
+    "imagePullSecrets",
+    "nodeSelector",
+    "tolerations",
+    "volumes",
+    "volumeMounts",
+    "serviceAccount",
+    "enableExtendedLabelSelectors"
+  ],
+  "properties": {
+    "global": { "type": "object" },
+    "enabled": { "type": "boolean" },
+    "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "resources": { "$ref": "#/definitions/resources" },
+    "replicas": { "type": "integer", "minimum": 0 },
+    "image": { "$ref": "#/definitions/image" },
+    "service_type": {
+      "type": "string",
+      "enum": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"]
+    },
+    "command": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "attribution_engines": { "type": "string", "minLength": 1 },
+    "attribution_enabled": { "type": "boolean" },
+    "attribution_service_url": { "type": "string" },
+    "attribution_fast_http_timeout_seconds": { "type": "integer", "minimum": 1 },
+    "attribution_slow_http_timeout_seconds": { "type": "integer", "minimum": 1 },
+    "audit_trail": { "$ref": "#/definitions/auditTrail" },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "isolated_errors",
+        "ambiguous_errors",
+        "non_isolated_errors",
+        "isolated_errors_env",
+        "ambiguous_errors_env",
+        "non_isolated_errors_env"
+      ],
+      "properties": {
+        "isolated_errors": { "$ref": "#/definitions/errorList" },
+        "ambiguous_errors": { "$ref": "#/definitions/errorList" },
+        "non_isolated_errors": { "$ref": "#/definitions/errorList" },
+        "isolated_errors_env": { "$ref": "#/definitions/errorListEnv" },
+        "ambiguous_errors_env": { "$ref": "#/definitions/errorListEnv" },
+        "non_isolated_errors_env": { "$ref": "#/definitions/errorListEnv" }
+      }
+    },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rabbitmq"],
+      "properties": {
+        "rabbitmq": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["secret_key_name"],
+          "properties": {
+            "secret_name": {
+              "oneOf": [
+                { "type": "null" },
+                { "type": "string", "minLength": 1 }
+              ]
+            },
+            "secret_key_name": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "event_bus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attribution_request_exchange",
+        "attribution_request_queue",
+        "isolator_completed_exchange",
+        "slow_signals_exchange",
+        "slow_signals_queue",
+        "exchange",
+        "host",
+        "username",
+        "port",
+        "vhost",
+        "queue_name",
+        "routing_key"
+      ],
+      "properties": {
+        "attribution_request_exchange": { "type": "string", "minLength": 1 },
+        "attribution_request_queue": { "type": "string", "minLength": 1 },
+        "isolator_completed_exchange": { "type": "string", "minLength": 1 },
+        "slow_signals_exchange": { "type": "string", "minLength": 1 },
+        "slow_signals_queue": { "type": "string", "minLength": 1 },
+        "exchange": { "type": "string", "minLength": 1 },
+        "host": { "type": "string", "minLength": 1 },
+        "username": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "vhost": { "type": "string", "minLength": 1 },
+        "queue_name": { "type": "string", "minLength": 1 },
+        "routing_key": { "type": "string", "minLength": 1 }
+      }
+    },
+    "root_path": { "type": "string", "minLength": 1 },
+    "num_worker_threads": { "type": "integer", "minimum": 1 },
+    "epilogue_started_wait_seconds": { "type": "integer", "minimum": 0 },
+    "slow_signals_enabled": { "type": "boolean" },
+    "slow_signals_delay_seconds": { "type": "integer", "minimum": 0 },
+    "epilog_query_duration_minutes": { "type": "integer", "minimum": 0 },
+    "max_isolated_nodes": { "type": "integer", "minimum": 0 },
+    "rack_aware_isolation_enabled": { "type": "boolean" },
+    "max_isolated_nodes_per_rack": { "type": "integer", "minimum": 0 },
+    "max_racks_to_isolate": { "type": "integer", "minimum": 0 },
+    "rack_extraction_pattern": { "type": "string" },
+    "jobmanager_http_timeout_seconds": { "type": "integer", "minimum": 1 },
+    "job_manager": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "port", "status_path"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "status_path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "grafana_dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumes": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "volumeMounts": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "automount", "annotations", "name"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "automount": { "type": "boolean" },
+        "annotations": { "$ref": "#/definitions/annotations" },
+        "name": { "type": "string" }
+      }
+    },
+    "enableExtendedLabelSelectors": { "type": "boolean" }
+  }
+}

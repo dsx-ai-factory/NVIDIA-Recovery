@@ -1,0 +1,36 @@
+name: Set up uv with cache
+description: Restore the uv cache and install the pinned uv toolchain.
+
+inputs:
+  cache-role:
+    description: Role or package name used to scope the uv cache key.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure uv environment
+      shell: bash
+      run: |
+        {
+          echo "UV_CACHE_DIR=$GITHUB_WORKSPACE/.uv-cache"
+          echo "UV_LINK_MODE=copy"
+          echo "UV_VERSION=0.11.20"
+        } >> "$GITHUB_ENV"
+
+    - name: Restore uv cache
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ${{ env.UV_CACHE_DIR }}
+        key: uv-${{ runner.os }}-python-${{ inputs.cache-role }}-${{ hashFiles('uv.lock', 'pyproject.toml') }}
+        restore-keys: |
+          uv-${{ runner.os }}-python-${{ inputs.cache-role }}-
+          uv-${{ runner.os }}-python-
+          uv-${{ runner.os }}-
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      with:
+        version: ${{ env.UV_VERSION }}
+        python-version: "3.12"
+        enable-cache: false

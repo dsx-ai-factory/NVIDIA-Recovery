@@ -1,0 +1,174 @@
+global: {}
+name: job-manager
+port: 8080
+replicas: 1
+resources:
+  # CPU explicitly declared so the namespace LimitRange's default (100m)
+  # does not get applied. 100m is too tight for the sync FastAPI handler
+  # plus ORM hydration; on aws-iad-prod (2026-05-28) 30 parallel /jobs
+  # requests starved the CPU so the /status liveness probe couldn't
+  # respond within 1s, kubelet SIGKILLed the pod, and the failure
+  # cascaded to all 3 replicas in ~80 seconds. 500m gives FastAPI room
+  # to serve a burst (~100 concurrent) without dropping the liveness
+  # probe. Ratio limit/request = 2 (cisd-limits LimitRange max).
+  limits:
+    cpu: 500m
+    memory: 1.5Gi
+  requests:
+    cpu: 250m
+    memory: 1Gi
+image:
+  repository: ""
+  name: job-manager
+  tag: ""
+  pullPolicy: Always
+command: []
+service_type: ClusterIP
+credentials:
+  aws:
+    secret_name: null
+  rabbitmq:
+    secret_name: null
+    secret_key_name: rabbitmq-password
+  mysql_secret_name: null
+  mysql_secret_key_name: null
+service_config:
+  log_level: info
+  stale_job_cleanup_enabled: false
+  stale_job_scan_frequency_seconds: 30
+  stale_job_threshold_seconds: 150
+  advice_enabled: true
+  advice_management_enabled: true
+  adi_attribution_request_emit_enabled: true
+  adi_straggler_emit_enabled: false
+  recovery_notifications_enabled: true
+  exclusion_node_stickiness_enabled: true
+  job_end_event_generation_enabled: true
+  environment: null
+  system_max_requeue_times: 75
+  checkpoint_based_requeue_stop_threshold: 3
+  requeue_early_stop_scan_frequency_seconds: 60
+  requeue_early_stop_threshold_seconds: 600
+  requeue_on_completion: false
+  # Omit notification_service_url to discover Notifications in the same release.
+  # Set an explicit URL for a custom Notifications service name or port.
+  audit_trail:
+    # Omit destination to use notification_service_url + /v1/audit/events.
+    # Set an explicit URL for a separate receiver, or "" for logging only.
+    max_batch_size: 100
+    max_buffer_size: 1000
+    flush_interval_seconds: 30
+
+  job_state_based_auto_resume_time_window_secs: 600
+  job_state_based_auto_resume_threshold_secs: 75
+  job_state_based_auto_resume_scan_interval_secs: 30
+
+  # DAG dependency support — enables cross-job dependency management
+  dag_support:
+    enabled: false
+    action_timeout_seconds: 120
+    retry_scan_frequency_seconds: 60
+
+  attribution_insight_config:
+    confirmed:
+      insight: "No action is needed. Heimdall has already requeued the job for you, excluding the bad node and reallocating a healthy one for the new run."
+    temporary:
+      insight: "No action is needed at this time. Heimdall has already requeued the job for you, excluding the potentially bad node, and is actively verifying the root cause for your job."
+    none:
+      insight: "Heimdall has already requeued the job for you. But manual intervention may be required to resolve the issue."
+
+  attribution_summary_config:
+    infra:
+      summary: "Job failed due to infrastructure issues."
+    potential_infra:
+      summary: "Job failed due to a potential infrastructure issue."
+    not_infra:
+      summary: "Job failed but not due to infrastructure issues."
+
+  guardrail_rules:
+    - "NO FAKE DATA - Never use fake or simulated data"
+    - "VERIFY EVERYTHING - Cross-check Heimdall anomalies with Loki"
+    - "MARK UNVERIFIED - Use ⚠️ for anomalies without evidence"
+    - "CONFIDENCE LEVEL - Provide the confidence level of the findings"
+    - "TOKEN LIMIT - Use REST API fallback if response > 25000 tokens"
+    - "LOG EVERYTHING - Keep audit trail of all operations"
+    - "SEARCH EARLY - Look 30 minutes before visible failures"
+    - "SEARCH MORE EVIDENCE - Look for more evidence to either corrobote Heimdall anomaly detection and attribution or challenge them"
+    - "When is today must be verified with date or python code"
+    - "When you do epoch calculation, use a script to validate the conversion"
+event_bus:
+  host: nvidia-recovery-rabbitmq
+  workflow_controller_exchange: wc_eventbus_exchange
+  job_queue: job_updates
+  job_routing_key: job.updates
+  anomaly_exchange: watcher_eventbus_exchange
+  anomaly_queue: anomaly_detected_job_manager
+  anomaly_routing_key: anomaly.detected.*
+  anomaly_queue_delivery_retry_delay_secs: 30
+  anomaly_dead_letter_routing_key: dead_letter.anomaly.detected
+  anomaly_dead_letter_redelivery_routing_key: anomaly.redeliver
+  username: rabbitmq
+  vhost: default-vhost
+
+  anomaly_isolator_exchange: aie_eventbus_exchange
+  anomaly_attribution_queue: anomaly_attribution_queue
+  anomaly_attribution_routing_key: anomaly.isolation.bad_nodes
+
+  adi_attribution_request_exchange: attribution_request_exchange
+  adi_attribution_request_routing_key: job.updates.attribution_request
+storage:
+  mode: MYSQL
+  endpoint_url: null
+  table_name: null
+  aws_default_region: none
+  read_capacity_units: 25
+  write_capacity_units: 25
+  sql:
+    host: mysql
+    port: 3306
+    username: aps_mysql
+    database_name: aps_workflow_database
+    # Verify the server certificate over TLS using ssl_ca_path. Off by
+    # default; deployments against a TLS-required database must set this
+    # true and mount a CA bundle at ssl_ca_path (see values.volumeMounts).
+    ssl_enabled: false
+    ssl_ca_path: "/etc/mysql-ca/ca.pem"
+    # Dedicated pool for upsert_job_record; disable if extra connections aren't affordable.
+    write_pool_enabled: true
+    write_pool_size: 5
+    write_max_overflow: 10
+
+kubernetes_leader_election:
+  lease_name: "job-manager-leader-election"
+  lease_duration_seconds: 15
+  renew_deadline_seconds: 10
+  retry_period_seconds: 5
+
+grafana_dashboard:
+  enabled: false
+
+imagePullSecrets: []
+
+nodeSelector: {}
+
+tolerations: []
+
+volumes: []
+
+volumeMounts: []
+
+rbac:
+  enable: true
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Look at the README.md at ./deploy/helm/README.md
+enableExtendedLabelSelectors: false

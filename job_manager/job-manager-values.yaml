@@ -1,0 +1,50 @@
+global:
+  imagePullSecrets: []
+  mysql:
+    database: &mysql_database heimdall
+    username: &mysql_username heimdall
+    password: &mysql_password heimdall
+  rabbitmq:
+    username: &rabbitmq_username heimdall
+    vhost: &rabbitmq_vhost default-vhost
+
+enabled: true
+service_type: ClusterIP
+replicas: 1
+command: ["job-manager"]
+service_config:
+  log_level: info
+  job_end_event_generation_enabled: true
+  guardrail_rules:
+    - "NO FAKE DATA - Never use fake or simulated data"
+    - "VERIFY EVERYTHING - Cross-check Heimdall anomalies with Loki"
+    - "MARK UNVERIFIED - Use ⚠️ for anomalies without evidence"
+    - "CONFIDENCE LEVEL - Provide the confidence level of the findings"
+    - "TOKEN LIMIT - Use REST API fallback if response > 25000 tokens"
+    - "LOG EVERYTHING - Keep audit trail of all operations"
+    - "SEARCH EARLY - Look 30 minutes before visible failures"
+    - "SEARCH MORE EVIDENCE - Look for more evidence to either corrobote Heimdall anomaly detection and attribution or challenge them"
+    - "When is today must be verified with date or python code"
+    - "When you do epoch calculation, use a script to validate the conversion"
+storage:
+  mode: MYSQL
+  sql:
+    dialect: mysql
+    port: 3306
+    username: *mysql_username
+    database_name: *mysql_database
+event_bus:
+  host: nvidia-recovery-rabbitmq
+  username: *rabbitmq_username
+  password: null
+  vhost: *rabbitmq_vhost
+  workflow_controller_exchange: workflow_controller
+  workflow_controller_exchange_type: topic
+  job_queue: job_updates
+  job_routing_key: workflow_controller.job.*
+  anomaly_exchange: watcher_eventbus_exchange
+  anomaly_queue: anomaly_detected_job_manager
+  anomaly_routing_key: anomaly.detected.*
+  anomaly_queue_delivery_retry_delay_secs: 30
+
+enableExtendedLabelSelectors: true

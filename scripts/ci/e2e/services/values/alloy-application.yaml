@@ -1,0 +1,40 @@
+# Apply after alloy.yaml: one owner for the complete shared application tree.
+alloy:
+  configMap:
+    name: alloy-application-config
+  mounts:
+    extra:
+      - name: log-links
+        mountPath: /home/log-links
+        readOnly: true
+      - name: log-sources
+        mountPath: /home/logs
+        readOnly: true
+      - name: positions
+        mountPath: /var/lib/alloy-positions
+        readOnly: false
+
+controller:
+  type: deployment
+  replicas: 1
+  # A rolling Deployment can briefly run two readers against the same files.
+  updateStrategy:
+    type: Recreate
+  nodeSelector: null
+  volumes:
+    extra:
+      - name: log-links
+        persistentVolumeClaim:
+          claimName: slurm-log-links
+          readOnly: true
+      - name: log-sources
+        persistentVolumeClaim:
+          claimName: slurm-job-logs
+          readOnly: true
+      - name: positions
+        persistentVolumeClaim:
+          claimName: alloy-application-positions
+
+serviceAccount:
+  create: false
+  name: alloy

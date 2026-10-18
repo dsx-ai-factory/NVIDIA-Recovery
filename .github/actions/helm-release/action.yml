@@ -1,0 +1,50 @@
+name: Publish Helm chart
+description: Publish a qualified chart archive, or package a nightly chart, to this repository's GHCR namespace.
+
+inputs:
+  version:
+    description: Helm chart version, optionally prefixed with v.
+    required: false
+  package:
+    description: Package a nightly chart before publishing; false reuses the qualified release artifact.
+    default: "true"
+  directory:
+    description: Directory containing the archive and version file.
+    default: dist/helm
+  skip-existing:
+    description: Succeed without pushing when this chart version exists.
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Helm
+      uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+      with:
+        version: v3.17.3
+
+    - name: Package chart
+      if: inputs.package == 'true'
+      shell: bash
+      env:
+        CHART_VERSION: ${{ inputs.version }}
+        HELM_OUTPUT_DIR: ${{ inputs.directory }}
+      run: scripts/ci/helm-release.sh package "${CHART_VERSION#v}"
+
+    - name: Publish chart to GHCR
+      shell: bash
+      env:
+        HELM_REGISTRY_PASSWORD: ${{ github.token }}
+        SKIP_EXISTING: ${{ inputs.skip-existing }}
+        HELM_OUTPUT_DIR: ${{ inputs.directory }}
+      run: |
+        set --
+        if [ "$SKIP_EXISTING" = "true" ]; then
+          set -- --skip-existing
+        fi
+        repository="${GITHUB_REPOSITORY,,}"
+        scripts/ci/helm-release.sh publish \
+          "$@" \
+          ghcr.io \
+          "oci://ghcr.io/${repository}/charts" \
+          "$GITHUB_ACTOR"

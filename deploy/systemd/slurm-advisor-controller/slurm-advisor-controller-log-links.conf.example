@@ -1,0 +1,8 @@
+# Install as
+# /etc/systemd/system/slurm-advisor-controller.service.d/log-links.conf only
+# after creating this exact destination and configuring the environment file.
+# This grants advisor writes only; separately sandbox the following collector
+# and use only source roots whose writers are trusted not to substitute links.
+# The destination must not overlap or alias any configured source root.
+[Service]
+ReadWritePaths=/var/lib/heimdall-oss/log-links

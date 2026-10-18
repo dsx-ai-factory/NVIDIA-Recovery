@@ -1,0 +1,31 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Wrapper around curl for calling the API gateway running locally
+# Usage: apigw-curl <path> [curl-options...]
+# Example: apigw-curl /v1/jobs -v
+
+set -euo pipefail
+
+# Default to internal endpoint (no auth required)
+APIGW_BASE_URL="${APIGW_URL:-http://localhost:8081}"
+
+if [ $# -eq 0 ]; then
+  echo "Usage: apigw-curl <path> [curl-options...]"
+  echo "Example: apigw-curl /v1/jobs"
+  echo "Example: apigw-curl /v1/jobs/upsert -X PUT -d '{\"job_id\":\"test\"}'"
+  echo ""
+  echo "Base URL: $APIGW_BASE_URL (override with APIGW_URL environment variable)"
+  exit 1
+fi
+
+# First argument is the path
+PATH_ARG="$1"
+shift
+
+# Remove leading slash if present, we'll add it back
+PATH_ARG="${PATH_ARG#/}"
+
+# Call curl with the full URL and remaining arguments
+exec curl "${APIGW_BASE_URL}/${PATH_ARG}" "$@"

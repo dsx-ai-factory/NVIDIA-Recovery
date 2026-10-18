@@ -1,0 +1,1025 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Watcher chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "annotations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "name",
+        "tag",
+        "pullPolicy"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 0
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 0
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "resourceQuantities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "memory"
+      ],
+      "properties": {
+        "cpu": {
+          "type": "string",
+          "minLength": 1
+        },
+        "memory": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requests",
+        "limits"
+      ],
+      "properties": {
+        "requests": {
+          "$ref": "#/definitions/resourceQuantities"
+        },
+        "limits": {
+          "$ref": "#/definitions/resourceQuantities"
+        }
+      }
+    },
+    "nullableString": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "tenantID": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        {
+          "type": "string",
+          "pattern": "^$|^[0-9]+$"
+        }
+      ]
+    },
+    "lokiCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "secret_key_name",
+        "api_token_secret_key_name"
+      ],
+      "properties": {
+        "app_secret_name": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "secret_key_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api_token_secret_name": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "api_token_secret_key_name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "victoriaLogsCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api_token_secret_key_name",
+        "username_secret_key_name",
+        "password_secret_key_name",
+        "ca_cert_secret_key_name",
+        "cert_secret_key_name",
+        "key_secret_key_name"
+      ],
+      "properties": {
+        "api_token_secret_name": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "api_token_secret_key_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "username_secret_name": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "username_secret_key_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password_secret_name": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "password_secret_key_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ca_cert_secret_name": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "ca_cert_secret_key_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cert_secret_name": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "cert_secret_key_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key_secret_name": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "key_secret_key_name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "logQueryProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "query_prefix": {
+          "type": "string"
+        },
+        "account_id": {
+          "$ref": "#/definitions/tenantID"
+        },
+        "project_id": {
+          "$ref": "#/definitions/tenantID"
+        },
+        "require_tenant": {
+          "type": "boolean"
+        },
+        "queries": {
+          "type": "object"
+        }
+      }
+    },
+    "logQueryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "query_prefix": {
+          "type": "string"
+        },
+        "query_delay": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "query_max_lookback": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "label_remapping_enabled": {
+          "type": "boolean"
+        },
+        "label_remapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "simple",
+            "composite"
+          ],
+          "properties": {
+            "simple": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "composite": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "logQueryConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "providers"
+      ],
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": [
+            "loki",
+            "victorialogs"
+          ]
+        },
+        "providers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "loki": {
+              "$ref": "#/definitions/logQueryProvider"
+            },
+            "victorialogs": {
+              "$ref": "#/definitions/logQueryProvider"
+            }
+          }
+        }
+      }
+    },
+    "rabbitmqCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "secret_key_name"
+      ],
+      "properties": {
+        "secret_name": {
+          "$ref": "#/definitions/nullableString"
+        },
+        "secret_key_name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "auditTrail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_batch_size",
+        "max_buffer_size",
+        "flush_interval_seconds"
+      ],
+      "properties": {
+        "destination": {
+          "oneOf": [
+            { "type": "null" },
+            { "const": "" },
+            {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://(\\[[^\\]]+\\]|[^/?#:\\s]+)(:[0-9]+)?([/?#]|$)"
+            }
+          ]
+        },
+        "max_batch_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_buffer_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "flush_interval_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "nativeWorkflowQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "query": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "\\S"
+              },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": false,
+                "properties": {
+                  "PRE_TRAINING": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "TRAINING_LOOP": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "nooutput_validation_query": {
+          "type": "string",
+          "pattern": "\\{job_id\\}"
+        }
+      }
+    },
+    "providerQueries": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "watcher": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "query_prefix": {
+              "type": "string"
+            },
+            "workflows": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/nativeWorkflowQuery"
+              }
+            }
+          }
+        },
+        "attribution": {
+          "type": "object"
+        },
+        "health": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "required": [
+    "global",
+    "name",
+    "resources",
+    "replicas",
+    "image",
+    "ruleConfig",
+    "config_path",
+    "log_level",
+    "port",
+    "loki_cert_file",
+    "loki_key_file",
+    "loki_ca_cert",
+    "use_lepton",
+    "lepton_worker_cluster_name",
+    "lepton_base_url",
+    "credentials",
+    "config",
+    "ingress",
+    "gateway",
+    "fluentbit",
+    "grafana_dashboard",
+    "imagePullSecrets",
+    "nodeSelector",
+    "tolerations",
+    "volumes",
+    "volumeMounts",
+    "serviceAccount",
+    "enableExtendedLabelSelectors"
+  ],
+  "properties": {
+    "global": {
+      "type": "object",
+      "properties": {
+        "log_query": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "backend",
+            "providers"
+          ],
+          "properties": {
+            "backend": {
+              "type": "string",
+              "enum": [
+                "loki",
+                "victorialogs"
+              ]
+            },
+            "providers": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "loki": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "application": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "url"
+                      ],
+                      "properties": {
+                        "url": {
+                          "type": "string"
+                        },
+                        "tenants": {
+                          "type": "string"
+                        },
+                        "org_id": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "system": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "url"
+                      ],
+                      "properties": {
+                        "url": {
+                          "type": "string"
+                        },
+                        "tenants": {
+                          "type": "string"
+                        },
+                        "org_id": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "queries": {
+                      "$ref": "#/definitions/providerQueries"
+                    }
+                  }
+                },
+                "victorialogs": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "application": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "url",
+                        "account_id",
+                        "project_id",
+                        "require_tenant"
+                      ],
+                      "properties": {
+                        "url": {
+                          "type": "string"
+                        },
+                        "account_id": {
+                          "$ref": "#/definitions/tenantID"
+                        },
+                        "project_id": {
+                          "$ref": "#/definitions/tenantID"
+                        },
+                        "require_tenant": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "system": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "url",
+                        "account_id",
+                        "project_id",
+                        "require_tenant"
+                      ],
+                      "properties": {
+                        "url": {
+                          "type": "string"
+                        },
+                        "account_id": {
+                          "$ref": "#/definitions/tenantID"
+                        },
+                        "project_id": {
+                          "$ref": "#/definitions/tenantID"
+                        },
+                        "require_tenant": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "queries": {
+                      "$ref": "#/definitions/providerQueries"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resources": {
+      "$ref": "#/definitions/resources"
+    },
+    "replicas": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "image": {
+      "$ref": "#/definitions/image"
+    },
+    "ruleConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rulePath", "existingConfigMap", "configMapKey"],
+      "properties": {
+        "rulePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "existingConfigMap": {
+          "type": "string"
+        },
+        "configMapKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "config_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "log_level": {
+      "type": "string",
+      "minLength": 1
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "loki_cert_file": {
+      "type": "string"
+    },
+    "loki_key_file": {
+      "type": "string"
+    },
+    "loki_ca_cert": {
+      "type": "string"
+    },
+    "loki_tenants": {
+      "type": "string"
+    },
+    "loki_x_scope_org_id": {
+      "type": "string"
+    },
+    "use_lepton": {
+      "type": "boolean"
+    },
+    "lepton_worker_cluster_name": {
+      "type": "string"
+    },
+    "lepton_base_url": {
+      "type": "string"
+    },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "loki",
+        "victorialogs",
+        "rabbitmq"
+      ],
+      "properties": {
+        "loki": {
+          "$ref": "#/definitions/lokiCredentials"
+        },
+        "victorialogs": {
+          "$ref": "#/definitions/victoriaLogsCredentials"
+        },
+        "rabbitmq": {
+          "$ref": "#/definitions/rabbitmqCredentials"
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metrics_cleanup_threshold_secs",
+        "event_source",
+        "service",
+        "datasources",
+        "environment",
+        "anomaly_workflow_options_defaults",
+        "anomaly_workflow_definitions"
+      ],
+      "properties": {
+        "metrics_cleanup_threshold_secs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "event_source": {
+          "type": "string",
+          "enum": [
+            "log_query",
+            "loki",
+            "rabbitmq"
+          ]
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "port",
+            "http_log_level",
+            "num_threads",
+            "max_queue_size",
+            "maintenance_tasks_interval_secs",
+            "audit_trail"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "http_log_level": {
+              "type": "string",
+              "minLength": 1
+            },
+            "num_threads": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_queue_size": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maintenance_tasks_interval_secs": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "audit_trail": {
+              "$ref": "#/definitions/auditTrail"
+            }
+          }
+        },
+        "datasources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "log_query",
+            "log_query_policy",
+            "rabbitmq",
+            "job_manager"
+          ],
+          "properties": {
+            "log_query": {
+              "$ref": "#/definitions/logQueryConfig"
+            },
+            "log_query_policy": {
+              "$ref": "#/definitions/logQueryPolicy"
+            },
+            "loki": {
+              "$ref": "#/definitions/logQueryPolicy"
+            },
+            "rabbitmq": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "publisher"
+              ],
+              "properties": {
+                "publisher": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": [
+                    "routing_prefix",
+                    "host",
+                    "username",
+                    "vhost",
+                    "exchange",
+                    "queues"
+                  ],
+                  "properties": {
+                    "routing_prefix": {
+                      "type": "string"
+                    },
+                    "host": {
+                      "type": "string",
+                      "minLength": 0
+                    },
+                    "username": {
+                      "type": "string",
+                      "minLength": 0
+                    },
+                    "vhost": {
+                      "type": "string",
+                      "minLength": 0
+                    },
+                    "exchange": {
+                      "type": "string",
+                      "minLength": 0
+                    },
+                    "queues": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "routing_keys": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            },
+            "job_manager": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "endpoint"
+              ],
+              "properties": {
+                "endpoint": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "environment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "anomaly_workflows": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object"
+            },
+            {
+              "type": "array"
+            }
+          ]
+        },
+        "anomaly_workflow_options_defaults": {
+          "type": "object"
+        },
+        "anomaly_workflow_definitions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "ingressClassName",
+        "apiVersion",
+        "annotations",
+        "labels",
+        "hosts",
+        "paths",
+        "tls"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ingressClassName": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "annotations": {
+          "$ref": "#/definitions/annotations"
+        },
+        "labels": {
+          "$ref": "#/definitions/annotations"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tls": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "servicePort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "pathType": {
+          "type": "string"
+        }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parentRef"
+      ],
+      "properties": {
+        "parentRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "namespace",
+            "sectionName"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "namespace": {
+              "type": "string"
+            },
+            "sectionName": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "fluentbit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "otlpHost"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "otlpHost": {
+          "type": "string"
+        }
+      }
+    },
+    "grafana_dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tolerations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "volumes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "volumeMounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "create",
+        "automount",
+        "annotations",
+        "name"
+      ],
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "automount": {
+          "type": "boolean"
+        },
+        "annotations": {
+          "$ref": "#/definitions/annotations"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "enableExtendedLabelSelectors": {
+      "type": "boolean"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "command": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

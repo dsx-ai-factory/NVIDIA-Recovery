@@ -1,0 +1,541 @@
+{
+  "components": {
+    "schemas": {
+      "Attribution": {
+        "description": "A single attributed finding against a resource set (design §6).",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "error_category": {
+            "$ref": "#/components/schemas/ErrorCategory"
+          },
+          "error_detail": {
+            "default": "",
+            "title": "Error Detail",
+            "type": "string"
+          },
+          "evidence_excerpt": {
+            "default": "",
+            "title": "Evidence Excerpt",
+            "type": "string"
+          },
+          "evidence_references": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence References",
+            "type": "array"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "recommended_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action"
+          },
+          "resource_set": {
+            "$ref": "#/components/schemas/ResourceSet"
+          },
+          "symptom": {
+            "default": "",
+            "title": "Symptom",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_set",
+          "error_category",
+          "observed_at"
+        ],
+        "title": "Attribution",
+        "type": "object"
+      },
+      "AttributionError": {
+        "description": "Informational error on a response; never changes the publish decision (design §10).",
+        "properties": {
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AttributionErrorType"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "AttributionError",
+        "type": "object"
+      },
+      "AttributionErrorType": {
+        "description": "Informational error type on a response; never changes the publish decision (design §10).",
+        "enum": [
+          "timeout",
+          "insufficient_telemetry",
+          "service_error",
+          "no_attribution_available"
+        ],
+        "title": "AttributionErrorType",
+        "type": "string"
+      },
+      "AttributionPhase": {
+        "description": "Which pass of the two-phase attribution flow a request represents (design §8).",
+        "enum": [
+          "fast",
+          "slow"
+        ],
+        "title": "AttributionPhase",
+        "type": "string"
+      },
+      "ErrorCategory": {
+        "description": "Category of an attributed error, spoken in workload vocabulary (design §6).",
+        "enum": [
+          "hardware",
+          "system_software",
+          "application",
+          "ambiguous",
+          "unattributed",
+          "insufficient_telemetry"
+        ],
+        "title": "ErrorCategory",
+        "type": "string"
+      },
+      "FailureContext": {
+        "description": "When/how the failure was detected (design §6). detection_signal drives STRAGGLER handling on NV side.",
+        "properties": {
+          "detected_at": {
+            "format": "date-time",
+            "title": "Detected At",
+            "type": "string"
+          },
+          "detection_signal": {
+            "title": "Detection Signal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detected_at",
+          "detection_signal"
+        ],
+        "title": "FailureContext",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ResourceKind": {
+        "description": "Kind of resource an attribution targets (design §6).",
+        "enum": [
+          "Node",
+          "AllJobResources"
+        ],
+        "title": "ResourceKind",
+        "type": "string"
+      },
+      "ResourceSet": {
+        "description": "A resource an attribution targets: a single Node (value=hostname) or AllJobResources (value=None).",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ResourceKind"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ResourceSet",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WorkloadAttributionRequest": {
+        "description": "A single FAST or SLOW attribution request from the Policy Engine to attribution-adapter (design §6).",
+        "properties": {
+          "continue_session": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Continue Session"
+          },
+          "failure_context": {
+            "$ref": "#/components/schemas/FailureContext"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/AttributionPhase"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/WorkloadScope"
+          },
+          "timeout_ms": {
+            "title": "Timeout Ms",
+            "type": "integer"
+          },
+          "user_id": {
+            "default": "",
+            "title": "User Id",
+            "type": "string"
+          },
+          "workload_context": {
+            "$ref": "#/components/schemas/WorkloadContext"
+          },
+          "workload_id": {
+            "title": "Workload Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "workload_id",
+          "scope",
+          "failure_context",
+          "timeout_ms",
+          "workload_context",
+          "phase"
+        ],
+        "title": "WorkloadAttributionRequest",
+        "type": "object"
+      },
+      "WorkloadAttributionResponse": {
+        "description": "The attribution result returned by attribution-adapter to the Policy Engine (design §6).",
+        "properties": {
+          "attribution_session_id": {
+            "default": "",
+            "title": "Attribution Session Id",
+            "type": "string"
+          },
+          "attributions": {
+            "items": {
+              "$ref": "#/components/schemas/Attribution"
+            },
+            "title": "Attributions",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttributionError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "service_identifier": {
+            "title": "Service Identifier",
+            "type": "string"
+          },
+          "service_version": {
+            "title": "Service Version",
+            "type": "string"
+          },
+          "unattributed_targets": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceSet"
+            },
+            "title": "Unattributed Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "service_identifier",
+          "service_version",
+          "request_id"
+        ],
+        "title": "WorkloadAttributionResponse",
+        "type": "object"
+      },
+      "WorkloadContext": {
+        "description": "Typed context FACT's AttributorInfo needs (design §6).\n\njob_end_time is DISTINCT from scope.end_time (which may be anomaly_time); it is the\nobserved_at no-source fallback on the NV side (design §7.2).",
+        "properties": {
+          "anomaly_uuid": {
+            "default": "",
+            "title": "Anomaly Uuid",
+            "type": "string"
+          },
+          "attempt_index": {
+            "title": "Attempt Index",
+            "type": "integer"
+          },
+          "cluster": {
+            "default": "",
+            "title": "Cluster",
+            "type": "string"
+          },
+          "command": {
+            "default": "",
+            "title": "Command",
+            "type": "string"
+          },
+          "job_end_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job End Time"
+          },
+          "node_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Count"
+          },
+          "state": {
+            "default": "",
+            "title": "State",
+            "type": "string"
+          },
+          "total_gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Gpu Count"
+          },
+          "workflow_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Workflow Id",
+            "type": "string"
+          },
+          "workload_name": {
+            "default": "",
+            "title": "Workload Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_id",
+          "attempt_index"
+        ],
+        "title": "WorkloadContext",
+        "type": "object"
+      },
+      "WorkloadScope": {
+        "description": "The nodes / ranks / time window an attribution request applies to (design §6).\n\nstart_time and end_time are Optional because SlurmJobExecutionStatus.start_time /\nend_time may be None (correction C12): callers that know the time pass it; callers\nworking from an in-progress job may not.",
+        "properties": {
+          "end_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time"
+          },
+          "nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "ranks": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Ranks",
+            "type": "array"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          }
+        },
+        "required": [
+          "nodes"
+        ],
+        "title": "WorkloadScope",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Attribution Adapter",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "description": "Liveness/readiness probe.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthz Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz"
+      }
+    },
+    "/v1/attribution": {
+      "post": {
+        "description": "Run attribution for a single FAST or SLOW pass.\n\nExtracts the W3C trace context from the inbound request headers and starts the handler\nspan as its child, then delegates to ``AttributionService.attribute``.\n\nArgs:\n    request (WorkloadAttributionRequest): The parsed attribution request body.\n    http_request (Request): The raw request, used to read trace-propagation headers.\n\nReturns:\n    WorkloadAttributionResponse: The attribution result.",
+        "operationId": "attribution_v1_attribution_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkloadAttributionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkloadAttributionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attribution"
+      }
+    }
+  }
+}

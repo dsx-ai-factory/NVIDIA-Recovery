@@ -1,0 +1,111 @@
+{
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "appname",
+              "value": {
+                "stringValue": "slurm-app-log"
+              }
+            },
+            {
+              "key": "job_id",
+              "value": {
+                "stringValue": "1368757"
+              }
+            },
+            {
+              "key": "service.id",
+              "value": {
+                "stringValue": "test-service-id"
+              }
+            },
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "test-cluster-02"
+              }
+            },
+            {
+              "key": "tenantId",
+              "value": {
+                "stringValue": "test-tenant-id"
+              }
+            },
+            {
+              "key": "appName",
+              "value": {
+                "stringValue": "slurm-app-log"
+              }
+            },
+            {
+              "key": "serviceId",
+              "value": {
+                "stringValue": "test-service-id"
+              }
+            },
+            {
+              "key": "serviceName",
+              "value": {
+                "stringValue": "test-cluster-02"
+              }
+            },
+            {
+              "key": "s_cluster",
+              "value": {
+                "stringValue": "test-cluster-02"
+              }
+            }
+          ]
+        },
+        "scopeLogs": [
+          {
+            "scope": {},
+            "logRecords": [
+              {
+                "observedTimeUnixNano": "1736379047489004785",
+                "body": {
+                  "stringValue": "6143:  [2025-01-08 15:30:23] iteration   866100/ 3178914 | consumed samples:    665164800 | elapsed time per iteration (ms): 2204.9 | throughput per GPU (TFLOP/s/GPU): 159.9 | learning rate: 3.320597E-04 | global batch size:   768 | lm loss: 1.617721E+00 | loss scale: 1.0 | grad norm: 0.211 | num zeros: 573746496.0 | params norm: 7654.529 | number of skipped iterations:   0 | number of nan iterations:   0 |"
+                },
+                "attributes": [
+                  {
+                    "key": "log.file.name",
+                    "value": {
+                      "stringValue": "56B_hybrid_20T_phase1_1368757_date_25-01-08_time_15-17-38.log"
+                    }
+                  },
+                  {
+                    "key": "log.file.path",
+                    "value": {
+                      "stringValue": "/tmp/otelfilelog_paths/prod/nemotron5-56b_hybrid-logs-phase1/56B_hybrid_20T_phase1_1368757_date_25-01-08_time_15-17-38.log"
+                    }
+                  },
+                  {
+                    "key": "log.file.path_resolved",
+                    "value": {
+                      "stringValue": "/tmp/nemotron5/56b_hybrid/logs/phase1/56B_hybrid_20T_phase1_1368757_date_25-01-08_time_15-17-38.log"
+                    }
+                  },
+                  {
+                    "key": "job_id",
+                    "value": {
+                      "stringValue": "1368757"
+                    }
+                  },
+                  {
+                    "key": "start_time",
+                    "value": {
+                      "stringValue": "25-01-08_time_15-17-38"
+                    }
+                  }
+                ],
+                "traceId": "",
+                "spanId": ""
+              }
+            ]
+          }
+        ]
+      }
+    ]
+}

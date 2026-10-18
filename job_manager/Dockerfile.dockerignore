@@ -1,0 +1,11 @@
+*
+!job_manager/README.md
+!job_manager/job_manager
+!job_manager/pyproject.toml
+!pyproject.toml
+!uv.lock
+!recovery_libs/docs
+!recovery_libs/pyproject.toml
+!recovery_libs/recovery_libs
+**/__pycache__
+**/*.pyc
