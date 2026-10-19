@@ -96,7 +96,7 @@ Restore access to existing secrets and variables only for their intended jobs:
 | Setting | Required scope or use |
 | --- | --- |
 | Secret `DOCS_FERN_TOKEN` | Existing `nvidia` Fern organization token for docs publication and the trusted preview workflow; review repository/organization exposure because the current preview job has no environment. |
-| Variables `DOCS_PUBLISH_ENABLED`, `DOCS_NVIDIA_URL` | Leave publication disabled until hosting is approved. Set `DOCS_NVIDIA_URL` to `https://docs.nvidia.com/nvidia-recovery` for `docs.yml`; the Fern organization, theme and host remain unchanged. |
+| Variables `DOCS_PUBLISH_ENABLED`, `DOCS_NVIDIA_URL` | Leave publication disabled until hosting is approved. Set `DOCS_NVIDIA_URL` to `https://docs.nvidia.com/recovery` for `docs.yml`; the Fern organization, theme and host remain unchanged. |
 | Secret `ATTRIBUTION_SOURCE_DEPLOY_KEY` | Only the protected `attribution-qualification` environment; never copied-PR jobs. |
 | Secrets `BITNAMI_OCI_REGISTRY_MIRROR`, `DOCKER_HUB_REGISTRY_MIRROR` | Optional existing public CI mirrors, as described below. |
 | Secret `SLACK_WEBHOOK_URL` | Existing E2E notifications in `e2e-main.yml`, `nightly.yml` and `tag-release.yml`. |

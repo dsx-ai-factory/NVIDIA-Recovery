@@ -9,12 +9,12 @@
 global-theme: nvidia
 
 instances:
-  - url: nvidia-recovery.docs.buildwithfern.com/nvidia-recovery
-    custom-domain: docs.nvidia.com/nvidia-recovery
+  - url: recovery.docs.buildwithfern.com/recovery
+    custom-domain: docs.nvidia.com/recovery
     multi-source: true
 
 metadata:
-  canonical-host: "docs.nvidia.com/nvidia-recovery"
+  canonical-host: "docs.nvidia.com/recovery"
 
 title: NVIDIA Recovery
 navigation:
