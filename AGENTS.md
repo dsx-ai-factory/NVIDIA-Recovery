@@ -9,15 +9,17 @@ Slurm-on-Kubernetes through Slinky.
 - Treat the inherited tree as a starting artifact, not an architecture
   endorsement. Preserve end-user recovery behavior while moving it behind the
   Advisor API; Slurm and Slinky are adapters to that contract.
-- Assign retained inherited behavior a disposition of `port`, `adapt`,
-  `quarantine`, or `drop`. Delete or quarantine private, unsupported, and
-  out-of-scope surfaces before deep refactoring.
 - Test through production interfaces. Do not add hidden test-only ingress.
 - Keep changes scoped to the requested outcome and avoid unrelated refactors.
 - Do not include internal issue or ticket tracker links in pull request
   descriptions or repository documentation.
 - Do not silently preserve internal hostnames, package indexes, registries,
   identity assumptions, credentials, customer data, or deployment-only paths.
+
+Important system design invariants and rules.
+
+1. An instance of NVIDIA Recovery currently operates on a single cluster at a time. Code may assume all jobs are from the same cluster.
+2.  `heimdall_job_id` is always a uuidv5 of job_id+attempt_index
 
 ## Action Boundaries
 
