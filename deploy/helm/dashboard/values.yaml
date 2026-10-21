@@ -34,6 +34,8 @@ app:
   JOB_NODE_ANALYSIS_ENABLED: false
   JOB_GROUPS_ENABLED: false
   AUDIT_EVENTS_ENABLED: true
+  # Public HTTP(S) trace viewer URL with {trace_id}; optional {span_id}/{recovery_sequence_id}.
+  AUDIT_TRACE_URL_TEMPLATE: ""
   GRAFANA_TRACE_URL_ENABLED: false
   GRAFANA_DATA_SOURCE_ID: ""
   # Operator-provided Grafana base URL; optional organization ID.

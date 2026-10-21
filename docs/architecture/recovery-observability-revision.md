@@ -5,13 +5,38 @@ Date: 2026-10-07
 This study describes the accepted design in
 [ADR 0048](../decisions/0048-start-recovery-traces-in-backend-and-share-observations.md),
 approved through [PR #245](https://github.com/NVIDIA/NVIDIA-Recovery/pull/245)
-and maintainer confirmation on 2026-10-08. Implementation remains pending in
-the stack below; this is not a description of deployed tracing.
+and maintainer confirmation on 2026-10-08. The revised implementation has
+landed in the layers below; it remains subject to live qualification before
+deployment.
+
+## Implementation update
+
+- **Backend:** Job Manager owns sequence creation before attribution and Advice;
+  public `GetRecoverySequence` is an exact-key, read-only lookup. Advice and
+  attribution observations carry explicit recovery/trace correlation, including
+  the ADI-to-adapter hop. The phase-one persistence and migration remain intact.
+- **Controller:** Each Advice application has a real lifecycle. One returned
+  command occurrence feeds audit, tracing, and a separate bounded milestone
+  worker. Completion time is captured before reporting; existing generation
+  outcomes classify convergence independently of successful release.
+- **E2E evidence:** Opt-in production-interface tests read canonical context
+  from Advice, retrieve that trace from Tempo, and match successful release to
+  its audit identity and completion microsecond. Component tests establish
+  milestone idempotency and delivery isolation without adding a
+  milestone-history API.
+- **Operator views:** Audit views link explicit historical IDs to an optional
+  operator-owned trace destination. Grafana distinguishes applied Advice from
+  command completion, and the collector routes traces independently of logs.
+
+Live Tempo qualification remains outstanding; local tests do not establish
+export and delivery in a deployed cluster. Legacy `correlation_uuid` removal
+remains the separate follow-up in ADR 0048.
 
 ## Findings
 
-The study used `main` at `4a4dadfbe87e`, merged PRs and their review discussions,
-and the current heads of the pending tracing stack.
+The findings and edit plan below preserve the original study snapshot: `main`
+at `4a4dadfbe87e`, merged PRs and their review discussions, and the inspected
+stack heads listed below. Statements about pending work describe that snapshot.
 
 | Evidence | Finding | Design effect |
 | --- | --- | --- |
