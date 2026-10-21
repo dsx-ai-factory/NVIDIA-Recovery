@@ -73,6 +73,18 @@
         "flushInterval": { "$ref": "#/definitions/duration" }
       }
     },
+    "milestoneReporting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queueCapacity", "rpcTimeout", "maxAttempts", "retryDelay", "shutdownTimeout"],
+      "properties": {
+        "queueCapacity": { "type": "integer", "minimum": 1 },
+        "rpcTimeout": { "$ref": "#/definitions/duration" },
+        "maxAttempts": { "type": "integer", "minimum": 1 },
+        "retryDelay": { "$ref": "#/definitions/duration" },
+        "shutdownTimeout": { "$ref": "#/definitions/duration" }
+      }
+    },
     "logLinkStorage": {
       "type": "object",
       "additionalProperties": false,
@@ -293,6 +305,7 @@
         "versionedSqueueJSON",
         "updateEligibleTimeAfterRequeue",
         "auditTrail",
+        "milestoneReporting",
         "kubernetesAuth",
         "logLinks",
         "resources"
@@ -352,6 +365,7 @@
         "partitionAllowlist": { "$ref": "#/definitions/partitionAllowlist" },
         "versionedSqueueJSON": { "type": "boolean" },
         "updateEligibleTimeAfterRequeue": { "type": "boolean" },
+        "milestoneReporting": { "$ref": "#/definitions/milestoneReporting" },
         "auditTrail": { "$ref": "#/definitions/auditTrail" },
         "kubernetesAuth": {
           "type": "object",

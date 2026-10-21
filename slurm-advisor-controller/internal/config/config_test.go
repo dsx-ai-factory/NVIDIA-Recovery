@@ -299,6 +299,59 @@ func TestFromEnvLoadsAuditTrailConfiguration(t *testing.T) {
 	}
 }
 
+func TestFromEnvLoadsMilestoneReportingConfiguration(t *testing.T) {
+	setConfigEnv(t, map[string]string{
+		"HEIMDALL_ENDPOINT":                        "127.0.0.1:8080",
+		"SLURM_ADVISOR_MILESTONE_QUEUE_CAPACITY":   "1024",
+		"SLURM_ADVISOR_MILESTONE_RPC_TIMEOUT":      "5s",
+		"SLURM_ADVISOR_MILESTONE_MAX_ATTEMPTS":     "5",
+		"SLURM_ADVISOR_MILESTONE_RETRY_DELAY":      "500ms",
+		"SLURM_ADVISOR_MILESTONE_SHUTDOWN_TIMEOUT": "10s",
+	})
+
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv() failed: %v", err)
+	}
+	want := MilestoneReportingConfig{
+		QueueCapacity:   1024,
+		RPCTimeout:      5 * time.Second,
+		MaxAttempts:     5,
+		RetryDelay:      500 * time.Millisecond,
+		ShutdownTimeout: 10 * time.Second,
+	}
+	if cfg.MilestoneReporting != want {
+		t.Fatalf("MilestoneReporting = %+v, want %+v", cfg.MilestoneReporting, want)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() failed: %v", err)
+	}
+}
+
+// An explicit zero would disable reporting or shutdown draining, so it must be
+// rejected rather than silently replaced by a default.
+func TestFromEnvRejectsExplicitZeroMilestoneReportingSettings(t *testing.T) {
+	for _, key := range []string{
+		"SLURM_ADVISOR_MILESTONE_QUEUE_CAPACITY",
+		"SLURM_ADVISOR_MILESTONE_RPC_TIMEOUT",
+		"SLURM_ADVISOR_MILESTONE_MAX_ATTEMPTS",
+		"SLURM_ADVISOR_MILESTONE_RETRY_DELAY",
+		"SLURM_ADVISOR_MILESTONE_SHUTDOWN_TIMEOUT",
+	} {
+		t.Run(key, func(t *testing.T) {
+			setConfigEnv(t, map[string]string{"HEIMDALL_ENDPOINT": "127.0.0.1:8080", key: "0"})
+
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatalf("FromEnv() failed: %v", err)
+			}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() succeeded for explicit zero, want error")
+			}
+		})
+	}
+}
+
 func TestFromEnvPreservesExplicitZeroAuditTrailSettingsForValidation(t *testing.T) {
 	settings := map[string]string{
 		"SLURM_ADVISOR_AUDIT_TRAIL_MAX_BATCH_SIZE": "0",

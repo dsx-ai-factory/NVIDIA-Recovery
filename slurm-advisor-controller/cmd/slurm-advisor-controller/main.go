@@ -170,7 +170,13 @@ func run() int {
 	// Stop reporting before closing the shared gateway connection. The controller
 	// loop has finished producing command occurrences when this defer runs.
 	reporter, stopReports := reconcile.StartMilestoneReporter(apiClient, reconcile.MilestoneReporterOptions{
-		Telemetry: controller.RecoveryTelemetry, Logger: logger,
+		Capacity:        cfg.MilestoneReporting.QueueCapacity,
+		RPCTimeout:      cfg.MilestoneReporting.RPCTimeout,
+		MaxAttempts:     cfg.MilestoneReporting.MaxAttempts,
+		RetryDelay:      cfg.MilestoneReporting.RetryDelay,
+		ShutdownTimeout: cfg.MilestoneReporting.ShutdownTimeout,
+		Telemetry:       controller.RecoveryTelemetry,
+		Logger:          logger,
 	})
 	controller.MilestoneReporter = reporter
 	defer stopReports()

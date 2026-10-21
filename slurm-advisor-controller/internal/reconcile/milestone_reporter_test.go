@@ -11,6 +11,8 @@ import (
 
 	"github.com/cockroachdb/errors"
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -20,8 +22,10 @@ type milestoneTransport struct {
 	mu        sync.Mutex
 	requests  []*pb.RecordRecoveryMilestoneRequest
 	failFirst bool
-	block     bool
-	entered   chan struct{}
+	// failWith, when set, fails every request carrying this idempotency key.
+	failWith map[string]error
+	block    bool
+	entered  chan struct{}
 }
 
 func (c *milestoneTransport) RecordRecoveryMilestone(ctx context.Context, request *pb.RecordRecoveryMilestoneRequest) (*pb.RecordRecoveryMilestoneResponse, error) {
@@ -40,7 +44,10 @@ func (c *milestoneTransport) RecordRecoveryMilestone(ctx context.Context, reques
 		return nil, ctx.Err()
 	}
 	if c.failFirst && n == 1 {
-		return nil, errors.New("response lost after commit")
+		return nil, status.Error(codes.Unavailable, "response lost after commit")
+	}
+	if err := c.failWith[request.GetIdempotencyKey()]; err != nil {
+		return nil, err
 	}
 	return &pb.RecordRecoveryMilestoneResponse{}, nil
 }
@@ -116,4 +123,59 @@ func (m *milestoneCounts) ObserveMilestoneReport(_ RecoveryOperation, _ Schedule
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.counts[result]++
+}
+
+// Retrying a rejected report cannot succeed and stalls every report queued
+// behind it on the single worker, while a temporary failure may clear.
+func TestMilestoneReporterRetriesOnlyTemporaryFailures(t *testing.T) {
+	tests := []struct {
+		name         string
+		err          error
+		wantAttempts int
+		wantResult   string
+	}{
+		{"backend unavailable", status.Error(codes.Unavailable, "connection refused"), 3, "error"},
+		{"attempt timed out", status.Error(codes.DeadlineExceeded, "deadline exceeded"), 3, "error"},
+		{"unmapped backend failure", errors.New("job manager returned HTTP 500"), 3, "error"},
+		{"sequence missing", status.Error(codes.NotFound, "recovery sequence not found"), 1, "rejected"},
+		{"invalid milestone", status.Error(codes.InvalidArgument, "job manager rejected recovery input"), 1, "rejected"},
+		{"credentials refused", status.Error(codes.Unauthenticated, "invalid token"), 1, "rejected"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &milestoneTransport{failWith: map[string]error{"failing": tt.err}}
+			telemetry := &milestoneCounts{counts: map[string]int{}}
+			reporter, stop := StartMilestoneReporter(client, MilestoneReporterOptions{
+				MaxAttempts: 3, RetryDelay: time.Millisecond, Telemetry: telemetry,
+			})
+			failing := RecoveryMilestone{Recovery: RecoveryContext{SequenceID: "sequence", Operation: RecoveryOperationRestart}, Action: SchedulerActionObservation{
+				Action: SchedulerActionRequeueHold, Outcome: SchedulerActionOutcomeSuccess, CompletedAt: time.Now(), OccurrenceID: "failing"}}
+			next := failing
+			next.Action.Action = SchedulerActionRelease
+			next.Action.OccurrenceID = "next"
+			reporter.Enqueue(failing)
+			reporter.Enqueue(next)
+			stop()
+
+			client.mu.Lock()
+			defer client.mu.Unlock()
+			attempts := 0
+			for _, request := range client.requests {
+				if request.GetIdempotencyKey() == "failing" {
+					attempts++
+				}
+			}
+			if attempts != tt.wantAttempts {
+				t.Fatalf("attempts = %d, want %d", attempts, tt.wantAttempts)
+			}
+			if last := client.requests[len(client.requests)-1]; last.GetIdempotencyKey() != "next" {
+				t.Fatalf("later report was not delivered after the failure: last = %q", last.GetIdempotencyKey())
+			}
+			telemetry.mu.Lock()
+			defer telemetry.mu.Unlock()
+			if telemetry.counts[tt.wantResult] != 1 || telemetry.counts["success"] != 1 {
+				t.Fatalf("results = %v, want one %q and one success", telemetry.counts, tt.wantResult)
+			}
+		})
+	}
 }

@@ -10,6 +10,8 @@ import (
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -40,7 +42,8 @@ type MilestoneReporterOptions struct {
 	Capacity int
 	// RPCTimeout bounds each remote attempt; zero selects two seconds.
 	RPCTimeout time.Duration
-	// MaxAttempts includes the first delivery; zero selects three.
+	// MaxAttempts includes the first delivery and bounds retries of temporary
+	// failures only; zero selects three.
 	MaxAttempts int
 	// RetryDelay separates attempts; zero selects 100 milliseconds.
 	RetryDelay time.Duration
@@ -67,6 +70,15 @@ type asyncMilestoneReporter struct {
 // reporting. A single worker preserves admitted order within each sequence.
 // Stop closes admission under the same lock as Enqueue, drains accepted work,
 // then cancels outstanding RPCs when the shutdown budget expires.
+//
+// TODO: Accepted milestones live only in memory, so a controller crash or a
+// report dropped after its last attempt leaves the backend sequence without a
+// completion and its restart latency unmeasured. If that gap appears in
+// practice, close it with a durable outbox here or by having Job Manager
+// reconstruct completion from the matching advice_scheduler_action_completed
+// audit event, which carries the same occurrence ID and command-return
+// timestamp. ADR 0048 currently excludes both, so either needs a superseding
+// decision; see its 2026-10-21 implementation note.
 func StartMilestoneReporter(client MilestoneClient, options MilestoneReporterOptions) (MilestoneReporter, func()) {
 	if options.Capacity <= 0 {
 		options.Capacity = 256
@@ -180,9 +192,36 @@ func (r *asyncMilestoneReporter) deliver(ctx context.Context, milestone Recovery
 			r.observe(milestone, "shutdown_drop")
 			return
 		}
+		if !temporaryMilestoneError(lastErr) {
+			// The same request would be rejected again, and retrying it would
+			// delay every report queued behind it on this single worker.
+			r.observe(milestone, "rejected")
+			r.logDeliveryFailure(milestone, lastErr)
+			return
+		}
 	}
 	r.observe(milestone, "error")
+	r.logDeliveryFailure(milestone, lastErr)
+}
+
+func (r *asyncMilestoneReporter) logDeliveryFailure(milestone RecoveryMilestone, err error) {
 	if r.options.Logger != nil {
-		r.options.Logger.Warn("report recovery scheduler action milestone", zap.String("recovery_sequence_id", milestone.Recovery.SequenceID), zap.String("scheduler_action", string(milestone.Action.Action)), zap.Error(lastErr))
+		r.options.Logger.Warn("report recovery scheduler action milestone", zap.String("recovery_sequence_id", milestone.Recovery.SequenceID), zap.String("scheduler_action", string(milestone.Action.Action)), zap.Error(err))
+	}
+}
+
+// temporaryMilestoneError reports whether a later identical request may
+// succeed. Reports are idempotent by occurrence ID, so retrying a request that
+// the backend actually recorded is safe. Unknown is temporary because the
+// gateway forwards unexpected Job Manager failures, such as a database error,
+// without a mapped status. InvalidArgument, NotFound, Internal, and
+// authentication failures describe the request or deployment and do not
+// change between attempts.
+func temporaryMilestoneError(err error) bool {
+	switch status.Code(err) {
+	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted, codes.Aborted, codes.Unknown:
+		return true
+	default:
+		return false
 	}
 }
