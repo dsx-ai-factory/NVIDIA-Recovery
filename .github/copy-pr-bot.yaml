@@ -1,4 +1,5 @@
 # NVIDIA copy-pr-bot; dsx-ai-factory CODEOWNERS team roster verified 2026-10-20.
+# Also includes maintainer-requested accounts abhjha17 and ruoxizhang17.
 # Refresh both lists when membership changes. Never leave either override empty.
 # See docs/governance/ci-approval.md for deployment verification requirements.
 enabled: true
@@ -7,6 +8,7 @@ auto_sync_ready: true
 additional_trustees: []
 additional_vetters: []
 trustees_override:
+  - abhjha17
   - ajaymh
   - ak-nv24
   - alwnv
@@ -20,10 +22,12 @@ trustees_override:
   - rlizzo
   - robo-corg
   - rsanadhya1
+  - ruoxizhang17
   - shamisp
   - vpunuqv
   - yugalj
 vetters_override:
+  - abhjha17
   - ajaymh
   - ak-nv24
   - alwnv
@@ -37,6 +41,7 @@ vetters_override:
   - rlizzo
   - robo-corg
   - rsanadhya1
+  - ruoxizhang17
   - shamisp
   - vpunuqv
   - yugalj
