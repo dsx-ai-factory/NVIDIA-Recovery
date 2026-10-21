@@ -10,12 +10,15 @@ Discussion: [PR #245](https://github.com/NVIDIA/NVIDIA-Recovery/pull/245)
 > delivery only for temporary failures (unavailable or overloaded backend,
 > timeouts, and unmapped backend errors); rejected reports are counted and not
 > retried. Queue, timeout, retry, and shutdown bounds are operator settings
-> (`controller.milestoneReporting`). Open follow-up: milestones are held only in
-> memory, so a controller restart, or a report dropped after its last attempt,
-> leaves the sequence without a completion and its restart latency unmeasured.
-> If that gap is observed in practice, a durable outbox or reconstruction of
-> completion from the matching audit event would close it. This decision
-> excludes both, so adopting either requires a superseding decision.
+> (`controller.milestoneReporting`). Audit events from the backend and the
+> controller record trace and span IDs only for sampled spans, so a sampled-out
+> recovery keeps its sequence ID but never links to a trace that was not
+> exported. Open follow-up: milestones are held only in memory, so a controller
+> restart, or a report dropped after its last attempt, leaves the sequence
+> without a completion and its restart latency unmeasured. If that gap is
+> observed in practice, a durable outbox or reconstruction of completion from
+> the matching audit event would close it. This decision excludes both, so
+> adopting either requires a superseding decision.
 
 Accepted following PR review and maintainer confirmation on 2026-10-08.
 This decision partially supersedes

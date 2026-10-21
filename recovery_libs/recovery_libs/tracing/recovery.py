@@ -64,11 +64,24 @@ def recovery_span_attributes() -> dict[str, str]:
 
 
 def operation_correlation(span: Span | None, sequence_id: str | None = None) -> dict[str, str | None]:
-    """Read identifiers from the actual operation span, never an ambient transport span."""
+    """Read identifiers from the actual operation span, never an ambient transport span.
+
+    Trace and span IDs are returned only for a sampled span. An unsampled span
+    still has valid IDs, but nothing is exported under them, so audit events
+    carrying them would link to a trace that never exists.
+
+    Args:
+        span: The span of the operation the audit event describes, if any.
+        sequence_id: The recovery sequence the operation belongs to, if any.
+
+    Returns:
+        The recovery sequence, trace, and span IDs to record; each is None when
+        unknown or, for trace and span IDs, when the span is not sampled.
+    """
     result: dict[str, str | None] = {"recovery_sequence_id": sequence_id, "trace_id": None, "span_id": None}
     if span is not None:
         span_context = span.get_span_context()
-        if span_context.is_valid:
+        if span_context.is_valid and span_context.trace_flags.sampled:
             result["trace_id"] = format(span_context.trace_id, "032x")
             result["span_id"] = format(span_context.span_id, "016x")
     return result

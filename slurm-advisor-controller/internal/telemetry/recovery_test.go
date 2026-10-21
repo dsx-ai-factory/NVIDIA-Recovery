@@ -203,3 +203,57 @@ func assertSpanAttribute(t *testing.T, attrs []attribute.KeyValue, key, want str
 	}
 	t.Fatalf("span attribute %q not found", key)
 }
+
+// Audit events carry the span IDs they return. A recovery whose backend trace
+// was sampled out exports nothing, so its audit events must not point at it.
+func TestRecoveryCorrelationOmitsSampledOutSpans(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	provider := sdktrace.NewTracerProvider(
+		sdktrace.WithSyncer(exporter),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.AlwaysSample())),
+	)
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		_ = provider.Shutdown(context.Background())
+		otel.SetTracerProvider(previous)
+	})
+
+	recorder := NewRecorder(prometheus.NewRegistry())
+	for _, tt := range []struct {
+		name        string
+		flags       string
+		wantTraceID string
+	}{
+		{"sampled", "01", "4bf92f3577b34da6a3ce929d0e0e4736"},
+		{"sampled out", "00", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			exporter.Reset()
+			recovery := reconcile.RecoveryContext{
+				SequenceID:  "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+				Traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-" + tt.flags,
+				Operation:   reconcile.RecoveryOperationRestart,
+			}
+			parent, err := recorder.RestoreParent(context.Background(), recovery)
+			if err != nil {
+				t.Fatalf("RestoreParent() failed: %v", err)
+			}
+			_, span := recorder.StartReconcile(parent, reconcile.ReconcileSpanAttributes{Recovery: recovery, JobID: "42"})
+			action := span.StartSchedulerAction(reconcile.SchedulerActionSpanAttributes{
+				Recovery: recovery, JobID: "42", Action: reconcile.SchedulerActionRelease, StartedAt: time.Now(),
+			})
+			for name, s := range map[string]reconcile.RecoverySpan{"reconcile": span, "scheduler action": action} {
+				traceID, spanID := s.Correlation()
+				if traceID != tt.wantTraceID || (spanID == "") != (tt.wantTraceID == "") {
+					t.Fatalf("%s Correlation() = (%q, %q), want trace ID %q", name, traceID, spanID, tt.wantTraceID)
+				}
+			}
+			action.EndSchedulerAction(reconcile.SchedulerActionSpanResult{Outcome: reconcile.SchedulerActionOutcomeSuccess})
+			span.EndReconcile(reconcile.ReconcileSpanResult{Outcome: reconcile.RecoveryOutcomeApplied})
+			if exported := len(exporter.GetSpans()) > 0; exported != (tt.wantTraceID != "") {
+				t.Fatalf("exported spans = %d, want IDs only when spans are exported", len(exporter.GetSpans()))
+			}
+		})
+	}
+}

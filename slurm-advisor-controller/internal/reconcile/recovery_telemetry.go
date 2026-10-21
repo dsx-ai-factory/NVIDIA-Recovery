@@ -126,7 +126,9 @@ type RecoverySpan interface {
 	SetMode(cluster.JobMode)
 	// StartSchedulerAction starts a child using tracing-owned context.
 	StartSchedulerAction(SchedulerActionSpanAttributes) RecoverySpan
-	// Correlation returns valid IDs for this actual operation, or empty strings.
+	// Correlation returns the IDs of this actual operation's exported span, or
+	// empty strings when the span is not sampled and so will never exist in the
+	// trace backend.
 	Correlation() (traceID, spanID string)
 	// EndReconcile ends the application span using the captured result.
 	EndReconcile(ReconcileSpanResult)

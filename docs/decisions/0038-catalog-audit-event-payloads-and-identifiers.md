@@ -2,7 +2,7 @@
 
 Status: accepted
 
-Implementation note: [ADR 0048](0048-start-recovery-traces-in-backend-and-share-observations.md) adds optional `recovery_sequence_id`, `trace_id`, and `span_id` to the Advice and attribution payloads below; historical payloads remain readable.
+Implementation note: [ADR 0048](0048-start-recovery-traces-in-backend-and-share-observations.md) adds optional `recovery_sequence_id`, `trace_id`, and `span_id` to the Advice and attribution payloads below; trace and span IDs are recorded only for sampled spans, and historical payloads remain readable.
 
 Date: 2026-09-09
 
@@ -212,8 +212,9 @@ Scheduler action names include `slurm.requeue_hold`,
 
 Advice application and scheduler-command events capture generation and explicit
 recovery/trace correlation under [ADR 0048](0048-start-recovery-traces-in-backend-and-share-observations.md).
-Trace and span identifiers refer to that actual operation; absent context leaves
-audit coverage intact. Each scheduler command uses one UUIDv4 occurrence as both
+Trace and span identifiers refer to that actual operation and are present only
+when its span is sampled, so every recorded ID names an exported trace; absent
+context or a sampled-out trace leaves audit coverage intact. Each scheduler command uses one UUIDv4 occurrence as both
 its audit producer idempotency key and its milestone idempotency key. Its audit
 `event_produced_at`, action span end, and milestone completion timestamp are the
 same UTC microsecond command-return time, captured before reporting. The separate

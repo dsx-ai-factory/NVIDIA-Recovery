@@ -178,9 +178,12 @@ func (s *recoverySpan) EndSchedulerAction(result reconcile.SchedulerActionSpanRe
 	}
 }
 
+// Correlation returns IDs only for a sampled span. An unsampled span still has
+// valid IDs, but nothing is exported under them, so writing them into audit
+// events would link operators to a trace that never exists.
 func (s *recoverySpan) Correlation() (string, string) {
 	context := s.span.SpanContext()
-	if !context.IsValid() {
+	if !context.IsValid() || !context.IsSampled() {
 		return "", ""
 	}
 	return context.TraceID().String(), context.SpanID().String()
