@@ -1,6 +1,6 @@
 exclude: '^notifications/tests/golden_values/'
 default_language_version:
-  golang: '1.27.1'
+  golang: '1.27.3'
 repos:
 -   repo: local
     hooks:
