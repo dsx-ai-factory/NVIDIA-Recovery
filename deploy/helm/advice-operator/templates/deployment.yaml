@@ -1,0 +1,117 @@
+{{/*
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "advice-operator.fullname" . }}
+  namespace: {{ template "advice-operator.namespace" . }}
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "advice-operator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "advice-operator.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "advice-operator.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          command:
+          - /manager
+          args:
+          {{- if .Values.http2 }}
+          - --enable-http2=true
+          {{- end }}
+          {{- if .Values.leaderElect }}
+          - --leader-elect=true
+          {{- end }}
+          - --health-probe-bind-address=:8081
+          - --metrics-bind-address=:{{ .Values.metrics.listen.port }}
+          - --metrics-secure={{ .Values.metrics.listen.secure.enabled }}
+          {{- if .Values.metrics.listen.secure.enabled }}
+          - --metrics-cert-path={{ .Values.metrics.listen.secure.certPath }}
+          - --metrics-cert-name={{ .Values.metrics.listen.secure.certName }}
+          - --metrics-cert-key={{ .Values.metrics.listen.secure.certKey }}
+          {{- end }}
+          - --advice-namespaces={{ .Values.adviceNamespaces }}
+          env:
+          - name: HEIMDALL_API_GATEWAY_URL
+            value: {{ .Values.heimdallAPIGatewayURL | quote }}
+          - name: HEIMDALL_API_INSECURE_SKIP_VERIFY
+            value: {{ .Values.heimdallAPIInsecureSkipVerify | quote }}
+          - name: POLL_INTERVAL
+            value: {{ .Values.pollInterval | quote }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+          - name: metrics
+            protocol: TCP
+            containerPort: {{ .Values.metrics.listen.port }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- range $constraint := . }}
+        - {{- toYaml $constraint | nindent 10 | trim }}
+          {{- if not $constraint.labelSelector }}
+          labelSelector:
+            matchLabels:
+              {{- include "advice-operator.selectorLabels" . | nindent 14 }}
+          {{- end }}
+        {{- end }}
+      {{- end }}

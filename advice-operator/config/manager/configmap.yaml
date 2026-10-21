@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: heimdall-advice-config
+  namespace: system
+data:
+  # Poll interval for syncing advice from the API (default: 30s if not specified)
+  poll-interval: "30s"
