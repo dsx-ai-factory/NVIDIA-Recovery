@@ -5,6 +5,7 @@ package config
 
 import (
 	"encoding/json"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -28,9 +29,15 @@ type SafetyChecks struct {
 	AcknowledgeSchedulerActions bool
 }
 
+// TracingConfig selects optional OTLP trace export.
 type TracingConfig struct {
+	// Endpoint is the full trace URL: the signal-specific endpoint as given, or
+	// the shared base endpoint with the OTLP/HTTP trace path appended.
 	Endpoint string
+	// Protocol selects grpc or HTTP/protobuf (http is an alias).
 	Protocol string
+	// Token is the bearer credential supplied by OTEL_EXPORTER_OTLP_TOKEN.
+	Token string
 }
 
 // MilestoneReportingConfig bounds the background worker that reports recovery
@@ -264,8 +271,12 @@ func FromEnv() (Config, error) {
 			AcknowledgeSchedulerActions: settings.AcknowledgeSchedulerActions,
 		},
 		Tracing: TracingConfig{
-			Endpoint: firstNonempty(settings.OTLPTraceEndpoint, settings.OTLPEndpoint),
+			Endpoint: tracingEndpoint(
+				settings.OTLPTraceEndpoint, settings.OTLPEndpoint,
+				firstNonempty(settings.OTLPTraceProtocol, settings.OTLPProtocol),
+			),
 			Protocol: firstNonempty(settings.OTLPTraceProtocol, settings.OTLPProtocol),
+			Token:    strings.TrimSpace(settings.OTLPToken),
 		},
 		MilestoneReporting: MilestoneReportingConfig{
 			QueueCapacity:   settings.MilestoneQueueCapacity.value,
@@ -502,6 +513,25 @@ func (cfg MilestoneReportingConfig) validate() error {
 		return errors.Newf("milestone shutdown timeout must be positive: %s", cfg.ShutdownTimeout)
 	}
 	return nil
+}
+
+// tracingEndpoint follows the OTLP exporter specification: a signal-specific
+// endpoint is used as given, while the shared endpoint is a base URL to which
+// OTLP/HTTP appends /v1/traces. gRPC endpoints carry no signal path.
+func tracingEndpoint(traceEndpoint, sharedEndpoint, protocol string) string {
+	if endpoint := strings.TrimSpace(traceEndpoint); endpoint != "" {
+		return endpoint
+	}
+	shared := strings.TrimSpace(sharedEndpoint)
+	if shared == "" || strings.EqualFold(strings.TrimSpace(protocol), "grpc") {
+		return shared
+	}
+	endpoint, err := url.JoinPath(shared, "v1/traces")
+	if err != nil {
+		// Leave the value for the exporter to reject; trace export is optional.
+		return shared
+	}
+	return endpoint
 }
 
 func firstNonempty(values ...string) string {

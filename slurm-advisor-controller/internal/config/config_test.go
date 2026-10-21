@@ -1204,6 +1204,51 @@ func TestFromEnvLoadsOTLPTracingContract(t *testing.T) {
 	}
 }
 
+// The shared OTLP endpoint is a base URL (as the log exporter treats it);
+// OTLP/HTTP sends traces to /v1/traces under it, gRPC has no signal path, and
+// a signal-specific endpoint is already the full trace URL.
+func TestFromEnvResolvesOTLPTraceEndpoint(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"shared http base", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318"}, "http://collector:4318/v1/traces"},
+		{"shared http with prefix", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "https://gateway/otlp/"}, "https://gateway/otlp/v1/traces"},
+		{"shared grpc", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4317", "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"}, "http://collector:4317"},
+		{"signal-specific", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://traces:4318/custom"}, "http://traces:4318/custom"},
+		{"export disabled", map[string]string{}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.env["HEIMDALL_ENDPOINT"] = "127.0.0.1:8080"
+			setConfigEnv(t, tt.env)
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatalf("FromEnv() failed: %v", err)
+			}
+			if cfg.Tracing.Endpoint != tt.want {
+				t.Fatalf("Tracing.Endpoint = %q, want %q", cfg.Tracing.Endpoint, tt.want)
+			}
+		})
+	}
+}
+
+func TestFromEnvPassesOTLPTokenToTraceExport(t *testing.T) {
+	setConfigEnv(t, map[string]string{
+		"HEIMDALL_ENDPOINT":           "127.0.0.1:8080",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+		"OTEL_EXPORTER_OTLP_TOKEN":    "secret-token",
+	})
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv() failed: %v", err)
+	}
+	if cfg.Tracing.Token != "secret-token" {
+		t.Fatal("Tracing.Token was not loaded from OTEL_EXPORTER_OTLP_TOKEN")
+	}
+}
+
 func TestValidateDoesNotMakeOTLPTracingAControllerPrecondition(t *testing.T) {
 	cfg := WithDefaults(Config{
 		HeimdallEndpoint: "127.0.0.1:8080",

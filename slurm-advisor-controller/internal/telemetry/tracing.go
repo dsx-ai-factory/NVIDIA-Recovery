@@ -29,6 +29,11 @@ type TracingProvider struct {
 // NewTracingProvider configures W3C propagation even when no exporter endpoint
 // is present. This keeps recovery-context validation and continuation available
 // in every deployment while making export opt-in through standard OTLP env vars.
+//
+// Trace export is optional, so an exporter that cannot be created is logged and
+// dropped rather than stopping scheduler reconciliation. Without an exporter
+// nothing is sampled: audit events record span IDs only for sampled spans, and
+// no trace would ever exist under them.
 func NewTracingProvider(ctx context.Context, cfg config.TracingConfig, logger *zap.Logger) (*TracingProvider, error) {
 	if logger == nil {
 		logger = zap.NewNop()
@@ -42,16 +47,21 @@ func NewTracingProvider(ctx context.Context, cfg config.TracingConfig, logger *z
 		return nil, errors.Wrap(err, "create tracing resource")
 	}
 
-	options := []sdktrace.TracerProviderOption{
-		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.AlwaysSample())),
-	}
+	options := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
+	exportEnabled := false
 	if cfg.Endpoint != "" {
 		exporter, exportErr := newTraceExporter(ctx, cfg)
 		if exportErr != nil {
-			return nil, errors.Wrap(exportErr, "create OTLP trace exporter")
+			logger.Warn("create OTLP trace exporter; continuing without trace export", zap.Error(exportErr))
+		} else {
+			options = append(options, sdktrace.WithBatcher(exporter))
+			exportEnabled = true
 		}
-		options = append(options, sdktrace.WithBatcher(exporter))
+	}
+	if exportEnabled {
+		options = append(options, sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.AlwaysSample())))
+	} else {
+		options = append(options, sdktrace.WithSampler(sdktrace.NeverSample()))
 	}
 
 	provider := sdktrace.NewTracerProvider(options...)
@@ -64,7 +74,7 @@ func NewTracingProvider(ctx context.Context, cfg config.TracingConfig, logger *z
 	logger.Info(
 		"initialized OpenTelemetry tracing",
 		zap.String("service_name", recoveryServiceName),
-		zap.Bool("export_enabled", cfg.Endpoint != ""),
+		zap.Bool("export_enabled", exportEnabled),
 		zap.String("protocol", cfg.Protocol),
 	)
 	return &TracingProvider{provider: provider}, nil
@@ -74,12 +84,18 @@ func newTraceExporter(ctx context.Context, cfg config.TracingConfig) (sdktrace.S
 	switch cfg.Protocol {
 	case "grpc":
 		options := []otlptracegrpc.Option{otlptracegrpc.WithEndpointURL(cfg.Endpoint)}
+		if cfg.Token != "" {
+			options = append(options, otlptracegrpc.WithHeaders(bearerHeader(cfg.Token)))
+		}
 		if strings.HasPrefix(cfg.Endpoint, "http://") {
 			options = append(options, otlptracegrpc.WithInsecure())
 		}
 		return otlptracegrpc.New(ctx, options...)
 	case "http", "http/protobuf":
 		options := []otlptracehttp.Option{otlptracehttp.WithEndpointURL(cfg.Endpoint)}
+		if cfg.Token != "" {
+			options = append(options, otlptracehttp.WithHeaders(bearerHeader(cfg.Token)))
+		}
 		if strings.HasPrefix(cfg.Endpoint, "http://") {
 			options = append(options, otlptracehttp.WithInsecure())
 		}
@@ -87,6 +103,12 @@ func newTraceExporter(ctx context.Context, cfg config.TracingConfig) (sdktrace.S
 	default:
 		return nil, errors.Newf("unsupported OTLP trace protocol %q", cfg.Protocol)
 	}
+}
+
+// bearerHeader authenticates like the controller's OTLP log exporter, so a
+// deployment that supplies only OTEL_EXPORTER_OTLP_TOKEN exports both signals.
+func bearerHeader(token string) map[string]string {
+	return map[string]string{"Authorization": "Bearer " + token}
 }
 
 // Shutdown flushes and stops the trace provider.
