@@ -39,6 +39,11 @@ type Recorder struct {
 	commandTimeouts          *prometheus.CounterVec
 	modeDecisions            *prometheus.CounterVec
 	environmentAdmissions    *prometheus.CounterVec
+	recoveryContexts         *prometheus.CounterVec
+	recoveryReconciles       *prometheus.CounterVec
+	recoveryActions          *prometheus.CounterVec
+	recoveryActionDuration   *prometheus.HistogramVec
+	recoveryMilestones       *prometheus.CounterVec
 	logLinksCreated          prometheus.Counter
 	logLinksExisting         prometheus.Counter
 	logLinkCollisions        prometheus.Counter
@@ -248,6 +253,27 @@ func NewRecorder(reg prometheus.Registerer) *Recorder {
 			Name: "slurm_advisor_controller_job_environment_admissions_total",
 			Help: "Total number of Slurm job environment admission decisions by bounded reason.",
 		}, []string{"decision_reason"}),
+		recoveryContexts: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "nvidia_recovery_trace_context_total",
+			Help: "Total number of recovery contexts by trusted source and validation outcome.",
+		}, []string{"source", "outcome"}),
+		recoveryReconciles: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "nvidia_recovery_reconcile_outcomes_total",
+			Help: "Total number of recovery reconciliation attempts by operation, outcome, and terminal classification.",
+		}, []string{"operation", "outcome", "terminal"}),
+		recoveryActions: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "nvidia_recovery_scheduler_actions_total",
+			Help: "Total number of recovery scheduler action attempts by operation, action, and outcome.",
+		}, []string{"operation", "action", "outcome"}),
+		recoveryActionDuration: factory.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "nvidia_recovery_scheduler_action_duration_seconds",
+			Help:    "Duration of recovery scheduler action attempts by operation, action, and outcome.",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"operation", "action", "outcome"}),
+		recoveryMilestones: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "nvidia_recovery_milestone_reports_total",
+			Help: "Total number of best-effort scheduler action milestone reports by operation, action, and result.",
+		}, []string{"operation", "action", "result"}),
 		logLinksCreated: factory.NewCounter(prometheus.CounterOpts{
 			Name: "slurm_advisor_controller_log_links_created_total",
 			Help: "Total number of Slurm log links created by the optional materializer.",

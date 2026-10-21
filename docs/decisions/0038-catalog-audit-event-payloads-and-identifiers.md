@@ -198,10 +198,10 @@ and new snapshots, including any checkpoint Issues.
 
 | Event type | Payload fields |
 | --- | --- |
-| `advice_scheduler_action_completed` | `advice_id`, `job_id`, `attempt_index`, optional `correlation_uuid`, `action`, `success`, optional `error` |
-| `advice_application_applied` | `advice_id`, `job_id`, `attempt_index`, optional `correlation_uuid` |
-| `advice_application_evaluated` | `advice_id`, `job_id`, `attempt_index`, optional `correlation_uuid`, `outcome`, `planned_actions` |
-| `advice_application_failed` | `advice_id`, `job_id`, `attempt_index`, optional `correlation_uuid`, optional `error` |
+| `advice_scheduler_action_completed` | `advice_id`, `job_id`, `attempt_index`, `generation`, optional `correlation_uuid`, `recovery_sequence_id`, `trace_id`, `span_id`, `action`, `success`, optional `error` |
+| `advice_application_applied` | `advice_id`, `job_id`, `attempt_index`, `generation`, optional `correlation_uuid`, `recovery_sequence_id`, `trace_id`, `span_id` |
+| `advice_application_evaluated` | `advice_id`, `job_id`, `attempt_index`, `generation`, optional `correlation_uuid`, `recovery_sequence_id`, `trace_id`, `span_id`, `outcome`, `planned_actions` |
+| `advice_application_failed` | `advice_id`, `job_id`, `attempt_index`, `generation`, optional `correlation_uuid`, `recovery_sequence_id`, `trace_id`, `span_id`, optional `error` |
 | `advice_reconciliation_converged` | `advice_id`, `job_id`, `attempt_index`, `generation`, `reason` |
 | `advice_reconciliation_abandoned` | `advice_id`, `job_id`, `attempt_index`, `generation`, `reason` |
 | `job_auto_requeue_hold_completed` | `job_id`, `attempt_index`, optional `correlation_uuid`, `success`, optional `error` |
@@ -209,6 +209,17 @@ and new snapshots, including any checkpoint Issues.
 These events use producer `slurm-advisor-controller` and level `recovery`.
 Scheduler action names include `slurm.requeue_hold`,
 `slurm.update_constraints`, `slurm.release`, and `slurm.cancel`.
+
+Advice application and scheduler-command events capture generation and explicit
+recovery/trace correlation under [ADR 0048](0048-start-recovery-traces-in-backend-and-share-observations.md).
+Trace and span identifiers refer to that actual operation; absent context leaves
+audit coverage intact. Each scheduler command uses one UUIDv4 occurrence as both
+its audit producer idempotency key and its milestone idempotency key. Its audit
+`event_produced_at`, action span end, and milestone completion timestamp are the
+same UTC microsecond command-return time, captured before reporting. The separate
+Advice application event has its own occurrence ID and does not assert restart
+completion. Milestone delivery uses an independent bounded FIFO worker with
+bounded retries and shutdown; the audit destination does not control it.
 
 ### Watchdog recovery event
 

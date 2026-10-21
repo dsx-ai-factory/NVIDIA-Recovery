@@ -28,6 +28,11 @@ type SafetyChecks struct {
 	AcknowledgeSchedulerActions bool
 }
 
+type TracingConfig struct {
+	Endpoint string
+	Protocol string
+}
+
 type LogLinksConfig struct {
 	Enabled                bool
 	Destination            string
@@ -98,6 +103,7 @@ type Config struct {
 	VersionedSqueueJSON            bool
 	UpdateEligibleTimeAfterRequeue bool
 	Safety                         SafetyChecks
+	Tracing                        TracingConfig
 	LogLinks                       LogLinksConfig
 
 	// UserAllowlist temporarily selects actions for named users without hiding other jobs.
@@ -156,6 +162,8 @@ type environmentConfig struct {
 	VersionedSqueueJSON            bool               `envconfig:"SLURM_ADVISOR_VERSIONED_SQUEUE_JSON"`
 	UpdateEligibleTimeAfterRequeue bool               `envconfig:"SLURM_ADVISOR_UPDATE_ELIGIBLE_TIME_AFTER_REQUEUE"`
 	AcknowledgeSchedulerActions    bool               `envconfig:"SLURM_ADVISOR_ACKNOWLEDGE_SCHEDULER_ACTIONS"`
+	OTLPTraceEndpoint              string             `envconfig:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+	OTLPTraceProtocol              string             `envconfig:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
 	LogLinksEnabled                bool               `envconfig:"SLURM_ADVISOR_LOG_LINKS_ENABLED"`
 	LogLinksDestination            string             `envconfig:"SLURM_ADVISOR_LOG_LINKS_DESTINATION"`
 	LogLinksSourceRoots            jsonStringArray    `envconfig:"SLURM_ADVISOR_LOG_LINKS_SOURCE_ROOTS_JSON"`
@@ -225,6 +233,10 @@ func FromEnv() (Config, error) {
 		UpdateEligibleTimeAfterRequeue: settings.UpdateEligibleTimeAfterRequeue,
 		Safety: SafetyChecks{
 			AcknowledgeSchedulerActions: settings.AcknowledgeSchedulerActions,
+		},
+		Tracing: TracingConfig{
+			Endpoint: firstNonempty(settings.OTLPTraceEndpoint, settings.OTLPEndpoint),
+			Protocol: firstNonempty(settings.OTLPTraceProtocol, settings.OTLPProtocol),
 		},
 		LogLinks: LogLinksConfig{
 			Enabled:                      settings.LogLinksEnabled,
@@ -432,6 +444,15 @@ func parseCSV(value string) []string {
 	return out
 }
 
+func firstNonempty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
 func WithDefaults(cfg Config) Config {
 	if cfg.Mode == "" {
 		cfg.Mode = ModeObserve
@@ -497,6 +518,10 @@ func WithDefaults(cfg Config) Config {
 	if cfg.Environment == "" {
 		cfg.Environment = "unspecified"
 	}
+	if cfg.Tracing.Protocol == "" {
+		cfg.Tracing.Protocol = "http/protobuf"
+	}
+	cfg.Tracing.Protocol = strings.ToLower(strings.TrimSpace(cfg.Tracing.Protocol))
 	if !cfg.metricsEnabledEnvSet {
 		cfg.MetricsEnabled = true
 	}

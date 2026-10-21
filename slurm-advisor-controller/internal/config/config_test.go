@@ -1132,6 +1132,39 @@ func TestFromEnvRejectsInvalidObservabilityValues(t *testing.T) {
 	}
 }
 
+func TestFromEnvLoadsOTLPTracingContract(t *testing.T) {
+	setConfigEnv(t, map[string]string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT":        "http://collector:4317",
+		"OTEL_EXPORTER_OTLP_PROTOCOL":        "grpc",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://traces:4318/v1/traces",
+	})
+
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv() failed: %v", err)
+	}
+	if cfg.Tracing.Endpoint != "http://traces:4318/v1/traces" {
+		t.Fatalf("Tracing.Endpoint = %q, want signal-specific endpoint", cfg.Tracing.Endpoint)
+	}
+	if cfg.Tracing.Protocol != "grpc" {
+		t.Fatalf("Tracing.Protocol = %q, want grpc", cfg.Tracing.Protocol)
+	}
+}
+
+func TestValidateDoesNotMakeOTLPTracingAControllerPrecondition(t *testing.T) {
+	cfg := WithDefaults(Config{
+		HeimdallEndpoint: "127.0.0.1:8080",
+		Tracing: TracingConfig{
+			Endpoint: "http://collector:4318",
+			Protocol: "http/json",
+		},
+	})
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() failed for optional OTLP trace configuration: %v", err)
+	}
+}
+
 func setConfigEnv(t *testing.T, values map[string]string) {
 	t.Helper()
 

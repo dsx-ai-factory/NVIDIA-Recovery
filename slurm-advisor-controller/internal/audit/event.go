@@ -79,6 +79,18 @@ type ToProducerEvent interface {
 
 // AdviceSchedulerActionCompletedEvent records a returned Advice-driven scheduler command.
 type AdviceSchedulerActionCompletedEvent struct {
+	// Generation identifies the Advice generation captured during this operation.
+	Generation int64
+
+	// RecoverySequenceID identifies the backend-owned sequence when available.
+	RecoverySequenceID string
+
+	// TraceID identifies the validated operation trace when available.
+	TraceID string
+
+	// SpanID identifies this actual operation span when available.
+	SpanID string
+
 	// HeimdallJobID identifies the Advice record and its Heimdall job.
 	HeimdallJobID string
 	// JobID identifies the scheduler job.
@@ -107,6 +119,7 @@ func (event AdviceSchedulerActionCompletedEvent) ToProducerEvent() ProducerEvent
 		ProducerSlurmAdvisorController,
 		AdviceSchedulerActionCompleted,
 		AdviceSchedulerActionCompletedPayload{
+			Generation: event.Generation, RecoverySequenceID: event.RecoverySequenceID, TraceID: event.TraceID, SpanID: event.SpanID,
 			AdviceID:        event.HeimdallJobID,
 			JobID:           event.JobID,
 			AttemptIndex:    event.AttemptIndex,
@@ -122,6 +135,18 @@ func (event AdviceSchedulerActionCompletedEvent) ToProducerEvent() ProducerEvent
 
 // AdviceApplicationAppliedEvent records Advice that was applied successfully.
 type AdviceApplicationAppliedEvent struct {
+	// Generation identifies the Advice generation captured during this operation.
+	Generation int64
+
+	// RecoverySequenceID identifies the backend-owned sequence when available.
+	RecoverySequenceID string
+
+	// TraceID identifies the validated operation trace when available.
+	TraceID string
+
+	// SpanID identifies this actual operation span when available.
+	SpanID string
+
 	// HeimdallJobID identifies the Advice record and its Heimdall job.
 	HeimdallJobID string
 	// JobID identifies the scheduler job.
@@ -144,6 +169,7 @@ func (event AdviceApplicationAppliedEvent) ToProducerEvent() ProducerEvent {
 		ProducerSlurmAdvisorController,
 		AdviceApplicationApplied,
 		AdviceApplicationAppliedPayload{
+			Generation: event.Generation, RecoverySequenceID: event.RecoverySequenceID, TraceID: event.TraceID, SpanID: event.SpanID,
 			AdviceID:        event.HeimdallJobID,
 			JobID:           event.JobID,
 			AttemptIndex:    event.AttemptIndex,
@@ -156,6 +182,18 @@ func (event AdviceApplicationAppliedEvent) ToProducerEvent() ProducerEvent {
 
 // AdviceApplicationEvaluatedEvent records actions planned in observe mode.
 type AdviceApplicationEvaluatedEvent struct {
+	// Generation identifies the Advice generation captured during this operation.
+	Generation int64
+
+	// RecoverySequenceID identifies the backend-owned sequence when available.
+	RecoverySequenceID string
+
+	// TraceID identifies the validated operation trace when available.
+	TraceID string
+
+	// SpanID identifies this actual operation span when available.
+	SpanID string
+
 	// HeimdallJobID identifies the Advice record and its Heimdall job.
 	HeimdallJobID string
 	// JobID identifies the scheduler job.
@@ -182,6 +220,7 @@ func (event AdviceApplicationEvaluatedEvent) ToProducerEvent() ProducerEvent {
 		ProducerSlurmAdvisorController,
 		AdviceApplicationEvaluated,
 		AdviceApplicationEvaluatedPayload{
+			Generation: event.Generation, RecoverySequenceID: event.RecoverySequenceID, TraceID: event.TraceID, SpanID: event.SpanID,
 			AdviceID:        event.HeimdallJobID,
 			JobID:           event.JobID,
 			AttemptIndex:    event.AttemptIndex,
@@ -196,6 +235,18 @@ func (event AdviceApplicationEvaluatedEvent) ToProducerEvent() ProducerEvent {
 
 // AdviceApplicationFailedEvent records an Advice application that failed.
 type AdviceApplicationFailedEvent struct {
+	// Generation identifies the Advice generation captured during this operation.
+	Generation int64
+
+	// RecoverySequenceID identifies the backend-owned sequence when available.
+	RecoverySequenceID string
+
+	// TraceID identifies the validated operation trace when available.
+	TraceID string
+
+	// SpanID identifies this actual operation span when available.
+	SpanID string
+
 	// HeimdallJobID identifies the Advice record and its Heimdall job.
 	HeimdallJobID string
 	// JobID identifies the scheduler job.
@@ -220,6 +271,7 @@ func (event AdviceApplicationFailedEvent) ToProducerEvent() ProducerEvent {
 		ProducerSlurmAdvisorController,
 		AdviceApplicationFailed,
 		AdviceApplicationFailedPayload{
+			Generation: event.Generation, RecoverySequenceID: event.RecoverySequenceID, TraceID: event.TraceID, SpanID: event.SpanID,
 			AdviceID:        event.HeimdallJobID,
 			JobID:           event.JobID,
 			AttemptIndex:    event.AttemptIndex,
@@ -408,6 +460,18 @@ var (
 
 // AdviceSchedulerActionCompletedPayload describes a completed scheduler command.
 type AdviceSchedulerActionCompletedPayload struct {
+	// Generation identifies the Advice generation captured during this operation.
+	Generation int64 `json:"generation,omitempty"`
+
+	// RecoverySequenceID identifies the backend-owned sequence when available.
+	RecoverySequenceID string `json:"recovery_sequence_id,omitempty"`
+
+	// TraceID identifies the validated operation trace when available.
+	TraceID string `json:"trace_id,omitempty"`
+
+	// SpanID identifies this actual operation span when available.
+	SpanID string `json:"span_id,omitempty"`
+
 	// AdviceID identifies the Advice record.
 	AdviceID string `json:"advice_id"`
 	// JobID identifies the scheduler job.
@@ -427,6 +491,18 @@ type AdviceSchedulerActionCompletedPayload struct {
 
 // AdviceApplicationAppliedPayload describes a successfully applied Advice record.
 type AdviceApplicationAppliedPayload struct {
+	// Generation identifies the Advice generation captured during this operation.
+	Generation int64 `json:"generation,omitempty"`
+
+	// RecoverySequenceID identifies the backend-owned sequence when available.
+	RecoverySequenceID string `json:"recovery_sequence_id,omitempty"`
+
+	// TraceID identifies the validated operation trace when available.
+	TraceID string `json:"trace_id,omitempty"`
+
+	// SpanID identifies this actual operation span when available.
+	SpanID string `json:"span_id,omitempty"`
+
 	// AdviceID identifies the Advice record.
 	AdviceID string `json:"advice_id"`
 	// JobID identifies the scheduler job.
@@ -440,6 +516,18 @@ type AdviceApplicationAppliedPayload struct {
 
 // AdviceApplicationEvaluatedPayload describes actions planned in observe mode.
 type AdviceApplicationEvaluatedPayload struct {
+	// Generation identifies the Advice generation captured during this operation.
+	Generation int64 `json:"generation,omitempty"`
+
+	// RecoverySequenceID identifies the backend-owned sequence when available.
+	RecoverySequenceID string `json:"recovery_sequence_id,omitempty"`
+
+	// TraceID identifies the validated operation trace when available.
+	TraceID string `json:"trace_id,omitempty"`
+
+	// SpanID identifies this actual operation span when available.
+	SpanID string `json:"span_id,omitempty"`
+
 	// AdviceID identifies the Advice record.
 	AdviceID string `json:"advice_id"`
 	// JobID identifies the scheduler job.
@@ -457,6 +545,18 @@ type AdviceApplicationEvaluatedPayload struct {
 
 // AdviceApplicationFailedPayload describes a failed Advice application.
 type AdviceApplicationFailedPayload struct {
+	// Generation identifies the Advice generation captured during this operation.
+	Generation int64 `json:"generation,omitempty"`
+
+	// RecoverySequenceID identifies the backend-owned sequence when available.
+	RecoverySequenceID string `json:"recovery_sequence_id,omitempty"`
+
+	// TraceID identifies the validated operation trace when available.
+	TraceID string `json:"trace_id,omitempty"`
+
+	// SpanID identifies this actual operation span when available.
+	SpanID string `json:"span_id,omitempty"`
+
 	// AdviceID identifies the Advice record.
 	AdviceID string `json:"advice_id"`
 	// JobID identifies the scheduler job.

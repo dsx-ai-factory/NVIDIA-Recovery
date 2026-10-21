@@ -72,6 +72,19 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	tracing, err := telemetry.NewTracingProvider(ctx, cfg.Tracing, logger)
+	if err != nil {
+		logger.Error("initialize tracing", zap.Error(err))
+		return 1
+	}
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := tracing.Shutdown(flushCtx); err != nil {
+			logger.Warn("shutdown trace exporter", zap.Error(err))
+		}
+	}()
+
 	logLinkSyncer, recovery, err := newLogLinkMaterializer(cfg, logger)
 	if err != nil {
 		logger.Error("initialize Slurm log-link materializer", zap.Error(err))
@@ -83,13 +96,12 @@ func run() int {
 		logLinkMaterializer = reconcile.NewAsyncLogLinkMaterializer(ctx, logLinkSyncer)
 	}
 
-	var observer reconcile.Observer = reconcile.NopObserver{}
-	var metricsRecorder *telemetry.Recorder
+	registry := telemetry.NewRegistry()
+	recorder := telemetry.NewRecorder(registry)
+	var observer reconcile.Observer = recorder
+	metricsRecorder := recorder
 	var metricsHandler http.Handler
 	if cfg.MetricsEnabled {
-		registry := telemetry.NewRegistry()
-		metricsRecorder = telemetry.NewRecorder(registry)
-		observer = metricsRecorder
 		metricsHandler = telemetry.Handler(registry)
 	}
 	if _, _, err := startMetricsServer(ctx, cfg, newMetricsMux(metricsHandler), logger); err != nil {
@@ -155,6 +167,13 @@ func run() int {
 		auditObserver,
 		logger,
 	)
+	// Stop reporting before closing the shared gateway connection. The controller
+	// loop has finished producing command occurrences when this defer runs.
+	reporter, stopReports := reconcile.StartMilestoneReporter(apiClient, reconcile.MilestoneReporterOptions{
+		Telemetry: controller.RecoveryTelemetry, Logger: logger,
+	})
+	controller.MilestoneReporter = reporter
+	defer stopReports()
 	logger.Info("starting Slurm advisor controller")
 
 	runOnce := func() {
@@ -316,7 +335,13 @@ func newController(
 		},
 		Observer:      observer,
 		AuditObserver: auditObserver,
-		Logger:        logger,
+		RecoveryTelemetry: func() reconcile.RecoveryTelemetry {
+			if recoveryTelemetry, ok := observer.(reconcile.RecoveryTelemetry); ok {
+				return recoveryTelemetry
+			}
+			return reconcile.NopRecoveryTelemetry{}
+		}(),
+		Logger: logger,
 		ModePolicy: reconcile.ModePolicy{
 			DefaultMode: cluster.JobMode(cfg.Mode),
 			AllowAct:    cfg.Safety.AcknowledgeSchedulerActions,

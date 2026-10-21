@@ -97,6 +97,21 @@ func (mr *MockHeimdallClientMockRecorder) ListAdvice(ctx any, opts ...any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAdvice", reflect.TypeOf((*MockHeimdallClient)(nil).ListAdvice), varargs...)
 }
 
+// RecordRecoveryMilestone mocks base method.
+func (m *MockHeimdallClient) RecordRecoveryMilestone(ctx context.Context, req *v1.RecordRecoveryMilestoneRequest) (*v1.RecordRecoveryMilestoneResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordRecoveryMilestone", ctx, req)
+	ret0, _ := ret[0].(*v1.RecordRecoveryMilestoneResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RecordRecoveryMilestone indicates an expected call of RecordRecoveryMilestone.
+func (mr *MockHeimdallClientMockRecorder) RecordRecoveryMilestone(ctx, req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordRecoveryMilestone", reflect.TypeOf((*MockHeimdallClient)(nil).RecordRecoveryMilestone), ctx, req)
+}
+
 // UpdateAdviceReconciliationStatus mocks base method.
 func (m *MockHeimdallClient) UpdateAdviceReconciliationStatus(ctx context.Context, adviceID string, status *v1.AdviceReconciliationStatus) (*v1.AdviceReconciliationStatus, error) {
 	m.ctrl.T.Helper()
