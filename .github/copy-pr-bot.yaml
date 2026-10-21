@@ -7,6 +7,7 @@ auto_sync_ready: true
 additional_trustees: []
 additional_vetters: []
 trustees_override:
+  - abhjha17
   - ajaymh
   - ak-nv24
   - alwnv
@@ -20,10 +21,12 @@ trustees_override:
   - rlizzo
   - robo-corg
   - rsanadhya1
+  - ruoxizhang17
   - shamisp
   - vpunuqv
   - yugalj
 vetters_override:
+  - abhjha17
   - ajaymh
   - ak-nv24
   - alwnv
@@ -37,6 +40,7 @@ vetters_override:
   - rlizzo
   - robo-corg
   - rsanadhya1
+  - ruoxizhang17
   - shamisp
   - vpunuqv
   - yugalj
