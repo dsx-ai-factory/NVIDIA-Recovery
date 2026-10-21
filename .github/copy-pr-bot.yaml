@@ -1,5 +1,4 @@
 # NVIDIA copy-pr-bot; dsx-ai-factory CODEOWNERS team roster verified 2026-10-20.
-# Also includes maintainer-requested accounts abhjha17 and ruoxizhang17.
 # Refresh both lists when membership changes. Never leave either override empty.
 # See docs/governance/ci-approval.md for deployment verification requirements.
 enabled: true
