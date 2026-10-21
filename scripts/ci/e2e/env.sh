@@ -317,6 +317,13 @@ fi
 if [[ -n "${VICTORIALOGS_URL+x}" ]]; then
   export VICTORIALOGS_URL
 fi
+# Optional production-interface trace evidence. Name an operator-managed Tempo
+# query Service as namespace/service:port (for example,
+# monitoring/tempo-query-frontend:3200), or give E2E_TEMPO_URL to skip the port
+# forward. Empty keeps recovery scenarios backend-independent.
+E2E_TEMPO_SERVICE="${E2E_TEMPO_SERVICE:-}"
+E2E_TEMPO_URL="${E2E_TEMPO_URL:-}"
+export E2E_TEMPO_SERVICE E2E_TEMPO_URL
 
 # How long each service install waits for its pods (`helm --wait`). Generous
 # because first-pull of charts like kube-prometheus-stack/slurm is slow.

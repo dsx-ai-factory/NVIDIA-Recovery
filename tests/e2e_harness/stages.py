@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from recovery_libs.testing.launch.jobs import JobState
-from recovery_libs.testing.scenario import Stage, consistently, eventually
+from recovery_libs.testing.scenario import Check, Stage, consistently, eventually, on
 
 from e2e_harness import audit
 from e2e_harness.checks import (
@@ -14,6 +14,7 @@ from e2e_harness.checks import (
     advice,
     audit_trail,
     job_state,
+    recovery_trace,
     requeue_notified,
     restarted,
     state_based_crash,
@@ -42,6 +43,26 @@ def state_based_recovery(e2e_config: E2EConfig, *, restart_within: float) -> tup
         ),
         eventually("requeue notified", requeue_notified(anomaly_type="CRASH"), within=evidence_window),
     )
+
+
+def recovery_traced(
+    e2e_config: E2EConfig, *, operation: str = "restart", role: str | None = None
+) -> tuple[Stage[RecoveryClient], ...]:
+    """When the run opts into trace evidence, the recovery's backend, Advice, and controller spans form one trace.
+
+    The stack does not ship a trace backend, so runs without Tempo skip this stage. Only restarts include an
+    attribution span, and only when the credentialed attribution service is available.
+    """
+
+    if not e2e_config.recovery_trace_enabled:
+        return ()
+    check: Check[RecoveryClient] = recovery_trace(
+        operation=operation,
+        require_attribution=operation == "restart" and e2e_config.attribution_mode == "available",
+    )
+    if role is not None:
+        check = on(role, check)
+    return (eventually("traced", check, within=e2e_config.watcher_evidence_timeout_seconds),)
 
 
 def stopped_at_requeue_limit(e2e_config: E2EConfig) -> tuple[Stage[RecoveryClient], ...]:

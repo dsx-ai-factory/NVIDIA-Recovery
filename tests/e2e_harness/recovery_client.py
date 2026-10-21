@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -166,6 +166,19 @@ class ControllerApi:
         return _get(self._http, "/metrics")
 
 
+class TempoApi:
+    """Trace reads from an operator-managed Tempo query endpoint."""
+
+    def __init__(self, http: httpx.Client) -> None:
+        self._http = http
+
+    @traced("tempo.trace")
+    def trace(self, *, trace_id: str) -> ApiResponse:
+        """One trace by ID through Tempo's production v2 trace-by-ID API."""
+
+        return _get(self._http, f"/api/v2/traces/{_segment(trace_id)}")
+
+
 class LogsApi:
     """Collected log reads from the stack's log backend: Loki or VictoriaLogs."""
 
@@ -211,6 +224,8 @@ class RecoveryClient:
     gateway: GatewayApi
     logs: LogsApi
     controller: ControllerApi
+    # None unless the run opts into recovery trace evidence; the stack does not ship a trace backend.
+    tempo: TempoApi | None
 
 
 @dataclass(frozen=True)
@@ -222,6 +237,7 @@ class ServiceUrls:
     gateway: str
     logs: str
     controller: str
+    tempo: str | None = None
 
 
 def traced_http(
@@ -244,17 +260,20 @@ def traced_http(
 def open_recovery_client(urls: ServiceUrls, *, log_backend: str, timeout: float = 30.0) -> Iterator[RecoveryClient]:
     """Yield a traced recovery client and close its connections on exit."""
 
-    with (
-        traced_http(urls.job_manager, timeout=timeout) as job_manager,
-        traced_http(urls.notifications, timeout=timeout) as notifications,
-        traced_http(urls.gateway, timeout=timeout) as gateway,
-        traced_http(urls.logs, timeout=timeout) as logs,
-        traced_http(urls.controller, timeout=timeout) as controller,
-    ):
-        yield RecoveryClient(
-            JobManagerApi(job_manager),
-            NotificationsApi(notifications),
-            GatewayApi(gateway),
-            LogsApi(logs, backend=log_backend),
-            ControllerApi(controller),
-        )
+    with ExitStack() as optional:
+        tempo = optional.enter_context(traced_http(urls.tempo, timeout=timeout)) if urls.tempo else None
+        with (
+            traced_http(urls.job_manager, timeout=timeout) as job_manager,
+            traced_http(urls.notifications, timeout=timeout) as notifications,
+            traced_http(urls.gateway, timeout=timeout) as gateway,
+            traced_http(urls.logs, timeout=timeout) as logs,
+            traced_http(urls.controller, timeout=timeout) as controller,
+        ):
+            yield RecoveryClient(
+                JobManagerApi(job_manager),
+                NotificationsApi(notifications),
+                GatewayApi(gateway),
+                LogsApi(logs, backend=log_backend),
+                ControllerApi(controller),
+                None if tempo is None else TempoApi(tempo),
+            )

@@ -84,6 +84,7 @@ main() {
   log "  ARCH                = $ARCH"
   log "  DEPLOY_INFRA        = $(enabled "$DEPLOY_INFRA" && echo on || echo off)"
   log "  E2E_LOG_BACKEND     = $E2E_LOG_BACKEND"
+  log "  E2E_TEMPO_SERVICE   = ${E2E_TEMPO_SERVICE:-${E2E_TEMPO_URL:-<disabled>}}"
   log "  DEPLOY_GPU_SCRAPE   = $(enabled "$DEPLOY_GPU_SCRAPE" && echo on || echo off)"
   log "  DEPLOY_STACK        = $(enabled "$DEPLOY_STACK" && echo on || echo off)"
   log "  DEV_CI_TIMEOUT      = $DEV_CI_TIMEOUT"

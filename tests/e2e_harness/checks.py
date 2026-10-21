@@ -33,6 +33,7 @@ from e2e_harness.recovery import (
     evaluate_terminated_advice_response,
 )
 from e2e_harness.recovery_client import ApiResponse, RecoveryApiError, RecoveryClient
+from e2e_harness.recovery_trace import evaluate_recovery_trace, recovery_context_from_advice
 from e2e_harness.services import E2EServices
 
 AuditExpectations = Callable[[SubmittedJob], Sequence[audit.EventExpectation]]
@@ -771,6 +772,40 @@ def gateway_audit_matches() -> Check[RecoveryClient]:
         if omitted:
             return Evidence(False, f"gateway omitted persisted events for: {', '.join(omitted)}")
         return Evidence(True, f"gateway returned all persisted events for job {run.job.job_id}")
+
+    return check
+
+
+def recovery_trace(*, require_attribution: bool, operation: str = "restart", attempt: int = 0) -> Check[RecoveryClient]:
+    """Tempo holds the attempt's backend-started recovery trace, and its release matches the audit trail.
+
+    The canonical trace comes from the attempt's Advice, never from a sequence the test creates. Trace export and
+    audit delivery are independent, so each poll rereads both.
+    """
+
+    def check(run: Run[RecoveryClient]) -> Evidence:
+        tempo = run.services.tempo
+        if tempo is None:
+            return Evidence(False, "recovery trace evidence needs E2E_TEMPO_SERVICE or E2E_TEMPO_URL")
+        job_id = run.job.job_id
+        advice = _unless_missing(lambda: run.services.job_manager.advice(job_id=job_id, attempt=attempt))
+        if advice is None:
+            return Evidence(False, f"no Advice yet for job {job_id} attempt {attempt}")
+        context = recovery_context_from_advice(advice.text, job_id=job_id, attempt=attempt, operation=operation)
+        # Tempo answers 404 until the trace's spans have been ingested.
+        trace = _unless_missing(lambda: tempo.trace(trace_id=context.trace_id))
+        if trace is None:
+            return Evidence(False, f"Tempo has no trace {context.trace_id} yet")
+        evidence = evaluate_recovery_trace(
+            trace.text,
+            context=context,
+            job_id=job_id,
+            attempt=attempt,
+            operation=operation,
+            require_attribution=require_attribution,
+            audit_events=_audit_events(run, attempt),
+        )
+        return Evidence(evidence.observed, evidence.summary)
 
     return check
 
