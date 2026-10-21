@@ -35,7 +35,7 @@ from watcher.service import WatcherService
 from watcher.workflow import RulesEngine
 
 # setup fastapi
-app =  FastAPI(
+app = FastAPI(
     title="Watcher Service",
     summary="Service to detect anomaly events in observability and forward it to Eventbus.",
     root_path="",
