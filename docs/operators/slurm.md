@@ -2,7 +2,7 @@
 
 For the Slurm administrator installing a native Advisor Controller on a Linux
 control-plane host. Complete [backend installation](installation.md) first;
-you need its private gateway address, the same source revision, Go 1.27.1,
+you need its private gateway address, the same source revision, Go 1.27.3,
 and the site's Slurm configuration and service identity. This guide starts the
 controller in observe mode and leaves the watchdog stopped.
 
