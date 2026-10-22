@@ -21,7 +21,7 @@ from opentelemetry.sdk.trace.export import (
     SpanExporter,
     SpanProcessor,
 )
-from opentelemetry.trace import Span
+from opentelemetry.trace import Span, TraceFlags
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pika.spec import BasicProperties
 
@@ -210,13 +210,19 @@ def extract_trace_id_from_span(span: Span) -> str | None:
     """
     Extract the trace ID as a hex string from a span's context.
 
+    Only a sampled span's trace is exported, so an unsampled span yields None
+    rather than an ID that would link to a trace that never exists.
+
+    Args:
+        span: The span whose trace ID to read.
+
     Returns:
         The trace ID as a 32-character lowercase hex string, or None if the span
-        context is invalid or has a zero trace ID.
+        context is invalid, has a zero trace ID, or is not sampled.
     """
     try:
         span_context = span.get_span_context()
-        if span_context and span_context.trace_id != 0:
+        if span_context and span_context.trace_id != 0 and span_context.trace_flags.sampled:
             return format(span_context.trace_id, "032x")
     except Exception as e:
         logger.warning("Failed to extract trace_id from span", exc_info=True, extra={"error": str(e)})
@@ -227,17 +233,23 @@ def extract_trace_id_from_rabbitmq_properties(properties: BasicProperties) -> st
     """
     Extract the trace ID from the ``traceparent`` header in RabbitMQ message properties.
 
-    The W3C traceparent format is: ``{version}-{trace_id}-{span_id}-{trace_flags}``
+    The W3C traceparent format is: ``{version}-{trace_id}-{span_id}-{trace_flags}``.
+    The producer's sampled flag decides whether that trace is exported, so an
+    unsampled traceparent yields None rather than an ID with no trace behind it.
+
+    Args:
+        properties: The message properties that may carry a ``traceparent`` header.
 
     Returns:
-        The trace ID as a 32-character lowercase hex string, or None if unavailable.
+        The trace ID as a 32-character lowercase hex string, or None if the
+        header is missing, malformed, or not sampled.
     """
     try:
         if properties and properties.headers:
             traceparent = properties.headers.get("traceparent")
             if traceparent and isinstance(traceparent, str):
                 parts = traceparent.split("-")
-                if len(parts) >= 2:
+                if len(parts) >= 4 and int(parts[3][:2], 16) & int(TraceFlags.SAMPLED):
                     return parts[1]
     except Exception as e:
         logger.warning("Failed to extract trace_id from RabbitMQ properties", exc_info=True, extra={"error": str(e)})

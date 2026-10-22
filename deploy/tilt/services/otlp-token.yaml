@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# The recovery services' copy of the local OTLP endpoint's bearer token, read
+# through global.otelcollector.auth (scripts/ci/e2e/values/otlp.yaml). It must
+# match the collector's Secret in otel-collector.yaml.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nvidia-recovery-otlp
+  namespace: slurm
+type: Opaque
+stringData:
+  token: heimdall-e2e-otlp-token

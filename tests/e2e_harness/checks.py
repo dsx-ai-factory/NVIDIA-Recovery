@@ -33,6 +33,7 @@ from e2e_harness.recovery import (
     evaluate_terminated_advice_response,
 )
 from e2e_harness.recovery_client import ApiResponse, RecoveryApiError, RecoveryClient
+from e2e_harness.recovery_trace import evaluate_recovery_trace, recovery_context_from_advice
 from e2e_harness.services import E2EServices
 
 AuditExpectations = Callable[[SubmittedJob], Sequence[audit.EventExpectation]]
@@ -771,6 +772,83 @@ def gateway_audit_matches() -> Check[RecoveryClient]:
         if omitted:
             return Evidence(False, f"gateway omitted persisted events for: {', '.join(omitted)}")
         return Evidence(True, f"gateway returned all persisted events for job {run.job.job_id}")
+
+    return check
+
+
+def recovery_trace(*, require_attribution: bool, operation: str = "restart", attempt: int = 0) -> Check[RecoveryClient]:
+    """Tempo holds the attempt's backend-started recovery trace, and its release matches the audit trail.
+
+    The canonical trace comes from the attempt's Advice, never from a sequence the test creates. Trace export and
+    audit delivery are independent, so each poll rereads both.
+    """
+
+    def check(run: Run[RecoveryClient]) -> Evidence:
+        tempo = run.services.tempo
+        if tempo is None:
+            return Evidence(False, "recovery trace evidence needs E2E_TEMPO_SERVICE or E2E_TEMPO_URL")
+        job_id = run.job.job_id
+        advice = _unless_missing(lambda: run.services.job_manager.advice(job_id=job_id, attempt=attempt))
+        if advice is None:
+            return Evidence(False, f"no Advice yet for job {job_id} attempt {attempt}")
+        context = recovery_context_from_advice(advice.text, job_id=job_id, attempt=attempt, operation=operation)
+        # Tempo answers 404 until the trace's spans have been ingested.
+        trace = _unless_missing(lambda: tempo.trace(trace_id=context.trace_id))
+        if trace is None:
+            return Evidence(False, f"Tempo has no trace {context.trace_id} yet")
+        evidence = evaluate_recovery_trace(
+            trace.text,
+            context=context,
+            job_id=job_id,
+            attempt=attempt,
+            operation=operation,
+            require_attribution=require_attribution,
+            audit_events=_audit_events(run, attempt),
+        )
+        return Evidence(evidence.observed, evidence.summary)
+
+    return check
+
+
+OTLP_SERVICE_LOGS = (
+    # Job Manager (Python exporter) names the job only in its message text; the comma ends the ID.
+    ("job_manager", "Upserting job: job_id={job_id},", {}),
+    # The controller (Go exporter) attaches the job as a structured field.
+    ("slurm-advisor-controller", "", {"job_id": "{job_id}"}),
+)
+"""Per service: its OTLP `service.name`, a message substring, and structured fields that place a record on the job."""
+
+
+def service_logs_exported() -> Check[RecoveryClient]:
+    """Job Manager and the controller exported logs about this job to the log store through the shared OTLP endpoint.
+
+    Each service reaches the store only through its own OTLP log exporter and the collector, so a record proves that
+    path end to end, including the bearer token. Both languages' exporters are covered.
+    """
+
+    def check(run: Run[RecoveryClient]) -> Evidence:
+        logs = run.services.logs
+        # Loki indexes the OTLP resource attribute `service.name` as `service_name`; VictoriaLogs keeps its name.
+        service_label = "service_name" if logs.backend == "loki" else "service.name"
+        job_id = run.job.job_id
+        missing: list[str] = []
+        for service, contains, fields in OTLP_SERVICE_LOGS:
+            response = logs.query(
+                labels={service_label: service},
+                contains=contains.format(job_id=job_id),
+                fields={key: value.format(job_id=job_id) for key, value in fields.items()},
+                start=_submitted_at(run),
+                end=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+            try:
+                records = decode_log_response(response.text, logs.backend)
+            except ValueError as error:
+                return Evidence(False, str(error))
+            if not records:
+                missing.append(service)
+        if missing:
+            return Evidence(False, f"no OTLP logs for job {job_id} yet from: {', '.join(missing)}")
+        return Evidence(True, f"Job Manager and controller logs for job {job_id} reached {logs.backend} through OTLP")
 
     return check
 

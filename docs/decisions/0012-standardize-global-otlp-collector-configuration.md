@@ -2,6 +2,8 @@
 
 Status: accepted
 
+> **Implementation note (2026-10-22):** Because the Slurm Advisor Controller is installed standalone (for example in a separate Slinky namespace), its chart keeps a copy of the shared helper so `global.otelcollector` also works in a standalone release; a rendered-output parity check fails CI and pre-commit if the copy diverges from `heimdall.otelEnv`. Evidence: [helper copy](../../deploy/helm/slurm-advisor-controller/templates/_helpers.tpl), [parity check](../../deploy/helm/scripts/check-otel-env-parity.sh).
+
 Date: 2026-08-14
 
 ## Context

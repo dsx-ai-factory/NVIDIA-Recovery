@@ -122,6 +122,11 @@ standard `OTEL_EXPORTER_OTLP_HEADERS` value. The Secret must already exist in
 the release namespace and its key must contain only the bearer token, not a
 complete HTTP header.
 
+The standalone `slurm-advisor-controller` chart accepts the same
+`global.otelcollector` values through its own copy of the helper, which
+`deploy/helm/scripts/check-otel-env-parity.sh` keeps identical in rendered
+output.
+
 This setting standardizes environment injection only. A service still needs
 OTLP-aware runtime logic, and any service-specific SDK enablement flag remains
 independent (for example, `api-gateway.otel.enabled`).

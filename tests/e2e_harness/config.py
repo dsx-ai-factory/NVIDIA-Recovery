@@ -6,10 +6,29 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 from e2e_harness.log_backend import validate_log_backend, validate_log_backend_url
+
+
+@dataclass(frozen=True, slots=True)
+class TempoService:
+    """The Kubernetes Service of a Tempo query endpoint."""
+
+    namespace: str
+    name: str
+    port: int
+
+
+def parse_tempo_service(value: str) -> TempoService:
+    """Parse `namespace/service:port`, the form `E2E_TEMPO_SERVICE` takes."""
+
+    match = re.fullmatch(r"([a-z0-9][a-z0-9-]*)/([a-z0-9][a-z0-9-]*):([0-9]{1,5})", value)
+    if match is None or not 0 < int(match.group(3)) < 65536:
+        raise ValueError(f"E2E_TEMPO_SERVICE must be namespace/service:port, got {value!r}")
+    return TempoService(match.group(1), match.group(2), int(match.group(3)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +52,16 @@ class E2EConfig:
     attribution_timeout_seconds: float
     stack_namespace: str
     stack_timeout_seconds: int
+    tempo_service: TempoService | None
+    tempo_url: str
+    otlp_logs: bool
+    """Whether the services export their logs through OTLP into the selected log store, so scenarios can require them."""
+
+    @property
+    def recovery_trace_enabled(self) -> bool:
+        """Whether scenarios also require recovery trace evidence from Tempo."""
+
+        return self.tempo_service is not None or bool(self.tempo_url)
 
     @property
     def log_backend_url(self) -> str:
@@ -114,4 +143,9 @@ def e2e_config_from_environment(environment: Mapping[str, str]) -> E2EConfig:
         attribution_timeout_seconds=_number(environment, "ATTRIBUTION_TIMEOUT", "180"),
         stack_namespace=environment.get("E2E_STACK_NAMESPACE", ""),
         stack_timeout_seconds=int(_number(environment, "E2E_STACK_TIMEOUT", "180")),
+        tempo_service=(
+            parse_tempo_service(environment["E2E_TEMPO_SERVICE"]) if environment.get("E2E_TEMPO_SERVICE") else None
+        ),
+        tempo_url=environment.get("E2E_TEMPO_URL", "").rstrip("/"),
+        otlp_logs=bool(environment.get("E2E_OTLP_LOGS")),
     )

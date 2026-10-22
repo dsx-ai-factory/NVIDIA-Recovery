@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# OTLP export for the local stack, applied to both the NVIDIA Recovery and the
+# Slurm Advisor Controller releases when Tilt deploys the shared
+# infrastructure. Every service sends logs and traces to one endpoint with one
+# bearer token, as in production; the local collector
+# (deploy/tilt/services/otel-collector.yaml) routes traces to Tempo and logs to
+# the selected log store.
+#
+# gRPC because the Python exporters do not yet append OTLP signal paths over
+# HTTP.
+global:
+  otelcollector:
+    enabled: true
+    endpoint: http://otel-collector.monitoring.svc.cluster.local:4317
+    protocol: grpc
+    auth:
+      enabled: true
+      secretName: nvidia-recovery-otlp
+      secretKey: token

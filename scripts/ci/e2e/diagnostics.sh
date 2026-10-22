@@ -59,6 +59,24 @@ _e2e_collect_deployment_logs() {
   done
 }
 
+_e2e_collect_telemetry_logs() {
+  local diagnostics_dir="$1"
+  local since_time="$2"
+  local deployment
+
+  # Missing traces or exported service logs are diagnosed from the local OTLP
+  # collector (authentication, export errors) and Tempo (ingestion).
+  for deployment in otel-collector tempo; do
+    if ! kubectl get deployment -n monitoring "$deployment" --request-timeout=10s >/dev/null 2>&1; then
+      continue
+    fi
+    _e2e_capture_diagnostic "$diagnostics_dir/$deployment.log" \
+      kubectl logs -n monitoring "deployment/$deployment" \
+      --all-containers=true --prefix=true --timestamps=true \
+      "--since-time=$since_time" --tail=2000
+  done
+}
+
 _e2e_collect_slurm_state() {
   local diagnostics_dir="$1"
   local namespace="${SLURM_NS:-slurm}"
@@ -103,6 +121,7 @@ _e2e_collect_failure_diagnostics() {
     kubectl get --raw "$job_manager_proxy/advice?page_size=1000&include_hidden=true"
 
   _e2e_collect_deployment_logs "$diagnostics_dir" "$namespace" "$since_time"
+  _e2e_collect_telemetry_logs "$diagnostics_dir" "$since_time"
   _e2e_collect_slurm_state "$diagnostics_dir"
 }
 
