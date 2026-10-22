@@ -1,0 +1,26 @@
+{{/*
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+*/ -}}
+{{- if .Values.metrics.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-metrics
+  namespace: {{ template "advice-operator.namespace" . }}
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+  {{- with .Values.metrics.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.metrics.service.port }}
+      protocol: TCP
+      targetPort: metrics
+      name: metrics
+  selector:
+    {{- include "advice-operator.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -26,8 +26,8 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def normalize(raw, destination):
-    """Remove clock, ownership and entry-order variance while retaining file modes."""
+def normalize(raw, destination, excluded_roots=()):
+    """Normalize archive metadata, omitting specified roots beneath its top directory."""
     with (
         tarfile.open(fileobj=io.BytesIO(raw), mode="r:*") as source,
         destination.open("wb") as output,
@@ -35,6 +35,9 @@ def normalize(raw, destination):
         tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as target,
     ):
         for member in sorted(source.getmembers(), key=lambda item: item.name):
+            relative = Path(*Path(member.name).parts[1:])
+            if any(relative == Path(root) or Path(root) in relative.parents for root in excluded_roots):
+                continue
             member.mtime = member.uid = member.gid = 0
             member.uname = member.gname = ""
             member.pax_headers = {}
@@ -151,7 +154,12 @@ def package(version, destination, ref):
         work = Path(temporary)
         prefix = f"nvidia-recovery-{version}"
         source = destination / f"{prefix}-source.tar.gz"
-        normalize(run("git", "archive", "--format=tar", f"--prefix={prefix}/", sha), source)
+        # Advice Operator is vendored for downstream consumers, not released yet.
+        normalize(
+            run("git", "archive", "--format=tar", f"--prefix={prefix}/", sha),
+            source,
+            excluded_roots=("advice-operator", "deploy/helm/advice-operator"),
+        )
         inspect_archive(source, prefix, ["LICENSE", "RELEASE.md", f"docs/releases/v{version}.md"])
         with tarfile.open(source) as archive:
             archive.extractall(work, filter="data")

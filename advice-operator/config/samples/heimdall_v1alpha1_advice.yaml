@@ -1,0 +1,31 @@
+apiVersion: heimdall.nvidia.com/v1alpha1
+kind: Advice
+metadata:
+  labels:
+    app.kubernetes.io/name: advice-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: advice-sample
+spec:
+  job:
+    heimdallId: "advice-sample"
+    jobId: "training-job-abc123"
+    attemptIndex: 0
+  advice:
+    state: "Restarted"
+    nodeConstraints:
+      exclusions:
+        - "gpu-node-123"
+  issues:
+    - issueType: "STRAGGLER"
+      timestamp: "2025-09-16T19:25:56.287880Z"
+      detectedBy: "App Log"
+      relevantLogLines:
+        - "3071:  [2025-09-16 12:25:38] iteration   664400/  993410 | consumed samples:   2041036800 | elapsed time per iteration (ms): 1731.3 | throughput per GPU (TFLOP/s/GPU): 105.4 | energy per GPU (J/iter/GPU): 598.7 | power per GPU (W/GPU): 345.8 | learning rate: 1.000000E-05 | global batch size:  3072 | lm loss: 1.270612E+00 | load_balancing_loss: 1.080232E+00 | loss scale: 1.0 | grad norm: 0.051 | num zeros: 171928080.0 | params norm: 4925.583 | number of skipped iterations:   0 | number of nan iterations:   0 |"
+      remediationActions:
+        - actionType: "Restart and Exclude Node"
+          timestamp: "2025-09-16T19:26:00.000000Z"
+          reason: "Suspected Hardware"
+          resourceDetails:
+            - resourceType: "Node"
+              resourceId: "gpu-node-123"
+              details: "Straggler detected - throughput per GPU below threshold at 105.4 TFLOP/s/GPU"

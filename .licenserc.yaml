@@ -42,6 +42,7 @@ header:
   paths-ignore:
     - 'agent-capabilities/vendor/**'
     - 'api-gateway/gen/**'
+    - 'advice-operator/internal/client/mock_advice_source.go'
     - 'dashboard/src/gen/**'
     # NVIDIA-owned Fern theme source that carries its own license header.
     - 'fern/main.css'
