@@ -231,6 +231,13 @@ func FromEnv() (Config, error) {
 		return Config{}, errors.New("SLURM_ADVISOR_SERVICE_ACCOUNT_TOKEN_PATH must not be empty")
 	}
 
+	// Traces sent to the shared endpoint use its protocol, including the
+	// controller's grpc default for logs, so one collector serves both signals.
+	// Only a trace-specific endpoint keeps the OTLP http/protobuf default.
+	traceProtocol := firstNonempty(settings.OTLPTraceProtocol, settings.OTLPProtocol)
+	if traceProtocol == "" && strings.TrimSpace(settings.OTLPTraceEndpoint) == "" {
+		traceProtocol = "grpc"
+	}
 	cfg := Config{
 		GatewayTLS:              tlsconfig.Config{Enabled: settings.TLSEnabled, CAFile: strings.TrimSpace(settings.TLSCAFile), ServerName: strings.TrimSpace(settings.TLSServerName)},
 		HeimdallEndpoint:        settings.HeimdallEndpoint,
@@ -271,11 +278,8 @@ func FromEnv() (Config, error) {
 			AcknowledgeSchedulerActions: settings.AcknowledgeSchedulerActions,
 		},
 		Tracing: TracingConfig{
-			Endpoint: tracingEndpoint(
-				settings.OTLPTraceEndpoint, settings.OTLPEndpoint,
-				firstNonempty(settings.OTLPTraceProtocol, settings.OTLPProtocol),
-			),
-			Protocol: firstNonempty(settings.OTLPTraceProtocol, settings.OTLPProtocol),
+			Endpoint: tracingEndpoint(settings.OTLPTraceEndpoint, settings.OTLPEndpoint, traceProtocol),
+			Protocol: traceProtocol,
 			Token:    strings.TrimSpace(settings.OTLPToken),
 		},
 		MilestoneReporting: MilestoneReportingConfig{

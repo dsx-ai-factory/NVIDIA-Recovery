@@ -1209,15 +1209,19 @@ func TestFromEnvLoadsOTLPTracingContract(t *testing.T) {
 // a signal-specific endpoint is already the full trace URL.
 func TestFromEnvResolvesOTLPTraceEndpoint(t *testing.T) {
 	tests := []struct {
-		name string
-		env  map[string]string
-		want string
+		name         string
+		env          map[string]string
+		want         string
+		wantProtocol string
 	}{
-		{"shared http base", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318"}, "http://collector:4318/v1/traces"},
-		{"shared http with prefix", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "https://gateway/otlp/"}, "https://gateway/otlp/v1/traces"},
-		{"shared grpc", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4317", "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"}, "http://collector:4317"},
-		{"signal-specific", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://traces:4318/custom"}, "http://traces:4318/custom"},
-		{"export disabled", map[string]string{}, ""},
+		{"shared http base", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf"}, "http://collector:4318/v1/traces", "http/protobuf"},
+		{"shared http with prefix", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "https://gateway/otlp/", "OTEL_EXPORTER_OTLP_PROTOCOL": "http"}, "https://gateway/otlp/v1/traces", "http"},
+		{"shared grpc", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4317", "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"}, "http://collector:4317", "grpc"},
+		// Logs default to grpc, so traces to the same collector must too.
+		{"shared without protocol", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4317"}, "http://collector:4317", "grpc"},
+		{"trace protocol overrides shared", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": "http/protobuf"}, "http://collector:4318/v1/traces", "http/protobuf"},
+		{"signal-specific", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://traces:4318/custom"}, "http://traces:4318/custom", "http/protobuf"},
+		{"export disabled", map[string]string{}, "", "grpc"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1229,6 +1233,13 @@ func TestFromEnvResolvesOTLPTraceEndpoint(t *testing.T) {
 			}
 			if cfg.Tracing.Endpoint != tt.want {
 				t.Fatalf("Tracing.Endpoint = %q, want %q", cfg.Tracing.Endpoint, tt.want)
+			}
+			if cfg.Tracing.Protocol != tt.wantProtocol {
+				t.Fatalf("Tracing.Protocol = %q, want %q", cfg.Tracing.Protocol, tt.wantProtocol)
+			}
+			if tt.env["OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"] == "" && tt.env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] == "" &&
+				cfg.Tracing.Protocol != cfg.OTLP.Protocol {
+				t.Fatalf("traces use %q but logs use %q on the shared endpoint", cfg.Tracing.Protocol, cfg.OTLP.Protocol)
 			}
 		})
 	}
