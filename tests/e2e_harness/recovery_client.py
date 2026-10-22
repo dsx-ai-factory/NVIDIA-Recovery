@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -166,6 +166,19 @@ class ControllerApi:
         return _get(self._http, "/metrics")
 
 
+class TempoApi:
+    """Trace reads from an operator-managed Tempo query endpoint."""
+
+    def __init__(self, http: httpx.Client) -> None:
+        self._http = http
+
+    @traced("tempo.trace")
+    def trace(self, *, trace_id: str) -> ApiResponse:
+        """One trace by ID through Tempo's production v2 trace-by-ID API."""
+
+        return _get(self._http, f"/api/v2/traces/{_segment(trace_id)}")
+
+
 class LogsApi:
     """Collected log reads from the stack's log backend: Loki or VictoriaLogs."""
 
@@ -178,20 +191,34 @@ class LogsApi:
         self.backend = backend
 
     @traced("logs.query")
-    def query(self, *, labels: Mapping[str, str], contains: str, start: str, end: str) -> ApiResponse:
-        """Records with exactly these labels whose message contains `contains`, between `start` and `end`."""
+    def query(
+        self,
+        *,
+        labels: Mapping[str, str],
+        contains: str,
+        start: str,
+        end: str,
+        fields: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        """Records with exactly these labels whose message contains `contains`, between `start` and `end`.
 
+        `fields` matches record attributes that are not stream labels, such as the structured fields of an
+        OTLP log record; Loki keeps those as structured metadata, which only a pipeline filter can match.
+        """
+
+        fields = fields or {}
         if self.backend == "loki":
             selector = ",".join(f"{key}={json.dumps(value)}" for key, value in labels.items())
+            field_filters = "".join(f" | {key}={json.dumps(value)}" for key, value in fields.items())
             params: dict[str, str | int] = {
-                "query": f"{{{selector}}} |= {json.dumps(contains)}",
+                "query": f"{{{selector}}} |= {json.dumps(contains)}{field_filters}",
                 "start": start,
                 "end": end,
                 "limit": self.QUERY_LIMIT,
                 "direction": "forward",
             }
             return _get(self._http, "/loki/api/v1/query_range", params)
-        selector = " AND ".join(f"{key}:={json.dumps(value)}" for key, value in labels.items())
+        selector = " AND ".join(f"{key}:={json.dumps(value)}" for key, value in {**labels, **fields}.items())
         # A regex of the escaped text keeps LogQL's plain-substring meaning for any punctuation.
         params = {
             "query": f"{selector} AND _msg:~{json.dumps(re.escape(contains))}",
@@ -211,6 +238,8 @@ class RecoveryClient:
     gateway: GatewayApi
     logs: LogsApi
     controller: ControllerApi
+    # None unless the run names a Tempo query endpoint for recovery trace evidence.
+    tempo: TempoApi | None
 
 
 @dataclass(frozen=True)
@@ -222,6 +251,7 @@ class ServiceUrls:
     gateway: str
     logs: str
     controller: str
+    tempo: str | None = None
 
 
 def traced_http(
@@ -244,17 +274,20 @@ def traced_http(
 def open_recovery_client(urls: ServiceUrls, *, log_backend: str, timeout: float = 30.0) -> Iterator[RecoveryClient]:
     """Yield a traced recovery client and close its connections on exit."""
 
-    with (
-        traced_http(urls.job_manager, timeout=timeout) as job_manager,
-        traced_http(urls.notifications, timeout=timeout) as notifications,
-        traced_http(urls.gateway, timeout=timeout) as gateway,
-        traced_http(urls.logs, timeout=timeout) as logs,
-        traced_http(urls.controller, timeout=timeout) as controller,
-    ):
-        yield RecoveryClient(
-            JobManagerApi(job_manager),
-            NotificationsApi(notifications),
-            GatewayApi(gateway),
-            LogsApi(logs, backend=log_backend),
-            ControllerApi(controller),
-        )
+    with ExitStack() as optional:
+        tempo = optional.enter_context(traced_http(urls.tempo, timeout=timeout)) if urls.tempo else None
+        with (
+            traced_http(urls.job_manager, timeout=timeout) as job_manager,
+            traced_http(urls.notifications, timeout=timeout) as notifications,
+            traced_http(urls.gateway, timeout=timeout) as gateway,
+            traced_http(urls.logs, timeout=timeout) as logs,
+            traced_http(urls.controller, timeout=timeout) as controller,
+        ):
+            yield RecoveryClient(
+                JobManagerApi(job_manager),
+                NotificationsApi(notifications),
+                GatewayApi(gateway),
+                LogsApi(logs, backend=log_backend),
+                ControllerApi(controller),
+                None if tempo is None else TempoApi(tempo),
+            )

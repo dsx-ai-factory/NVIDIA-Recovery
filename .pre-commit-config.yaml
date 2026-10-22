@@ -35,6 +35,13 @@ repos:
         language: script
         files: ^deploy/helm/[^/]+/
         stages: [pre-commit, manual]
+    -   id: helm-otel-env-parity
+        name: helm OTLP environment helper parity
+        entry: deploy/helm/scripts/check-otel-env-parity.sh
+        language: script
+        files: ^deploy/helm/(nvidia-recovery|slurm-advisor-controller)/templates/_helpers\.tpl$|^deploy/helm/scripts/check-otel-env-parity\.sh$
+        pass_filenames: false
+        stages: [pre-commit, manual]
     -   id: python-format
         name: python format check
         entry: scripts/ci/format-python.sh

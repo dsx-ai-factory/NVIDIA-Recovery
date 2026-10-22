@@ -37,7 +37,7 @@ run_tests() {
     # bridge here; already-exported caller knobs pass through unchanged.
     export E2E_ATTRIBUTION_MODE E2E_LOG_BACKEND E2E_PROFILE E2E_STACK_NAMESPACE E2E_STACK_DEPLOYMENTS
     export E2E_STACK_STATEFULSETS E2E_STACK_TIMEOUT E2E_SCENARIOS
-    export DEPLOY_SLURM_ADVISOR_STACK LOKI_URL VICTORIALOGS_URL
+    export DEPLOY_SLURM_ADVISOR_STACK LOKI_URL VICTORIALOGS_URL E2E_TEMPO_SERVICE E2E_TEMPO_URL E2E_OTLP_LOGS
     cd "$REPO_ROOT"
     if ! uv run --locked --package recovery-libs --extra e2e e2e-stack-gate; then
       dump_unready_pod_diagnostics

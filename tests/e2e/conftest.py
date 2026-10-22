@@ -82,6 +82,17 @@ def recovery(e2e_config: E2EConfig) -> Iterator[RecoveryClient]:
             )
             for name, (variable, ns, service, port) in services.items()
         }
+        tempo = e2e_config.tempo_service
+        if e2e_config.tempo_url or tempo is not None:
+            urls["tempo"] = stack.enter_context(
+                service_url(
+                    namespace=tempo.namespace if tempo else "",
+                    service=tempo.name if tempo else "",
+                    port=tempo.port if tempo else 0,
+                    url=e2e_config.tempo_url,
+                    kubeconfig=kubeconfig,
+                )
+            )
         with open_recovery_client(ServiceUrls(**urls), log_backend=e2e_config.log_backend) as client:
             yield client
 
