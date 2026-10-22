@@ -9,6 +9,7 @@ from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HttpOTLPSpanExporter
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ALWAYS_OFF
 from opentelemetry.trace import Span, SpanContext, TraceFlags, TraceState
 from pika.spec import BasicProperties
 from recovery_libs.tracing.traces import (
@@ -45,7 +46,7 @@ class TestTraces(unittest.TestCase):
             mock_resource.create.assert_called_once_with({"service.name": service_name})
 
             # Verify TracerProvider creation and configuration
-            mock_provider_class.assert_called_once_with(resource=mock_resource.create.return_value)
+            mock_provider_class.assert_called_once_with(resource=mock_resource.create.return_value, sampler=ALWAYS_OFF)
 
             # No span processor should be added when OTLP endpoint is not configured
             mock_provider.add_span_processor.assert_not_called()
@@ -166,7 +167,7 @@ class TestTraces(unittest.TestCase):
 
             # Verify TracerProvider creation and configuration
             mock_http_exporter.assert_called_once_with(
-                endpoint="http://localhost:4318", headers={"authorization": "Bearer test_token"}
+                endpoint="http://localhost:4318/v1/traces", headers={"authorization": "Bearer test_token"}
             )
 
             # Verify span processor was added

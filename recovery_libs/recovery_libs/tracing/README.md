@@ -61,15 +61,16 @@ The span exporter, processor and the portocol can all be passed in explicitly as
 implementation of them, they can be initialized and configured like this.
 
 Alternatively, they can also be configured through a few environment variables, namely:
-* `OTEL_EXPORTER_OTLP_PROTOCOL`: The protocol used when exporting the spans. Only `http` and `grpc` (case insensitive)
-are considered valid input.
-* `OTEL_EXPORTER_OTLP_ENDPOINT`: The exporter endpoint where the spans will be sent to.
+* `OTEL_EXPORTER_OTLP_PROTOCOL`: The protocol used when exporting the spans: `grpc`, `http/protobuf`, or its alias
+`http` (case insensitive).
+* `OTEL_EXPORTER_OTLP_ENDPOINT`: The collector base URL shared by traces and logs. gRPC uses it as-is; HTTP sends spans
+to its `/v1/traces` path and logs to its `/v1/logs` path, keeping any base path.
+* `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`: Optional complete trace URL, used verbatim instead of the shared endpoint.
 * `OTEL_EXPORTER_OTLP_TOKEN`: The bearer token used to authenticate to the endpoint.
 
-These are the only 3 environment variables recognized by this tracing lib for now.
-
-When nothing is specified, by default, the span exporter will be `ConsoleSpanExporter` and the span processor will be
-`BatchSpanProcessor`.
+When no endpoint is configured, no exporter is installed and spans are never sampled. Trace context still propagates,
+but it is marked unsampled so services do not record trace IDs for traces that are never exported. The span processor
+defaults to `BatchSpanProcessor`.
 
 ## Deployment Setup
 

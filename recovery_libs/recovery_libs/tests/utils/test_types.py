@@ -28,14 +28,15 @@ class TestOTLPProtocol:
             ("HTTP", OTLPProtocol.HTTP),
             ("GRPC", OTLPProtocol.GRPC),
             ("HtTp", OTLPProtocol.HTTP),
+            ("http/protobuf", OTLPProtocol.HTTP),
         ],
-        ids=["http-lower", "grpc-lower", "HTTP-upper", "GRPC-upper", "http-mixed"],
+        ids=["http-lower", "grpc-lower", "HTTP-upper", "GRPC-upper", "http-mixed", "http-protobuf-spec"],
     )
     def test_from_string_valid_protocols(self, protocol_string: str, expected_enum: OTLPProtocol):
         """Test from_string converts valid protocol strings case-insensitively."""
         assert OTLPProtocol.from_string(protocol_string) == expected_enum
 
-    @pytest.mark.parametrize("invalid_protocol", ["tcp", "udp", "websocket", ""])
+    @pytest.mark.parametrize("invalid_protocol", ["tcp", "udp", "websocket", "", "http/json"])
     def test_from_string_invalid_protocols(self, invalid_protocol: str):
         """Test from_string raises ValueError for invalid protocols."""
         with pytest.raises(ValueError) as exc_info:

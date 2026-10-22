@@ -218,8 +218,8 @@ def get_logger(
     it safe to call multiple times with different settings.
 
     OTLP will be enabled if enable_otlp=True AND all three environment variables are set:
-    - OTEL_EXPORTER_OTLP_PROTOCOL: Protocol type ("http" or "grpc")
-    - OTEL_EXPORTER_OTLP_ENDPOINT: OTLP endpoint URL
+    - OTEL_EXPORTER_OTLP_PROTOCOL: Protocol type ("grpc", "http/protobuf", or "http")
+    - OTEL_EXPORTER_OTLP_ENDPOINT: OTLP base endpoint URL (HTTP logs go to its /v1/logs path)
     - OTEL_EXPORTER_OTLP_TOKEN: Authentication token
 
     NOTE: All OTLP handlers share a singleton LoggerProvider, so multiple loggers

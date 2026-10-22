@@ -21,13 +21,15 @@ from opentelemetry.sdk.trace.export import (
     SpanExporter,
     SpanProcessor,
 )
+from opentelemetry.sdk.trace.sampling import ALWAYS_OFF
 from opentelemetry.trace import Span, TraceFlags
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pika.spec import BasicProperties
+from recovery_libs.utils.otlp_endpoint import OTLPSignal, resolve_otlp_signal_endpoint
+from recovery_libs.utils.types import OTLPProtocol
 
 logger = logging.getLogger(__name__)
 
-allowed_protocols = {"grpc", "http"}
 _W3C_TRACE_HEADERS = ("traceparent", "tracestate")
 
 
@@ -42,56 +44,63 @@ def set_up_trace_provider(
 
     Args:
         service_name (str): The name of the service that is being instrumented.
-        span_exporter (Optional[SpanExporter]): The span exporter to use. When not provided, if the environment variable
-            OTEL_EXPORTER_OTLP_ENDPOINT is set, it uses OTLPSpanExporter with the value of it as the endpoint,
-            otherwise no exporter is configured (spans are not exported but context propagation remains active).
+        span_exporter (Optional[SpanExporter]): The span exporter to use. When not provided, an OTLP exporter is
+            created if OTEL_EXPORTER_OTLP_TRACES_ENDPOINT (used verbatim) or OTEL_EXPORTER_OTLP_ENDPOINT (a base
+            URL; HTTP export goes to its /v1/traces path) is set. Otherwise no exporter is configured.
         span_processor (Optional[SpanProcessor]): The span processor to use. When not provided, it defaults to the
             BatchSpanProcessor.
-        protolcol: The protocol to use for OTLP exporter, either "grpc" or "http". Defaults to "grpc".
+        protocol: The OTLP protocol: "grpc", "http/protobuf", or its alias "http". OTEL_EXPORTER_OTLP_PROTOCOL
+            overrides it. Defaults to "grpc".
 
+    Raises:
+        ValueError: If the protocol is not supported.
+
+    Without an exporter, spans are never sampled. Trace context still propagates, but the unsampled flag keeps
+    callers such as advice recovery context and audit events from recording trace IDs for traces that are never
+    exported.
     """
-    if env_protocol := os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL"):
-        protocol = env_protocol.lower()
-
-    if protocol not in allowed_protocols:
-        raise ValueError(f"Protocol provided '{protocol}' is invalid. Allowed protocols: {allowed_protocols}.")
+    otlp_protocol = OTLPProtocol.from_string(os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL") or protocol)
 
     logger.info(f"Setting up trace provider for service: {service_name}")
     if span_exporter is None:
-        if otlp_endpoint := os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
-            logger.info(f"Initializing OTLPSpanExporter with endpoint: {otlp_endpoint} and protocol: {protocol}")
+        if otlp_endpoint := resolve_otlp_signal_endpoint(
+            os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"), otlp_protocol, OTLPSignal.TRACES
+        ):
+            logger.info(f"Initializing OTLPSpanExporter with endpoint: {otlp_endpoint} and protocol: {otlp_protocol}")
 
             if otlp_bearer_token_header := os.getenv("OTEL_EXPORTER_OTLP_TOKEN"):
                 logger.info("Authentication method: bearer token.")
                 headers = {"authorization": f"Bearer {otlp_bearer_token_header}"}
                 span_exporter = (
                     GrpcOTLPSpanExporter(endpoint=otlp_endpoint, headers=headers)
-                    if protocol == "grpc"
+                    if otlp_protocol == OTLPProtocol.GRPC
                     else HttpOTLPSpanExporter(endpoint=otlp_endpoint, headers=headers)
                 )
             else:
                 logger.info("Authentication method: no authentication.")
                 span_exporter = (
                     GrpcOTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
-                    if protocol == "grpc"
+                    if otlp_protocol == OTLPProtocol.GRPC
                     else HttpOTLPSpanExporter(endpoint=otlp_endpoint)
                 )
         else:
             logger.warning(
                 "OTEL_EXPORTER_OTLP_ENDPOINT not set. "
-                "Trace context propagation is active but spans will not be exported."
+                "Trace context propagation is active but spans will not be sampled or exported."
             )
     else:
         logger.info("Using the custom span exporter provided.")
 
     resource = Resource.create({"service.name": service_name})
+
+    if span_exporter is None:
+        trace.set_tracer_provider(TracerProvider(resource=resource, sampler=ALWAYS_OFF))
+        return
+
     provider = TracerProvider(resource=resource)
-
-    if span_exporter is not None:
-        if span_processor is None:
-            span_processor = BatchSpanProcessor(span_exporter)
-        provider.add_span_processor(span_processor)
-
+    if span_processor is None:
+        span_processor = BatchSpanProcessor(span_exporter)
+    provider.add_span_processor(span_processor)
     trace.set_tracer_provider(provider)
 
 
