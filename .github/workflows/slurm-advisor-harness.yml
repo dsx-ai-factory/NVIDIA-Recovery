@@ -20,7 +20,7 @@ defaults:
     shell: bash
 
 env:
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27.3"
 
 jobs:
   slurm-advisor-harness:

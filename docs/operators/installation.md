@@ -52,7 +52,7 @@ currently requires an amd64 node; native amd64 qualification remains required
 and arm64 qualification is pending.
 
 The conventional-Slurm path also requires Go at the version declared in
-`slurm-advisor-controller/go.mod` (currently 1.27.1) on a compatible Linux
+`slurm-advisor-controller/go.mod` (currently 1.27.3) on a compatible Linux
 build host.
 
 ### Target environment
