@@ -1,0 +1,135 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Local stand-in for the operator-managed OTLP endpoint. Like production, the
+# recovery services send logs and traces to one endpoint with one bearer token
+# (global.otelcollector), and the collector routes each signal: traces to Tempo
+# (tempo.yaml) and logs to the selected log store. The Tiltfile replaces
+# __LOGS_OTLP_ENDPOINT__ with that store's OTLP logs URL.
+#
+# The token is a fixed credential for the disposable cluster, like the stack's
+# local MySQL and RabbitMQ passwords. Services read the same value from the
+# nvidia-recovery-otlp Secret in their own namespace (otlp-token.yaml). The
+# monitoring namespace comes from tempo.yaml.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nvidia-recovery-otlp
+  namespace: monitoring
+type: Opaque
+stringData:
+  token: heimdall-e2e-otlp-token
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector
+  namespace: monitoring
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      bearertokenauth:
+        token: ${env:OTLP_TOKEN}
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+            auth:
+              authenticator: bearertokenauth
+          http:
+            endpoint: 0.0.0.0:4318
+            auth:
+              authenticator: bearertokenauth
+    processors:
+      batch:
+        timeout: 1s
+    exporters:
+      otlp/tempo:
+        endpoint: tempo.monitoring.svc.cluster.local:4317
+        tls:
+          insecure: true
+      otlphttp/logs:
+        logs_endpoint: __LOGS_OTLP_ENDPOINT__
+    service:
+      extensions: [health_check, bearertokenauth]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp/tempo]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlphttp/logs]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.162.0
+          args:
+            - --config=/etc/otelcol/config.yaml
+          env:
+            - name: OTLP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: nvidia-recovery-otlp
+                  key: token
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: health
+              containerPort: 13133
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http

@@ -55,9 +55,12 @@ type Controller struct {
 	Options             ControllerOptions
 	Observer            Observer
 	AuditObserver       AuditObserver
-	ModePolicy          ModePolicy
-	Logger              *zap.Logger
-	Now                 func() time.Time
+	// MilestoneReporter accepts immutable command results without delaying reconciliation.
+	MilestoneReporter MilestoneReporter
+	RecoveryTelemetry RecoveryTelemetry
+	ModePolicy        ModePolicy
+	Logger            *zap.Logger
+	Now               func() time.Time
 
 	// heimdallJobsBootstrapped records that the controller has successfully
 	// loaded the reconciliation job set from Job Manager and recorded those job
@@ -282,6 +285,13 @@ func (c *Controller) observer() Observer {
 	}
 
 	return NopObserver{}
+}
+
+func (c *Controller) recoveryTelemetry() RecoveryTelemetry {
+	if c.RecoveryTelemetry != nil {
+		return c.RecoveryTelemetry
+	}
+	return NopRecoveryTelemetry{}
 }
 
 func (c *Controller) modePolicy() ModePolicy {

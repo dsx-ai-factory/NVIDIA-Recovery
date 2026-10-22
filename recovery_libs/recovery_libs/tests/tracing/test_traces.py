@@ -390,6 +390,20 @@ class TestTraces(unittest.TestCase):
         result = extract_trace_id_from_span(mock_span)
         self.assertIsNone(result)
 
+    def test_extract_trace_id_from_span_omits_sampled_out_trace(self):
+        # Nothing is exported for an unsampled span, so a stored ID would link to no trace.
+        span_context = SpanContext(
+            trace_id=0x1234567890ABCDEF1234567890ABCDEF,
+            span_id=0x1234567890ABCDEF,
+            is_remote=False,
+            trace_flags=TraceFlags(TraceFlags.DEFAULT),
+            trace_state=TraceState(),
+        )
+        mock_span = MagicMock(spec=Span)
+        mock_span.get_span_context.return_value = span_context
+
+        self.assertIsNone(extract_trace_id_from_span(mock_span))
+
     def test_extract_trace_id_from_span_with_exception(self):
         mock_span = MagicMock(spec=Span)
         mock_span.get_span_context.side_effect = Exception("Test exception")
@@ -402,6 +416,11 @@ class TestTraces(unittest.TestCase):
 
         result = extract_trace_id_from_rabbitmq_properties(properties)
         self.assertEqual(result, "1234567890abcdef1234567890abcdef")
+
+    def test_extract_trace_id_from_rabbitmq_properties_omits_sampled_out_trace(self):
+        properties = BasicProperties(headers={"traceparent": "00-1234567890abcdef1234567890abcdef-1234567890abcdef-00"})
+
+        self.assertIsNone(extract_trace_id_from_rabbitmq_properties(properties))
 
     def test_extract_trace_id_from_rabbitmq_properties_without_headers(self):
         properties = BasicProperties()

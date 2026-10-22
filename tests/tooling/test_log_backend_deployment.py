@@ -11,6 +11,7 @@ import re
 import runpy
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 import yaml
@@ -196,6 +197,8 @@ def test_tilt_graph_selects_one_store_and_applies_effective_backend_last(
         ]
     }
     symbols["os"] = SimpleNamespace(environ=environment)
+    symbols["read_file"] = lambda path: (ROOT / path).read_text()
+    symbols["blob"] = lambda text: text
     runpy.run_path(str(ROOT / "Tiltfile"), init_globals=symbols)
     assert not any(name == "fail" for name, _, _ in calls)
     resources = {
@@ -241,6 +244,21 @@ def test_tilt_graph_selects_one_store_and_applies_effective_backend_last(
     dependencies = resources["slurm-advisor-controller"]["resource_deps"]
     assert notifications in dependencies
     assert (f"{release}-attribution-service" in dependencies) == (attribution == "available")
+
+    # Services export logs and traces to the local collector, which must deliver logs to the store the suite reads.
+    assert "scripts/ci/e2e/values/otlp.yaml" in values
+    assert "scripts/ci/e2e/values/otlp.yaml" in advisor["values"]
+    assert "otel-collector" in resources[f"{release}-job-manager"]["resource_deps"]
+    collector = next(
+        document
+        for name, args, _ in calls
+        if name == "k8s_yaml" and "kind: ConfigMap" in args[0]
+        for document in yaml.safe_load_all(args[0])
+        if document and document["kind"] == "ConfigMap" and document["metadata"]["name"] == "otel-collector"
+    )
+    exporters = yaml.safe_load(collector["data"]["config.yaml"])["exporters"]
+    store = "loki-gateway" if backend == "loki" else "victorialogs"
+    assert urlsplit(exporters["otlphttp/logs"]["logs_endpoint"]).hostname == f"{store}.monitoring.svc.cluster.local"
 
     readiness = subprocess.run(
         [

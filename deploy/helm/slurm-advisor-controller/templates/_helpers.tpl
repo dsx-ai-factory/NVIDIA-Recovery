@@ -196,3 +196,29 @@ app.kubernetes.io/component: watchdog
 {{- end -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+OpenTelemetry collector environment, matching the NVIDIA Recovery chart's
+heimdall.otelEnv. This chart also installs standalone, where that umbrella
+helper does not exist. The token variable is declared before the headers
+variable so Kubernetes expands it in OTEL_EXPORTER_OTLP_HEADERS.
+*/}}
+{{- define "slurm-advisor-controller.otelEnv" -}}
+{{- $otelcollector := ((.Values.global).otelcollector) | default dict -}}
+{{- if ($otelcollector.enabled | default false) }}
+- name: OTEL_EXPORTER_OTLP_PROTOCOL
+  value: {{ required "global.otelcollector.protocol is required when global.otelcollector.enabled=true" $otelcollector.protocol | quote }}
+- name: OTEL_EXPORTER_OTLP_ENDPOINT
+  value: {{ required "global.otelcollector.endpoint is required when global.otelcollector.enabled=true" $otelcollector.endpoint | quote }}
+{{- $auth := $otelcollector.auth | default dict }}
+{{- if ($auth.enabled | default false) }}
+- name: OTEL_EXPORTER_OTLP_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ required "global.otelcollector.auth.secretName is required when global.otelcollector.auth.enabled=true" $auth.secretName | quote }}
+      key: {{ required "global.otelcollector.auth.secretKey is required when global.otelcollector.auth.enabled=true" $auth.secretKey | quote }}
+- name: OTEL_EXPORTER_OTLP_HEADERS
+  value: "Authorization=Bearer $(OTEL_EXPORTER_OTLP_TOKEN)"
+{{- end }}
+{{- end }}
+{{- end }}

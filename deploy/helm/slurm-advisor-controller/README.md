@@ -274,11 +274,12 @@ investigation of Slurm responsiveness, scheduler connectivity, command logs,
 and phase durations. A nearly exhausted phase or an aggressively short metadata
 deadline can also interrupt a command, so the count alone is not proof of an outage.
 
-## Controller log export
+## Controller log and trace export
 
-The controller always writes structured logs to its local output. When deployed
-through the `nvidia-recovery` umbrella chart, configure the same release-wide collector
-settings used by the other backend services to also export controller logs:
+The controller always writes structured logs to its local output. To also
+export its logs and recovery traces, configure the same release-wide collector
+settings used by the other backend services. They work both through the
+`nvidia-recovery` umbrella chart and in a standalone release of this chart:
 
 ```yaml
 global:
@@ -293,7 +294,7 @@ global:
 ```
 
 The referenced Secret must exist in the release namespace and its key must
-contain only the bearer token. The existing `heimdall.otelEnv` helper supplies
+contain only the bearer token. The chart supplies
 `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL`, and
 `OTEL_EXPORTER_OTLP_TOKEN`, then constructs `OTEL_EXPORTER_OTLP_HEADERS` using
 Kubernetes environment expansion. Do not put the token itself in Helm values.
@@ -310,11 +311,12 @@ bridge for its normal semantic mapping. Local stderr output is not transformed.
 Alerts against the OTLP stream should not require an exact message match for
 these events because the message includes the event-specific error text.
 
-As specified in [ADR 0012](../../../docs/decisions/0012-standardize-global-otlp-collector-configuration.md),
-the shared exporter environment integration requires the umbrella chart;
-standalone chart installations retain local logging. The watchdog receives
-the same environment settings in an umbrella release, but does not consume
-them for log export.
+[ADR 0012](../../../docs/decisions/0012-standardize-global-otlp-collector-configuration.md)
+defines this environment once, in the umbrella chart's `heimdall.otelEnv`
+helper. Because this chart is also installed standalone, it carries a copy that
+`deploy/helm/scripts/check-otel-env-parity.sh` keeps identical in rendered
+output; change both helpers together. The watchdog receives the same
+environment settings but does not consume them for log export.
 
 ## Audit buffering
 
@@ -367,6 +369,39 @@ backoff with jitter. Partial acceptance is terminal: accepted events are counted
 and rejected events are dropped without replaying the batch. Pod shutdown drains
 queued events before closing the shared gateway connection.
 
+
+## Recovery milestone reporting
+
+After each Advice-driven scheduler command, the controller reports the
+command's result to Job Manager as a recovery milestone. Job Manager uses it to
+mark the recovery complete and to measure restart latency. Reporting runs on one
+background worker with a bounded in-memory queue, so it never delays scheduler
+commands:
+
+```yaml
+controller:
+  milestoneReporting:
+    queueCapacity: 256   # reports waiting for delivery; a full queue drops new ones
+    rpcTimeout: 2s       # bound on each delivery attempt
+    maxAttempts: 3       # includes the first attempt; temporary failures only
+    retryDelay: 100ms    # pause between attempts
+    shutdownTimeout: 2s  # time to drain queued reports when the pod stops
+```
+
+All five values must be positive. Only temporary failures are retried:
+unavailable or overloaded backends, timeouts, and unmapped backend errors.
+Rejections such as an unknown recovery sequence, invalid input, or refused
+credentials are not retried, because the same report would fail again and
+would delay the reports queued behind it. Retries are safe because Job Manager
+deduplicates reports by command occurrence.
+
+When the backend is unavailable, each report can occupy the worker for up to
+`maxAttempts × rpcTimeout + (maxAttempts − 1) × retryDelay`. Size
+`queueCapacity` for the commands expected during that outage. Reports are kept
+only in memory, so a controller restart loses any still queued. Watch
+`nvidia_recovery_milestone_reports_total` by `result`: `success`, `retry`,
+`error` (temporary failures exhausted), `rejected` (not retried), `queue_full`,
+`stopped`, `shutdown_drop`, and `unavailable`.
 ## Optional log-link materialization
 
 `controller.logLinks.enabled` defaults to `false`. In that state the chart

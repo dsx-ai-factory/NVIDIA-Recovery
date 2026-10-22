@@ -164,3 +164,8 @@ func (c *GRPCClient) UpdateAdviceReconciliationStatus(
 func (c *GRPCClient) CreateAuditEvents(ctx context.Context, req *pb.CreateAuditEventsRequest, opts ...grpc.CallOption) (*pb.CreateAuditEventsResponse, error) {
 	return c.auditClient.CreateAuditEvents(ctx, req, opts...)
 }
+
+// RecordRecoveryMilestone forwards a captured command occurrence to Job Manager.
+func (c *GRPCClient) RecordRecoveryMilestone(ctx context.Context, req *pb.RecordRecoveryMilestoneRequest) (*pb.RecordRecoveryMilestoneResponse, error) {
+	return c.client.RecordRecoveryMilestone(ctx, req)
+}

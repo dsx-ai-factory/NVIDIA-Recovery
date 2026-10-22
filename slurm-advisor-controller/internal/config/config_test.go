@@ -299,6 +299,59 @@ func TestFromEnvLoadsAuditTrailConfiguration(t *testing.T) {
 	}
 }
 
+func TestFromEnvLoadsMilestoneReportingConfiguration(t *testing.T) {
+	setConfigEnv(t, map[string]string{
+		"HEIMDALL_ENDPOINT":                        "127.0.0.1:8080",
+		"SLURM_ADVISOR_MILESTONE_QUEUE_CAPACITY":   "1024",
+		"SLURM_ADVISOR_MILESTONE_RPC_TIMEOUT":      "5s",
+		"SLURM_ADVISOR_MILESTONE_MAX_ATTEMPTS":     "5",
+		"SLURM_ADVISOR_MILESTONE_RETRY_DELAY":      "500ms",
+		"SLURM_ADVISOR_MILESTONE_SHUTDOWN_TIMEOUT": "10s",
+	})
+
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv() failed: %v", err)
+	}
+	want := MilestoneReportingConfig{
+		QueueCapacity:   1024,
+		RPCTimeout:      5 * time.Second,
+		MaxAttempts:     5,
+		RetryDelay:      500 * time.Millisecond,
+		ShutdownTimeout: 10 * time.Second,
+	}
+	if cfg.MilestoneReporting != want {
+		t.Fatalf("MilestoneReporting = %+v, want %+v", cfg.MilestoneReporting, want)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() failed: %v", err)
+	}
+}
+
+// An explicit zero would disable reporting or shutdown draining, so it must be
+// rejected rather than silently replaced by a default.
+func TestFromEnvRejectsExplicitZeroMilestoneReportingSettings(t *testing.T) {
+	for _, key := range []string{
+		"SLURM_ADVISOR_MILESTONE_QUEUE_CAPACITY",
+		"SLURM_ADVISOR_MILESTONE_RPC_TIMEOUT",
+		"SLURM_ADVISOR_MILESTONE_MAX_ATTEMPTS",
+		"SLURM_ADVISOR_MILESTONE_RETRY_DELAY",
+		"SLURM_ADVISOR_MILESTONE_SHUTDOWN_TIMEOUT",
+	} {
+		t.Run(key, func(t *testing.T) {
+			setConfigEnv(t, map[string]string{"HEIMDALL_ENDPOINT": "127.0.0.1:8080", key: "0"})
+
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatalf("FromEnv() failed: %v", err)
+			}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() succeeded for explicit zero, want error")
+			}
+		})
+	}
+}
+
 func TestFromEnvPreservesExplicitZeroAuditTrailSettingsForValidation(t *testing.T) {
 	settings := map[string]string{
 		"SLURM_ADVISOR_AUDIT_TRAIL_MAX_BATCH_SIZE": "0",
@@ -1129,6 +1182,95 @@ func TestFromEnvRejectsInvalidObservabilityValues(t *testing.T) {
 				t.Fatal("FromEnv() succeeded, want error")
 			}
 		})
+	}
+}
+
+func TestFromEnvLoadsOTLPTracingContract(t *testing.T) {
+	setConfigEnv(t, map[string]string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT":        "http://collector:4317",
+		"OTEL_EXPORTER_OTLP_PROTOCOL":        "grpc",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://traces:4318/v1/traces",
+	})
+
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv() failed: %v", err)
+	}
+	if cfg.Tracing.Endpoint != "http://traces:4318/v1/traces" {
+		t.Fatalf("Tracing.Endpoint = %q, want signal-specific endpoint", cfg.Tracing.Endpoint)
+	}
+	if cfg.Tracing.Protocol != "grpc" {
+		t.Fatalf("Tracing.Protocol = %q, want grpc", cfg.Tracing.Protocol)
+	}
+}
+
+// The shared OTLP endpoint is a base URL (as the log exporter treats it);
+// OTLP/HTTP sends traces to /v1/traces under it, gRPC has no signal path, and
+// a signal-specific endpoint is already the full trace URL.
+func TestFromEnvResolvesOTLPTraceEndpoint(t *testing.T) {
+	tests := []struct {
+		name         string
+		env          map[string]string
+		want         string
+		wantProtocol string
+	}{
+		{"shared http base", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf"}, "http://collector:4318/v1/traces", "http/protobuf"},
+		{"shared http with prefix", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "https://gateway/otlp/", "OTEL_EXPORTER_OTLP_PROTOCOL": "http"}, "https://gateway/otlp/v1/traces", "http"},
+		{"shared grpc", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4317", "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"}, "http://collector:4317", "grpc"},
+		// Logs default to grpc, so traces to the same collector must too.
+		{"shared without protocol", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4317"}, "http://collector:4317", "grpc"},
+		{"trace protocol overrides shared", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": "http/protobuf"}, "http://collector:4318/v1/traces", "http/protobuf"},
+		{"signal-specific", map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://traces:4318/custom"}, "http://traces:4318/custom", "http/protobuf"},
+		{"export disabled", map[string]string{}, "", "grpc"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.env["HEIMDALL_ENDPOINT"] = "127.0.0.1:8080"
+			setConfigEnv(t, tt.env)
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatalf("FromEnv() failed: %v", err)
+			}
+			if cfg.Tracing.Endpoint != tt.want {
+				t.Fatalf("Tracing.Endpoint = %q, want %q", cfg.Tracing.Endpoint, tt.want)
+			}
+			if cfg.Tracing.Protocol != tt.wantProtocol {
+				t.Fatalf("Tracing.Protocol = %q, want %q", cfg.Tracing.Protocol, tt.wantProtocol)
+			}
+			if tt.env["OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"] == "" && tt.env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] == "" &&
+				cfg.Tracing.Protocol != cfg.OTLP.Protocol {
+				t.Fatalf("traces use %q but logs use %q on the shared endpoint", cfg.Tracing.Protocol, cfg.OTLP.Protocol)
+			}
+		})
+	}
+}
+
+func TestFromEnvPassesOTLPTokenToTraceExport(t *testing.T) {
+	setConfigEnv(t, map[string]string{
+		"HEIMDALL_ENDPOINT":           "127.0.0.1:8080",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector:4318",
+		"OTEL_EXPORTER_OTLP_TOKEN":    "secret-token",
+	})
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv() failed: %v", err)
+	}
+	if cfg.Tracing.Token != "secret-token" {
+		t.Fatal("Tracing.Token was not loaded from OTEL_EXPORTER_OTLP_TOKEN")
+	}
+}
+
+func TestValidateDoesNotMakeOTLPTracingAControllerPrecondition(t *testing.T) {
+	cfg := WithDefaults(Config{
+		HeimdallEndpoint: "127.0.0.1:8080",
+		Tracing: TracingConfig{
+			Endpoint: "http://collector:4318",
+			Protocol: "http/json",
+		},
+	})
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() failed for optional OTLP trace configuration: %v", err)
 	}
 }
 

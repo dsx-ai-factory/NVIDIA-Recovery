@@ -110,7 +110,7 @@ spec:
             - name: SLURM_WATCHDOG_AUDIT_TRAIL_FLUSH_INTERVAL
               value: {{ .Values.watchdog.auditTrail.flushInterval | quote }}
             {{- if (((.Values.global).otelcollector).enabled) }}
-            {{- include "heimdall.otelEnv" . | nindent 12 }}
+            {{- include "slurm-advisor-controller.otelEnv" . | nindent 12 }}
             {{- end }}
           {{- if .Values.metrics.watchdog.enabled }}
           ports:

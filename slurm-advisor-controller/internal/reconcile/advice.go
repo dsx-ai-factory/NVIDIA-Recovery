@@ -83,85 +83,65 @@ func (c *Controller) reconcileAdvice(ctx context.Context, snapshot ControllerSna
 		}
 		observeAdviceReconciliationAttempt(observation)
 
-		if reason, ok := c.ownershipSkip(advice); ok {
-			skip := adviceSkip(advice, reason)
-			c.observeAdviceSkip(advice, skip.Reason)
-			result.Skips = append(result.Skips, skip)
-			observeAdviceSkip(observation, skip.Reason)
-			continue
-		}
-		if adviceIsStale(advice, snapshot.ObservedAt, c.Options.AdviceMaxAge) {
-			itemResult, _ := terminalAdviceResult(
-				advice,
-				AdviceSkipStaleAdvice,
-				pb.AdviceReconciliationDisposition_ADVICE_RECONCILIATION_DISPOSITION_ABANDONED,
-				pb.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_ADVICE_EXPIRED,
-			)
-			result.Skips = append(result.Skips, itemResult.Skips...)
-			result.TerminalOutcomes = append(result.TerminalOutcomes, itemResult.TerminalOutcomes...)
-			skip := itemResult.Skips[0]
-			c.observeAdviceSkip(advice, skip.Reason)
-			observeAdviceSkip(observation, skip.Reason)
-			if err := c.publishAdviceTerminalOutcomes(ctx, snapshot.ObservedAt, itemResult.TerminalOutcomes, observation); err != nil {
-				errs = append(errs, err)
-			}
-			continue
-		}
-
-		job, ok := jobsByID[advice.GetJobId()]
-		if !ok {
-			skip := adviceSkip(advice, AdviceSkipMissingSnapshotJob)
-			c.observeAdviceSkip(advice, skip.Reason)
-			result.Skips = append(result.Skips, skip)
-			observeAdviceSkip(observation, skip.Reason)
-			continue
-		}
-		if len(c.Options.PartitionAllowlist) > 0 && !slices.Contains(c.Options.PartitionAllowlist, job.Partition) {
-			skip := adviceSkip(advice, AdviceSkipPartitionFiltered)
-			c.observeAdviceSkip(advice, skip.Reason)
-			result.Skips = append(result.Skips, skip)
-			observeAdviceSkip(observation, skip.Reason)
-			continue
-		}
-		decision := modeDecisionForJob(snapshot, c.modePolicy(), job)
-		if decision.Mode == cluster.JobModeIgnore {
-			skip := adviceSkip(advice, AdviceSkipIgnoredJob)
-			c.observeAdviceSkip(advice, skip.Reason)
-			result.Skips = append(result.Skips, skip)
-			observeAdviceSkip(observation, skip.Reason)
-			continue
-		}
-
-		itemCtx, cancelItem := timeoutContext(ctx, c.Options.AdviceItemTimeout)
-		itemResult, err := c.reconcileAdviceForJob(itemCtx, advice, job, decision.Mode, observation)
+		itemResult, err := c.reconcileAdviceItem(ctx, snapshot, jobsByID, advice, observation)
 		result.Skips = append(result.Skips, itemResult.Skips...)
 		result.TerminalOutcomes = append(result.TerminalOutcomes, itemResult.TerminalOutcomes...)
-		for _, skip := range itemResult.Skips {
-			observeAdviceSkip(observation, skip.Reason)
-		}
 		if err != nil {
-			cancelItem()
 			errs = append(errs, err)
 			if ctx.Err() != nil {
 				break
 			}
-			continue
 		}
-		if err := c.publishAdviceTerminalOutcomes(itemCtx, snapshot.ObservedAt, itemResult.TerminalOutcomes, observation); err != nil {
-			errs = append(errs, err)
-		}
-		cancelItem()
 	}
 
 	return result, errors.Join(errs...)
 }
 
-func (c *Controller) reconcileAdviceForJob(ctx context.Context, advice *pb.Advice, job cluster.JobExecutionRecord, mode cluster.JobMode, observation *SyncObservation) (result AdviceSyncResult, err error) {
-	// Defer audit emission so every return path reports the final named result and error.
-	auditObservation := newAdviceApplicationObservation(advice)
-	defer func() {
-		c.observeAdviceApplication(auditObservation, result, err)
+// reconcileAdviceItem observes admission and scheduler application as one real
+// per-Advice lifecycle. Status publication follows capture of the application
+// result, preserving command/application timing and existing timeout ownership.
+func (c *Controller) reconcileAdviceItem(ctx context.Context, snapshot ControllerSnapshot, jobsByID map[string]cluster.JobExecutionRecord, advice *pb.Advice, observation *SyncObservation) (AdviceSyncResult, error) {
+	workCtx := ctx
+	cancelItem := func() {}
+	defer func() { cancelItem() }()
+	result, err := func() (result AdviceSyncResult, err error) {
+		application := c.startAdviceApplication(ctx, advice)
+		mode := cluster.JobModeIgnore
+		defer func() { c.finishAdviceApplication(application, result, err, mode) }()
+		if reason, ok := c.ownershipSkip(advice); ok {
+			return skippedAdviceResult(advice, reason)
+		}
+		if adviceIsStale(advice, snapshot.ObservedAt, c.Options.AdviceMaxAge) {
+			return terminalAdviceResult(advice, AdviceSkipStaleAdvice,
+				pb.AdviceReconciliationDisposition_ADVICE_RECONCILIATION_DISPOSITION_ABANDONED,
+				pb.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_ADVICE_EXPIRED)
+		}
+		job, ok := jobsByID[advice.GetJobId()]
+		if !ok {
+			return skippedAdviceResult(advice, AdviceSkipMissingSnapshotJob)
+		}
+		if len(c.Options.PartitionAllowlist) > 0 && !slices.Contains(c.Options.PartitionAllowlist, job.Partition) {
+			return skippedAdviceResult(advice, AdviceSkipPartitionFiltered)
+		}
+		decision := modeDecisionForJob(snapshot, c.modePolicy(), job)
+		mode = decision.Mode
+		if mode == cluster.JobModeIgnore {
+			return skippedAdviceResult(advice, AdviceSkipIgnoredJob)
+		}
+		workCtx, cancelItem = timeoutContext(ctx, c.Options.AdviceItemTimeout)
+		return c.applyAdviceForJob(workCtx, advice, job, mode, observation, &application)
 	}()
+	for _, skip := range result.Skips {
+		observeAdviceSkip(observation, skip.Reason)
+	}
+	if err != nil {
+		return result, err
+	}
+	return result, c.publishAdviceTerminalOutcomes(workCtx, snapshot.ObservedAt, result.TerminalOutcomes, observation)
+}
+
+func (c *Controller) applyAdviceForJob(ctx context.Context, advice *pb.Advice, job cluster.JobExecutionRecord, mode cluster.JobMode, observation *SyncObservation, auditObservation *AdviceApplicationObservation) (result AdviceSyncResult, err error) {
+	auditObservation.recoverySpan.SetMode(mode)
 
 	desiredState := advice.GetAdvice().GetState()
 
@@ -226,7 +206,7 @@ func (c *Controller) reconcileAdviceForJob(ctx context.Context, advice *pb.Advic
 				observeAdviceAction(observation, ActionAdviceRequeueHold, mode, ObservationOutcomePlanned)
 			}
 			if err := c.runAdviceSchedulerAction(
-				ctx, &auditObservation, SchedulerActionRequeueHold, mode,
+				ctx, auditObservation, SchedulerActionRequeueHold, false, mode,
 				func(actionCtx context.Context) error { return c.ActionExecutor.JobRequeueHold(actionCtx, job.JobID) },
 			); err != nil {
 				if mode == cluster.JobModeAct {
@@ -260,7 +240,7 @@ func (c *Controller) reconcileAdviceForJob(ctx context.Context, advice *pb.Advic
 				observeAdviceAction(observation, ActionAdviceNodeUpdate, mode, ObservationOutcomePlanned)
 			}
 			if err := c.runAdviceSchedulerAction(
-				ctx, &auditObservation, SchedulerActionUpdateConstraints, mode,
+				ctx, auditObservation, SchedulerActionUpdateConstraints, false, mode,
 				func(actionCtx context.Context) error {
 					return c.ActionExecutor.JobNodeUpdate(actionCtx, job.JobID, constraints.Exclusions, constraints.Inclusions, 0)
 				},
@@ -277,7 +257,7 @@ func (c *Controller) reconcileAdviceForJob(ctx context.Context, advice *pb.Advic
 				observeAdviceAction(observation, ActionAdviceRelease, mode, ObservationOutcomePlanned)
 			}
 			if err := c.runAdviceSchedulerAction(
-				ctx, &auditObservation, SchedulerActionRelease, mode,
+				ctx, auditObservation, SchedulerActionRelease, true, mode,
 				func(actionCtx context.Context) error { return c.ActionExecutor.JobRelease(actionCtx, job.JobID) },
 			); err != nil {
 				observeAdviceAction(observation, ActionAdviceRelease, mode, ObservationOutcomeError)
@@ -297,13 +277,13 @@ func (c *Controller) reconcileAdviceForJob(ctx context.Context, advice *pb.Advic
 		if mode != cluster.JobModeAct {
 			observeAdviceAction(observation, ActionAdviceKill, mode, ObservationOutcomePlanned)
 			_ = c.runAdviceSchedulerAction(
-				ctx, &auditObservation, SchedulerActionCancel, mode,
+				ctx, auditObservation, SchedulerActionCancel, true, mode,
 				func(context.Context) error { return nil },
 			)
 			return result, nil
 		}
 		if err := c.runAdviceSchedulerAction(
-			ctx, &auditObservation, SchedulerActionCancel, mode,
+			ctx, auditObservation, SchedulerActionCancel, true, mode,
 			func(actionCtx context.Context) error { return c.ActionExecutor.JobKill(actionCtx, job.JobID) },
 		); err != nil {
 			observeAdviceAction(observation, ActionAdviceKill, mode, ObservationOutcomeError)
@@ -320,13 +300,13 @@ func (c *Controller) reconcileAdviceForJob(ctx context.Context, advice *pb.Advic
 			if mode != cluster.JobModeAct {
 				observeAdviceAction(observation, ActionAdviceRelease, mode, ObservationOutcomePlanned)
 				_ = c.runAdviceSchedulerAction(
-					ctx, &auditObservation, SchedulerActionRelease, mode,
+					ctx, auditObservation, SchedulerActionRelease, true, mode,
 					func(context.Context) error { return nil },
 				)
 				return result, nil
 			}
 			if err := c.runAdviceSchedulerAction(
-				ctx, &auditObservation, SchedulerActionRelease, mode,
+				ctx, auditObservation, SchedulerActionRelease, true, mode,
 				func(actionCtx context.Context) error { return c.ActionExecutor.JobRelease(actionCtx, job.JobID) },
 			); err != nil {
 				observeAdviceAction(observation, ActionAdviceRelease, mode, ObservationOutcomeError)
@@ -364,13 +344,13 @@ func (c *Controller) reconcileAdviceForJob(ctx context.Context, advice *pb.Advic
 		if mode != cluster.JobModeAct {
 			observeAdviceAction(observation, ActionAdviceNodeUpdate, mode, ObservationOutcomePlanned)
 			_ = c.runAdviceSchedulerAction(
-				ctx, &auditObservation, SchedulerActionUpdateConstraints, mode,
+				ctx, auditObservation, SchedulerActionUpdateConstraints, false, mode,
 				func(context.Context) error { return nil },
 			)
 			return result, nil
 		}
 		actionErr := c.runAdviceSchedulerAction(
-			ctx, &auditObservation, SchedulerActionUpdateConstraints, mode,
+			ctx, auditObservation, SchedulerActionUpdateConstraints, false, mode,
 			func(actionCtx context.Context) error {
 				return c.ActionExecutor.JobNodeUpdate(actionCtx, job.JobID, constraints.Exclusions, constraints.Inclusions, 0)
 			},

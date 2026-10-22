@@ -66,7 +66,7 @@ diagnostics_dir="$test_root/reports/e2e-real-fact/advisor-act/diagnostics"
 for artifact in \
   collector.log pods.txt events.txt jobs.json advice.json \
   nvidia-recovery-job-manager.log slurm-advisor-controller.log nvidia-recovery-api-gateway.log \
-  squeue.json sacct.json; do
+  otel-collector.log tempo.log squeue.json sacct.json; do
   [[ -f "$diagnostics_dir/$artifact" ]] || {
     printf 'error: missing diagnostic artifact %s\n' "$artifact" >&2
     exit 1
