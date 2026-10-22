@@ -183,6 +183,9 @@ jobs:
           helm dependency build deploy/helm/nvidia-recovery
           deploy/helm/scripts/check-charts.sh deploy/helm/*/Chart.yaml
 
+      - name: Check OTLP environment helper parity
+        run: deploy/helm/scripts/check-otel-env-parity.sh
+
   go-lint:
     name: Go Lint
     runs-on:

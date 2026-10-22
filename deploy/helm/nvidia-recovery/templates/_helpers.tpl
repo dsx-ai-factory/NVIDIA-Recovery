@@ -26,6 +26,8 @@ SPDX-License-Identifier: Apache-2.0
 OpenTelemetry environment variables shared by Heimdall application
 containers. The token variable is intentionally declared before the headers
 variable so Kubernetes expands it in OTEL_EXPORTER_OTLP_HEADERS.
+The slurm-advisor-controller chart keeps a copy for standalone releases; change
+both together (deploy/helm/scripts/check-otel-env-parity.sh enforces it).
 */}}
 {{- define "heimdall.otelEnv" -}}
 {{- $otelcollector := ((.Values.global).otelcollector) | default dict -}}
