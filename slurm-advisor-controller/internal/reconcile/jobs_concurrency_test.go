@@ -321,6 +321,13 @@ func (*concurrentUpsertClient) UpdateAdviceReconciliationStatus(
 	return nil, nil
 }
 
+func (*concurrentUpsertClient) RecordRecoveryMilestone(
+	context.Context,
+	*pb.RecordRecoveryMilestoneRequest,
+) (*pb.RecordRecoveryMilestoneResponse, error) {
+	return nil, nil
+}
+
 func (c *concurrentUpsertClient) maxConcurrency() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()

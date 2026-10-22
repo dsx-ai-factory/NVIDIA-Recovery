@@ -7,6 +7,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
+
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
 )
@@ -53,6 +55,21 @@ const (
 
 // AdviceApplicationObservation describes one completed Advice application.
 type AdviceApplicationObservation struct {
+	// OccurrenceID identifies this application independently from command attempts.
+	OccurrenceID string
+	// TargetAttempt is the scheduler attempt targeted by this application.
+	TargetAttempt int32
+	// RecoverySequenceID explicitly identifies the backend-owned recovery.
+	RecoverySequenceID string
+	// TraceID and SpanID identify the actual application span when available.
+	TraceID string
+	SpanID  string
+	// CompletedAt records application return, before projection or delivery.
+	CompletedAt time.Time
+	// recoverySpan owns instrumentation state without exposing execution context.
+	recoverySpan RecoverySpan
+	recovery     *RecoveryContext
+
 	// AdviceID identifies the Advice record.
 	AdviceID string
 	// Generation identifies the evaluated Advice generation.
@@ -76,6 +93,19 @@ type AdviceApplicationObservation struct {
 
 // SchedulerActionObservation describes one Advice-driven scheduler command.
 type SchedulerActionObservation struct {
+	// OccurrenceID is shared by audit and milestone retries for one command attempt.
+	OccurrenceID string
+	// TraceID and SpanID identify this action's actual operation span.
+	TraceID string
+	SpanID  string
+	// StartedAt records command start; Duration retains the monotonic interval.
+	StartedAt time.Time
+	Duration  time.Duration
+	// Mode is the effective scheduler mutation policy for this attempt.
+	Mode cluster.JobMode
+	// CompletesSequence is explicit adapter intent after a successful final action.
+	CompletesSequence bool
+
 	// Action identifies the scheduler command.
 	Action SchedulerActionName
 	// Outcome describes the planned or completed command.
@@ -160,11 +190,36 @@ func (c *Controller) auditObserver() AuditObserver {
 	return NopAuditObserver{}
 }
 
-func (c *Controller) observeAdviceSkip(advice *pb.Advice, reason AdviceSkipReason) {
-	observation := newAdviceApplicationObservation(advice)
-	observation.Outcome = AdviceApplicationOutcomeSkipped
-	observation.SkipReason = reason
-	c.auditObserver().ObserveAdviceApplication(observation)
+// startAdviceApplication begins before policy classification. Only the tracing
+// projection retains its context; callers retain execution and timeout ownership.
+func (c *Controller) startAdviceApplication(ctx context.Context, advice *pb.Advice) AdviceApplicationObservation {
+	application := newAdviceApplicationObservation(advice)
+	application.recoverySpan = nopRecoverySpan{}
+	recovery, parent := c.adviceRecoveryContext(ctx, advice)
+	application.recovery = recovery
+	if recovery == nil {
+		return application
+	}
+	application.RecoverySequenceID = recovery.SequenceID
+	application.TargetAttempt = recovery.SourceAttempt
+	if recovery.Operation == RecoveryOperationRestart {
+		application.TargetAttempt++
+	}
+	_, application.recoverySpan = c.recoveryTelemetry().StartReconcile(parent, ReconcileSpanAttributes{
+		Recovery: *recovery, JobID: advice.GetJobId(), TargetAttempt: application.TargetAttempt,
+		AdviceID: application.AdviceID, Generation: application.Generation,
+		OccurrenceID: application.OccurrenceID, AdviceState: advice.GetAdvice().GetState().String(),
+	})
+	application.TraceID, application.SpanID = application.recoverySpan.Correlation()
+	return application
+}
+
+func (c *Controller) finishAdviceApplication(application AdviceApplicationObservation, result AdviceSyncResult, err error, mode cluster.JobMode) {
+	application.CompletedAt = c.observedAt().UTC().Truncate(time.Microsecond)
+	spanResult := classifyReconcileResult(result, err, mode)
+	spanResult.CompletedAt = application.CompletedAt
+	application.recoverySpan.EndReconcile(spanResult)
+	c.observeAdviceApplication(application, result, err)
 }
 
 func (c *Controller) observeAdviceApplication(
@@ -195,6 +250,8 @@ func newAdviceApplicationObservation(advice *pb.Advice) AdviceApplicationObserva
 		correlationUUID = advice.GetHeimdallJobId()
 	}
 	return AdviceApplicationObservation{
+		OccurrenceID:    uuid.NewString(),
+		TargetAttempt:   advice.GetAttemptIndex(),
 		AdviceID:        advice.GetHeimdallJobId(),
 		Generation:      advice.GetGeneration(),
 		JobID:           advice.GetJobId(),
@@ -212,35 +269,58 @@ func hasPlannedSchedulerAction(actions []SchedulerActionObservation) bool {
 	return false
 }
 
+// runAdviceSchedulerAction is the sole Advice command boundary. It captures a
+// returned command once, then projects the immutable occurrence independently.
+// Remote delivery is owned by bounded workers and cannot delay the next command.
 func (c *Controller) runAdviceSchedulerAction(
-	ctx context.Context,
-	observation *AdviceApplicationObservation,
-	action SchedulerActionName,
-	mode cluster.JobMode,
-	command func(context.Context) error,
+	ctx context.Context, application *AdviceApplicationObservation,
+	action SchedulerActionName, completesSequenceOnSuccess bool,
+	mode cluster.JobMode, command func(context.Context) error,
 ) error {
-	if mode != cluster.JobModeAct {
-		observation.Actions = append(observation.Actions, SchedulerActionObservation{
-			Action:  action,
-			Outcome: SchedulerActionOutcomePlanned,
+	started := time.Now()
+	observation := SchedulerActionObservation{
+		StartedAt:    started.UTC().Truncate(time.Microsecond),
+		OccurrenceID: uuid.NewString(), Action: action, Mode: mode,
+		Outcome: SchedulerActionOutcomePlanned,
+	}
+	var span RecoverySpan = nopRecoverySpan{}
+	if recovery := application.recovery; recovery != nil {
+		span = application.recoverySpan.StartSchedulerAction(SchedulerActionSpanAttributes{
+			Recovery: *recovery, JobID: application.JobID, TargetAttempt: application.TargetAttempt,
+			AdviceID: application.AdviceID, Generation: application.Generation,
+			OccurrenceID: observation.OccurrenceID, Action: action, StartedAt: observation.StartedAt, Mode: mode,
+			SLOEligible: recovery.Operation == RecoveryOperationRestart && mode == cluster.JobModeAct,
 		})
-		return nil
+		observation.TraceID, observation.SpanID = span.Correlation()
 	}
-
-	actionErr := command(ctx)
-	outcome := SchedulerActionOutcomeSuccess
-	if actionErr != nil {
-		outcome = SchedulerActionOutcomeError
+	if mode == cluster.JobModeAct {
+		observation.Err = command(ctx)
+		// Capture both clocks before any observer or remote reporting can run.
+		observation.Duration = time.Since(started)
+		observation.CompletedAt = c.observedAt().UTC().Truncate(time.Microsecond)
+		observation.Outcome = SchedulerActionOutcomeSuccess
+		if observation.Err != nil {
+			observation.Outcome = SchedulerActionOutcomeError
+		}
+		observation.CompletesSequence = completesSequenceOnSuccess && observation.Err == nil
 	}
-	actionObservation := SchedulerActionObservation{
-		Action:      action,
-		Outcome:     outcome,
-		CompletedAt: c.observedAt().UTC(),
-		Err:         actionErr,
+	span.EndSchedulerAction(SchedulerActionSpanResult{
+		Outcome: observation.Outcome, CompletedAt: observation.CompletedAt,
+		Duration: observation.Duration, Err: observation.Err,
+		CompletesSequence: observation.CompletesSequence,
+	})
+	application.Actions = append(application.Actions, observation)
+	if mode == cluster.JobModeAct {
+		c.auditObserver().ObserveAdviceSchedulerAction(*application, observation)
+		if recovery := application.recovery; recovery != nil && recovery.SequenceID != "" {
+			if c.MilestoneReporter != nil {
+				c.MilestoneReporter.Enqueue(RecoveryMilestone{Recovery: *recovery, Action: observation})
+			} else {
+				c.recoveryTelemetry().ObserveMilestoneReport(recovery.Operation, action, "unavailable")
+			}
+		}
 	}
-	observation.Actions = append(observation.Actions, actionObservation)
-	c.auditObserver().ObserveAdviceSchedulerAction(*observation, actionObservation)
-	return actionErr
+	return observation.Err
 }
 
 func (c *Controller) observeFailedJobRequeueHold(

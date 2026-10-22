@@ -367,6 +367,39 @@ backoff with jitter. Partial acceptance is terminal: accepted events are counted
 and rejected events are dropped without replaying the batch. Pod shutdown drains
 queued events before closing the shared gateway connection.
 
+
+## Recovery milestone reporting
+
+After each Advice-driven scheduler command, the controller reports the
+command's result to Job Manager as a recovery milestone. Job Manager uses it to
+mark the recovery complete and to measure restart latency. Reporting runs on one
+background worker with a bounded in-memory queue, so it never delays scheduler
+commands:
+
+```yaml
+controller:
+  milestoneReporting:
+    queueCapacity: 256   # reports waiting for delivery; a full queue drops new ones
+    rpcTimeout: 2s       # bound on each delivery attempt
+    maxAttempts: 3       # includes the first attempt; temporary failures only
+    retryDelay: 100ms    # pause between attempts
+    shutdownTimeout: 2s  # time to drain queued reports when the pod stops
+```
+
+All five values must be positive. Only temporary failures are retried:
+unavailable or overloaded backends, timeouts, and unmapped backend errors.
+Rejections such as an unknown recovery sequence, invalid input, or refused
+credentials are not retried, because the same report would fail again and
+would delay the reports queued behind it. Retries are safe because Job Manager
+deduplicates reports by command occurrence.
+
+When the backend is unavailable, each report can occupy the worker for up to
+`maxAttempts × rpcTimeout + (maxAttempts − 1) × retryDelay`. Size
+`queueCapacity` for the commands expected during that outage. Reports are kept
+only in memory, so a controller restart loses any still queued. Watch
+`nvidia_recovery_milestone_reports_total` by `result`: `success`, `retry`,
+`error` (temporary failures exhausted), `rejected` (not retried), `queue_full`,
+`stopped`, `shutdown_drop`, and `unavailable`.
 ## Optional log-link materialization
 
 `controller.logLinks.enabled` defaults to `false`. In that state the chart

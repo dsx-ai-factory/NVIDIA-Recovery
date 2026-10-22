@@ -77,11 +77,12 @@ func (observer *Observer) ObserveAdviceSchedulerAction(
 		JobID:           application.JobID,
 		AttemptIndex:    application.AttemptIndex,
 		CorrelationUUID: application.CorrelationUUID,
-		Action:          string(action.Action),
-		Success:         action.Outcome == reconcile.SchedulerActionOutcomeSuccess,
-		Error:           errorString(action.Err),
-		ProducedAt:      producedAt,
-		IdempotencyKey:  observer.newID(),
+		Generation:      application.Generation, RecoverySequenceID: application.RecoverySequenceID, TraceID: action.TraceID, SpanID: action.SpanID,
+		Action:         string(action.Action),
+		Success:        action.Outcome == reconcile.SchedulerActionOutcomeSuccess,
+		Error:          errorString(action.Err),
+		ProducedAt:     producedAt,
+		IdempotencyKey: action.OccurrenceID,
 	})
 }
 
@@ -109,8 +110,9 @@ func (observer *Observer) ObserveAdviceApplication(
 			JobID:           observation.JobID,
 			AttemptIndex:    observation.AttemptIndex,
 			CorrelationUUID: observation.CorrelationUUID,
-			ProducedAt:      observer.now(),
-			IdempotencyKey:  observer.newID(),
+			Generation:      observation.Generation, RecoverySequenceID: observation.RecoverySequenceID, TraceID: observation.TraceID, SpanID: observation.SpanID,
+			ProducedAt:     observation.CompletedAt,
+			IdempotencyKey: observation.OccurrenceID,
 		})
 	case reconcile.AdviceApplicationOutcomeSkipped:
 		// Skips reflect level-triggered reconciliation state and can recur without
@@ -122,10 +124,11 @@ func (observer *Observer) ObserveAdviceApplication(
 			JobID:           observation.JobID,
 			AttemptIndex:    observation.AttemptIndex,
 			CorrelationUUID: observation.CorrelationUUID,
-			Outcome:         string(observation.Outcome),
-			PlannedActions:  plannedActions,
-			ProducedAt:      observer.now(),
-			IdempotencyKey:  observer.newID(),
+			Generation:      observation.Generation, RecoverySequenceID: observation.RecoverySequenceID, TraceID: observation.TraceID, SpanID: observation.SpanID,
+			Outcome:        string(observation.Outcome),
+			PlannedActions: plannedActions,
+			ProducedAt:     observation.CompletedAt,
+			IdempotencyKey: observation.OccurrenceID,
 		})
 	case reconcile.AdviceApplicationOutcomeFailed:
 		observer.add(audit.AdviceApplicationFailedEvent{
@@ -133,9 +136,10 @@ func (observer *Observer) ObserveAdviceApplication(
 			JobID:           observation.JobID,
 			AttemptIndex:    observation.AttemptIndex,
 			CorrelationUUID: observation.CorrelationUUID,
-			Error:           errorString(observation.Err),
-			ProducedAt:      observer.now(),
-			IdempotencyKey:  observer.newID(),
+			Generation:      observation.Generation, RecoverySequenceID: observation.RecoverySequenceID, TraceID: observation.TraceID, SpanID: observation.SpanID,
+			Error:          errorString(observation.Err),
+			ProducedAt:     observation.CompletedAt,
+			IdempotencyKey: observation.OccurrenceID,
 		})
 	}
 }

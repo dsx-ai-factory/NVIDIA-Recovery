@@ -6,7 +6,7 @@ Date: 2026-08-12
 
 Discussion: [PR #7](https://github.com/NVIDIA/NVIDIA-Recovery/pull/7)
 
-> **Implementation note (2026-10-08):** Persistence, backend-only sequence creation/read-only lookup, milestone validation, and Advice/attribution span and audit correlation are implemented under [ADR 0048](0048-start-recovery-traces-in-backend-and-share-observations.md); controller observations/reporting and UI correlation remain pending in later layers of the [implementation stack](../architecture/recovery-observability-revision.md#changes-to-the-implementation-stack).
+> **Implementation note (2026-10-08):** Persistence, backend-only sequence creation/read-only lookup, milestone validation, Advice/attribution span and audit correlation, and shared controller observations/reporting are implemented under [ADR 0048](0048-start-recovery-traces-in-backend-and-share-observations.md); UI correlation remains pending in a later layer of the [implementation stack](../architecture/recovery-observability-revision.md#changes-to-the-implementation-stack).
 
 [ADR 0048](0048-start-recovery-traces-in-backend-and-share-observations.md)
 supersedes this ADR's SAC-initiated sequence creation and direct-path tracing

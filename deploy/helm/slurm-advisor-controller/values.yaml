@@ -81,6 +81,16 @@ controller:
     maxBatchSize: 100
     bufferSize: 1000
     flushInterval: 30s
+  # Background reporting of recovery milestones (command results) to Job
+  # Manager. Reporting never delays scheduler commands; a full queue or a
+  # failure after the last attempt drops the report and counts it in metrics.
+  # Only temporary backend failures are retried.
+  milestoneReporting:
+    queueCapacity: 256
+    rpcTimeout: 2s
+    maxAttempts: 3
+    retryDelay: 100ms
+    shutdownTimeout: 2s
   kubernetesAuth:
     # Mount a short-lived, audience-bound ServiceAccount token for the gateway.
     # Usable with public JWT validation as well as internal TokenReview.
