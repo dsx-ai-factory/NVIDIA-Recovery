@@ -17,6 +17,7 @@ from e2e_harness.checks import (
     recovery_trace,
     requeue_notified,
     restarted,
+    service_logs_exported,
     state_based_crash,
     terminated_advice,
 )
@@ -45,24 +46,29 @@ def state_based_recovery(e2e_config: E2EConfig, *, restart_within: float) -> tup
     )
 
 
-def recovery_traced(
+def recovery_telemetry(
     e2e_config: E2EConfig, *, operation: str = "restart", role: str | None = None
 ) -> tuple[Stage[RecoveryClient], ...]:
-    """When the run opts into trace evidence, the recovery's backend, Advice, and controller spans form one trace.
+    """The recovery's backend, Advice, and controller spans form one trace, and its services' logs were exported.
 
-    The stack does not ship a trace backend, so runs without Tempo skip this stage. Only restarts include an
-    attribution span, and only when the credentialed attribution service is available.
+    Both arrive through the services' production OTLP exporters and the stack's shared OTLP endpoint. The local
+    harness deploys that endpoint with Tempo and enables both stages; a run against a cluster without them skips
+    each stage whose backend it does not name. Only restarts include an attribution span, and only when the
+    credentialed attribution service is available.
     """
 
-    if not e2e_config.recovery_trace_enabled:
-        return ()
-    check: Check[RecoveryClient] = recovery_trace(
-        operation=operation,
-        require_attribution=operation == "restart" and e2e_config.attribution_mode == "available",
-    )
-    if role is not None:
-        check = on(role, check)
-    return (eventually("traced", check, within=e2e_config.watcher_evidence_timeout_seconds),)
+    stages: list[Stage[RecoveryClient]] = []
+    within = e2e_config.watcher_evidence_timeout_seconds
+    if e2e_config.recovery_trace_enabled:
+        traced: Check[RecoveryClient] = recovery_trace(
+            operation=operation,
+            require_attribution=operation == "restart" and e2e_config.attribution_mode == "available",
+        )
+        stages.append(eventually("traced", traced if role is None else on(role, traced), within=within))
+    if e2e_config.otlp_logs:
+        logged = service_logs_exported()
+        stages.append(eventually("logs exported", logged if role is None else on(role, logged), within=within))
+    return tuple(stages)
 
 
 def stopped_at_requeue_limit(e2e_config: E2EConfig) -> tuple[Stage[RecoveryClient], ...]:

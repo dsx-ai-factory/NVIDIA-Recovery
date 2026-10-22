@@ -22,7 +22,7 @@ from e2e_harness.checks import (
 from e2e_harness.config import E2EConfig
 from e2e_harness.dag import ADVICE_STATE_RELEASED, dependency_by_id
 from e2e_harness.recovery_client import RecoveryClient
-from e2e_harness.stages import recovery_traced
+from e2e_harness.stages import recovery_telemetry
 from e2e_harness.workloads import JOB_STATE_CRASH_RECOVERY, dag_job
 from recovery_libs.testing.launch.jobs import JobState
 from recovery_libs.testing.scenario import Scenario, consistently, eventually, on
@@ -119,6 +119,6 @@ def test_retryable_parent_failure_does_not_abort_child(e2e_config: E2EConfig) ->
                 ),
                 within=90,
             ),
-            *recovery_traced(e2e_config, operation="dag_release", role="child"),
+            *recovery_telemetry(e2e_config, operation="dag_release", role="child"),
         ),
     )

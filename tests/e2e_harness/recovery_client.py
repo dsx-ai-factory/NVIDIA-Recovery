@@ -191,20 +191,34 @@ class LogsApi:
         self.backend = backend
 
     @traced("logs.query")
-    def query(self, *, labels: Mapping[str, str], contains: str, start: str, end: str) -> ApiResponse:
-        """Records with exactly these labels whose message contains `contains`, between `start` and `end`."""
+    def query(
+        self,
+        *,
+        labels: Mapping[str, str],
+        contains: str,
+        start: str,
+        end: str,
+        fields: Mapping[str, str] | None = None,
+    ) -> ApiResponse:
+        """Records with exactly these labels whose message contains `contains`, between `start` and `end`.
 
+        `fields` matches record attributes that are not stream labels, such as the structured fields of an
+        OTLP log record; Loki keeps those as structured metadata, which only a pipeline filter can match.
+        """
+
+        fields = fields or {}
         if self.backend == "loki":
             selector = ",".join(f"{key}={json.dumps(value)}" for key, value in labels.items())
+            field_filters = "".join(f" | {key}={json.dumps(value)}" for key, value in fields.items())
             params: dict[str, str | int] = {
-                "query": f"{{{selector}}} |= {json.dumps(contains)}",
+                "query": f"{{{selector}}} |= {json.dumps(contains)}{field_filters}",
                 "start": start,
                 "end": end,
                 "limit": self.QUERY_LIMIT,
                 "direction": "forward",
             }
             return _get(self._http, "/loki/api/v1/query_range", params)
-        selector = " AND ".join(f"{key}:={json.dumps(value)}" for key, value in labels.items())
+        selector = " AND ".join(f"{key}:={json.dumps(value)}" for key, value in {**labels, **fields}.items())
         # A regex of the escaped text keeps LogQL's plain-substring meaning for any punctuation.
         params = {
             "query": f"{selector} AND _msg:~{json.dumps(re.escape(contains))}",
@@ -224,7 +238,7 @@ class RecoveryClient:
     gateway: GatewayApi
     logs: LogsApi
     controller: ControllerApi
-    # None unless the run opts into recovery trace evidence; the stack does not ship a trace backend.
+    # None unless the run names a Tempo query endpoint for recovery trace evidence.
     tempo: TempoApi | None
 
 

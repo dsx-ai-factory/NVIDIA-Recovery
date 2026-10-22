@@ -317,13 +317,23 @@ fi
 if [[ -n "${VICTORIALOGS_URL+x}" ]]; then
   export VICTORIALOGS_URL
 fi
-# Optional production-interface trace evidence. Name an operator-managed Tempo
-# query Service as namespace/service:port (for example,
-# monitoring/tempo-query-frontend:3200), or give E2E_TEMPO_URL to skip the port
-# forward. Empty keeps recovery scenarios backend-independent.
-E2E_TEMPO_SERVICE="${E2E_TEMPO_SERVICE:-}"
+# Production-interface telemetry evidence. With DEPLOY_INFRA, Tilt deploys a
+# local OTLP collector and Tempo and points every service at that one endpoint,
+# so recovery scenarios also require the recovery's trace and its services'
+# exported logs. Against another cluster, name its Tempo query Service as
+# namespace/service:port or give E2E_TEMPO_URL to skip the port forward, and
+# set E2E_OTLP_LOGS when its services export logs into the selected log store.
+# An explicitly empty value skips that evidence ('-' not ':-').
 E2E_TEMPO_URL="${E2E_TEMPO_URL:-}"
-export E2E_TEMPO_SERVICE E2E_TEMPO_URL
+if [[ -z "${E2E_TEMPO_SERVICE+x}" && -z "$E2E_TEMPO_URL" && -n "${DEPLOY_INFRA:-}" ]]; then
+  E2E_TEMPO_SERVICE=monitoring/tempo:3200
+fi
+E2E_TEMPO_SERVICE="${E2E_TEMPO_SERVICE-}"
+if [[ -z "${E2E_OTLP_LOGS+x}" && -n "${DEPLOY_INFRA:-}" ]]; then
+  E2E_OTLP_LOGS=1
+fi
+E2E_OTLP_LOGS="${E2E_OTLP_LOGS-}"
+export E2E_TEMPO_SERVICE E2E_TEMPO_URL E2E_OTLP_LOGS
 
 # How long each service install waits for its pods (`helm --wait`). Generous
 # because first-pull of charts like kube-prometheus-stack/slurm is slow.

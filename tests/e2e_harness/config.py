@@ -15,7 +15,7 @@ from e2e_harness.log_backend import validate_log_backend, validate_log_backend_u
 
 @dataclass(frozen=True, slots=True)
 class TempoService:
-    """The Kubernetes Service of an operator-managed Tempo query endpoint."""
+    """The Kubernetes Service of a Tempo query endpoint."""
 
     namespace: str
     name: str
@@ -54,10 +54,12 @@ class E2EConfig:
     stack_timeout_seconds: int
     tempo_service: TempoService | None
     tempo_url: str
+    otlp_logs: bool
+    """Whether the services export their logs through OTLP into the selected log store, so scenarios can require them."""
 
     @property
     def recovery_trace_enabled(self) -> bool:
-        """Whether scenarios also require recovery trace evidence from an operator-managed Tempo."""
+        """Whether scenarios also require recovery trace evidence from Tempo."""
 
         return self.tempo_service is not None or bool(self.tempo_url)
 
@@ -145,4 +147,5 @@ def e2e_config_from_environment(environment: Mapping[str, str]) -> E2EConfig:
             parse_tempo_service(environment["E2E_TEMPO_SERVICE"]) if environment.get("E2E_TEMPO_SERVICE") else None
         ),
         tempo_url=environment.get("E2E_TEMPO_URL", "").rstrip("/"),
+        otlp_logs=bool(environment.get("E2E_OTLP_LOGS")),
     )

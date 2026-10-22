@@ -11,7 +11,7 @@ from e2e_harness import audit
 from e2e_harness.checks import audit_trail
 from e2e_harness.config import E2EConfig
 from e2e_harness.recovery_client import RecoveryClient
-from e2e_harness.stages import recovery_traced, state_based_recovery
+from e2e_harness.stages import recovery_telemetry, state_based_recovery
 from e2e_harness.workloads import JOB_STATE_CRASH_RECOVERY, recovery_metadata, slurm_batch
 from recovery_libs.testing.fixtures import Fixtures
 from recovery_libs.testing.launch.jobs import JobSpec
@@ -64,6 +64,6 @@ def test_job_state_crash_recovery(e2e_config: E2EConfig, fixtures: Fixtures) -> 
                 ),
                 within=90,
             ),
-            *recovery_traced(e2e_config),
+            *recovery_telemetry(e2e_config),
         ),
     )

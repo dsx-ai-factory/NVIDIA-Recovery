@@ -810,6 +810,49 @@ def recovery_trace(*, require_attribution: bool, operation: str = "restart", att
     return check
 
 
+OTLP_SERVICE_LOGS = (
+    # Job Manager (Python exporter) names the job only in its message text; the comma ends the ID.
+    ("job_manager", "Upserting job: job_id={job_id},", {}),
+    # The controller (Go exporter) attaches the job as a structured field.
+    ("slurm-advisor-controller", "", {"job_id": "{job_id}"}),
+)
+"""Per service: its OTLP `service.name`, a message substring, and structured fields that place a record on the job."""
+
+
+def service_logs_exported() -> Check[RecoveryClient]:
+    """Job Manager and the controller exported logs about this job to the log store through the shared OTLP endpoint.
+
+    Each service reaches the store only through its own OTLP log exporter and the collector, so a record proves that
+    path end to end, including the bearer token. Both languages' exporters are covered.
+    """
+
+    def check(run: Run[RecoveryClient]) -> Evidence:
+        logs = run.services.logs
+        # Loki indexes the OTLP resource attribute `service.name` as `service_name`; VictoriaLogs keeps its name.
+        service_label = "service_name" if logs.backend == "loki" else "service.name"
+        job_id = run.job.job_id
+        missing: list[str] = []
+        for service, contains, fields in OTLP_SERVICE_LOGS:
+            response = logs.query(
+                labels={service_label: service},
+                contains=contains.format(job_id=job_id),
+                fields={key: value.format(job_id=job_id) for key, value in fields.items()},
+                start=_submitted_at(run),
+                end=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+            try:
+                records = decode_log_response(response.text, logs.backend)
+            except ValueError as error:
+                return Evidence(False, str(error))
+            if not records:
+                missing.append(service)
+        if missing:
+            return Evidence(False, f"no OTLP logs for job {job_id} yet from: {', '.join(missing)}")
+        return Evidence(True, f"Job Manager and controller logs for job {job_id} reached {logs.backend} through OTLP")
+
+    return check
+
+
 def _audit_job(run: Run[RecoveryClient]) -> SubmittedJob:
     return SubmittedJob(run.job.job_id, _submitted_at(run))
 
