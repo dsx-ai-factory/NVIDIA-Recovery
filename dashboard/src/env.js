@@ -6,6 +6,7 @@ import { z } from "zod";
 import { normalizeBasePath } from "./lib/base-path.js";
 import { grafanaUrlSchema } from "./lib/grafanaUrlSchema.js";
 import { httpUrlSchema } from "./lib/httpUrlSchema.js";
+import { isTraceViewerTemplate } from "./lib/trace-viewer.js";
 import { resolveAuthConfiguration } from "./server/auth-config.js";
 
 const skipValidation = !!process.env.SKIP_ENV_VALIDATION;
@@ -73,6 +74,13 @@ export const env = createEnv({
     METRICS_ENABLED: z.string().optional(),
     API_KEYS_ENABLED: z.string().optional(),
     AUDIT_EVENTS_ENABLED: z.string().optional(),
+    AUDIT_TRACE_URL_TEMPLATE: z
+      .string()
+      .refine(isTraceViewerTemplate, {
+        message:
+          "Trace destination must be an HTTP(S) URL with {trace_id} outside its authority",
+      })
+      .optional(),
     GRAFANA_TRACE_URL_ENABLED: z.string().optional(),
     GRAFANA_DATA_SOURCE_ID: z.string().optional(),
     GRAFANA_URL: grafanaUrlSchema.optional(),
@@ -135,6 +143,7 @@ export const env = createEnv({
     METRICS_ENABLED: process.env.METRICS_ENABLED,
     API_KEYS_ENABLED: process.env.API_KEYS_ENABLED,
     AUDIT_EVENTS_ENABLED: process.env.AUDIT_EVENTS_ENABLED,
+    AUDIT_TRACE_URL_TEMPLATE: process.env.AUDIT_TRACE_URL_TEMPLATE,
     GRAFANA_TRACE_URL_ENABLED: process.env.GRAFANA_TRACE_URL_ENABLED,
     GRAFANA_DATA_SOURCE_ID: process.env.GRAFANA_DATA_SOURCE_ID,
     GRAFANA_URL: process.env.GRAFANA_URL,

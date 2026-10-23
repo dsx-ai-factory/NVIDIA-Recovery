@@ -19,14 +19,16 @@ with `Editor` or `Admin` permissions on the target folder.
 export GRAFANA_TOKEN="<grafana-service-account-token>"
 ```
 
+Dry-run validation does not connect to Grafana and does not require a token.
+
 ## Configuration
 
 All persistent settings live in `tools/config.yaml`:
 
 ```yaml
 grafana:
-  url: https://grafana.example.com
-  org_id: 1            # X-Grafana-Org-Id header
+  url: ""              # or set GRAFANA_URL / --grafana-url
+  org_id:               # or set GRAFANA_ORG_ID / --org-id
   folder_uid: ""       # target folder UID (empty = General folder)
 
 defaults:
@@ -34,6 +36,10 @@ defaults:
   message: "Updated via grafana-dashboard-update tool"  # version history message
   dashboards_dir: "../"                                 # default directory for --dir
 ```
+
+Deployment-specific Grafana URLs, organization IDs, and folder UIDs are
+operator configuration and are deliberately empty in the checked-in file.
+`GRAFANA_FOLDER_UID` or `--folder-uid` may supply the target folder.
 
 ## Usage
 
@@ -88,7 +94,9 @@ python tools/update_dashboard.py -f dashboard.json --no-overwrite
 | `-d, --dir PATH` | Push all `*.json` files in directory (excludes `dd-*`) |
 | `-c, --config PATH` | YAML config file (default: `tools/config.yaml`) |
 | `-m, --message TEXT` | Version history commit message |
-| `--folder-uid UID` | Override target folder UID from config |
+| `--grafana-url URL` | Override the Grafana URL from environment or config |
+| `--org-id ID` | Override the organization ID from environment or config |
+| `--folder-uid UID` | Override target folder UID from environment or config |
 | `--no-overwrite` | Fail if dashboard already exists |
 | `--dry-run` | List files without pushing |
 

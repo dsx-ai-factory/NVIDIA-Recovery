@@ -18,423 +18,339 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 6806,
+  "id": null,
   "links": [],
   "panels": [
     {
       "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 3,
-      "panels": [],
-      "title": "Span Explorer",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "tempo",
-        "uid": "${tempo}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "footer": {
-              "reducers": []
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Trace Name"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Trace Service"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 16,
-        "w": 24,
-        "x": 0,
-        "y": 1
-      },
-      "id": 4,
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true
-      },
-      "pluginVersion": "12.3.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "tempo",
-            "uid": "${tempo}"
-          },
-          "limit": 50,
-          "query": "{resource.service.name=~\"${service:pipe}\" && resource.cluster=~\"${cluster:pipe}\" && resource.k8s.environment.name=~\"${environment:pipe}\"} && {name=~\"${operation:pipe}\"} | select(span.job_id, span.environment, span.service)",
-          "queryType": "traceql",
-          "refId": "A",
-          "tableType": "spans"
-        }
-      ],
-      "title": "Spans by Service",
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Trace Name": true,
-              "Trace Service": true
-            },
-            "indexByName": {
-              "Span ID": 0,
-              "span.job_id": 1,
-              "job_id": 1,
-              "service.name": 2,
-              "Name": 3,
-              "Start time": 4,
-              "cluster": 5,
-              "k8s.environment.name": 6,
-              "span.environment": 7,
-              "environment": 7,
-              "span.service": 8,
-              "service": 8,
-              "Duration": 9,
-              "traceIdHidden": 10
-            },
-            "renameByName": {
-              "span.job_id": "Job ID",
-              "job_id": "Job ID",
-              "service.name": "Service",
-              "cluster": "Cluster",
-              "k8s.environment.name": "Environment",
-              "span.environment": "Environment (span)",
-              "environment": "Environment (span)",
-              "span.service": "Service (span)",
-              "service": "Service (span)"
-            }
-          }
-        }
-      ],
-      "type": "table"
-    },
-    {
-      "datasource": {
-        "type": "tempo",
-        "uid": "${tempo}"
-      },
-      "gridPos": {
-        "h": 18,
-        "w": 24,
-        "x": 0,
-        "y": 17
-      },
-      "id": 7,
-      "options": {},
-      "pluginVersion": "12.3.2",
-      "targets": [
-        {
-          "datasource": {
-            "type": "tempo",
-            "uid": "${tempo}"
-          },
-          "query": "${traceID}",
-          "queryType": "traceql",
-          "refId": "A"
-        }
-      ],
-      "title": "Trace Detail",
-      "type": "traces"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 35
-      },
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
       "id": 1,
       "panels": [],
-      "title": "Trace Explorer",
+      "title": "Recovery outcomes",
       "type": "row"
     },
     {
-      "datasource": {
-        "type": "tempo",
-        "uid": "${tempo}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "footer": {
-              "reducers": []
-            },
-            "inspect": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Trace ID"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 310
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Trace Name"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": true
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 16,
-        "w": 24,
-        "x": 0,
-        "y": 36
-      },
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 1},
       "id": 2,
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true
-      },
-      "pluginVersion": "12.3.2",
+      "options": {"cellHeight": "sm", "showHeader": true},
       "targets": [
         {
-          "datasource": {
-            "type": "tempo",
-            "uid": "${tempo}"
-          },
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
           "limit": 50,
-          "query": "{resource.service.name=~\"${service:pipe}\" && resource.cluster=~\"${cluster:pipe}\" && resource.k8s.environment.name=~\"${environment:pipe}\"} && {name=~\"${operation:pipe}\"}",
+          "query": "{ span:name = \"job.recovery.reconcile\" && span.recovery.outcome = \"applied\" && span.recovery.operation = \"restart\" }",
           "queryType": "traceql",
           "refId": "A",
           "tableType": "traces"
         }
       ],
-      "title": "Recent Traces",
-      "transformations": [
+      "description": "Application performed applicable work. This does not prove successful release or durable completion; later convergence is separate.",
+      "title": "Applied restart Advice (not completion)",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 1},
+      "id": 3,
+      "options": {"cellHeight": "sm", "showHeader": true},
+      "targets": [
         {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Trace Name": true
-            },
-            "indexByName": {
-              "Trace ID": 0,
-              "Trace Service": 1,
-              "Start time": 2,
-              "Duration": 3,
-              "traceIdHidden": 4
-            },
-            "renameByName": {}
-          }
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+          "limit": 50,
+          "query": "{ span:name = \"job.recovery.reconcile\" && span.recovery.terminal = true && span.recovery.outcome = \"skipped\" } | select(span.advice.skip.reason, span.recovery.operation)",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "spans"
         }
       ],
+      "description": "Generation-terminal reconciliation outcomes; missing command completion timing remains unknown.",
+      "title": "Terminal skips",
       "type": "table"
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 1},
+      "id": 4,
+      "options": {"cellHeight": "sm", "showHeader": true},
+      "targets": [
+        {
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+          "limit": 50,
+          "query": "{ span:name = \"job.recovery.reconcile\" && span.recovery.terminal = true && span.recovery.outcome = \"failed\" && span:status = error }",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "traces"
+        }
+      ],
+      "title": "Terminal failures",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 9},
+      "id": 5,
+      "options": {"cellHeight": "sm", "showHeader": true},
+      "targets": [
+        {
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+          "limit": 50,
+          "query": "{ span:name = \"job.recovery.reconcile\" && span.recovery.terminal = false && span.recovery.outcome = \"failed\" && span:status = error }",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "traces"
+        }
+      ],
+      "title": "Retryable failed attempts",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 9},
+      "id": 6,
+      "options": {"cellHeight": "sm", "showHeader": true},
+      "targets": [
+        {
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+          "limit": 50,
+          "query": "{ span:name = \"job.recovery.reconcile\" && span.recovery.terminal = false && span.recovery.outcome = \"planned\" && span.recovery.slo.eligible = false }",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "traces"
+        }
+      ],
+      "title": "Observe-mode plans",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 9},
+      "id": 7,
+      "options": {"cellHeight": "sm", "showHeader": true},
+      "targets": [
+        {
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+          "limit": 50,
+          "query": "{ span:name = \"job.recovery.reconcile\" && span.recovery.operation = \"dag_release\" && span.recovery.slo.eligible = false }",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "traces"
+        }
+      ],
+      "title": "DAG Advice applications (SLO excluded)",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 17},
+      "id": 8,
+      "panels": [],
+      "title": "Recovery trace explorer",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "gridPos": {"h": 14, "w": 24, "x": 0, "y": 18},
+      "id": 9,
+      "options": {"cellHeight": "sm", "showHeader": true},
+      "targets": [
+        {
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+          "limit": 100,
+          "query": "{ span:name =~ \"${operation:regex}\" && resource.service.name =~ \"${service:regex}\" && span.recovery.sequence.id =~ \"${sequence_id:regex}\" && span.job.id =~ \"${job_id:regex}\" } | select(span.recovery.sequence.id, span.recovery.operation, span.recovery.outcome, span.recovery.terminal, span.job.id, span.job.attempt.source, span.job.attempt.target, span.advice.id, span.scheduler.action, span.scheduler.action.outcome)",
+          "queryType": "traceql",
+          "refId": "A",
+          "tableType": "spans"
+        }
+      ],
+      "title": "Recovery spans",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+      "gridPos": {"h": 18, "w": 24, "x": 0, "y": 32},
+      "id": 10,
+      "options": {},
+      "targets": [
+        {
+          "datasource": {"type": "tempo", "uid": "${tempo_datasource}"},
+          "query": "${trace_id}",
+          "queryType": "traceql",
+          "refId": "A"
+        }
+      ],
+      "title": "Trace detail",
+      "type": "traces"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 50},
+      "id": 11,
+      "panels": [],
+      "title": "Recovery metrics",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 51},
+      "id": 12,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+          "expr": "sum by (operation, trigger_type, outcome) (rate(nvidia_recovery_sequences_total[$__rate_interval]))",
+          "legendFormat": "{{operation}} {{trigger_type}} {{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Sequence begin rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 51},
+      "id": 13,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+          "expr": "sum by (operation, outcome, terminal) (rate(nvidia_recovery_reconcile_outcomes_total[$__rate_interval]))",
+          "legendFormat": "{{operation}} {{outcome}} terminal={{terminal}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Reconcile outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 51},
+      "id": 14,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+          "expr": "sum by (operation, action, outcome) (rate(nvidia_recovery_scheduler_actions_total[$__rate_interval]))",
+          "legendFormat": "{{operation}} {{action}} {{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Scheduler action attempts",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 59},
+      "id": 15,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+          "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(nvidia_recovery_end_to_end_duration_seconds_bucket{operation=\"restart\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{operation}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Completed restart latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 59},
+      "id": 16,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+          "expr": "sum by (source, outcome) (rate(nvidia_recovery_trace_context_total[$__rate_interval]))",
+          "legendFormat": "{{source}} {{outcome}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+          "expr": "sum by (operation, action, result) (rate(nvidia_recovery_milestone_reports_total[$__rate_interval]))",
+          "legendFormat": "milestone {{operation}} {{action}} {{result}}",
+          "refId": "B"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${prometheus_datasource}"},
+          "expr": "sum by (operation, action, outcome, record_result) (rate(nvidia_recovery_milestones_recorded_total[$__rate_interval]))",
+          "legendFormat": "recorded {{operation}} {{action}} {{outcome}} {{record_result}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Correlation and milestone coverage",
+      "type": "timeseries"
     }
   ],
   "preload": false,
   "schemaVersion": 42,
-  "tags": [],
+  "tags": ["nvidia-recovery", "tracing"],
   "templating": {
     "list": [
       {
-        "name": "tempo",
+        "current": {},
         "label": "Tempo datasource",
-        "type": "datasource",
+        "name": "tempo_datasource",
+        "options": [],
         "query": "tempo",
-        "current": {},
-        "options": [],
-        "refresh": 1,
-        "regex": ""
+        "type": "datasource"
       },
       {
-        "name": "cluster",
-        "label": "Cluster",
-        "type": "textbox",
-        "query": "",
         "current": {},
+        "label": "Prometheus datasource",
+        "name": "prometheus_datasource",
         "options": [],
-        "description": "Enter the cluster label value for your deployment."
-      },
-      {
-        "name": "environment",
-        "label": "Environment",
-        "type": "textbox",
-        "query": "",
-        "current": {},
-        "options": [],
-        "description": "Enter the environment label value for your deployment."
+        "query": "prometheus",
+        "type": "datasource"
       },
       {
         "allValue": ".*",
-        "current": {
-          "text": [
-            "watcher",
-            "job_manager",
-            "anomaly_detection_isolator"
-          ],
-          "value": [
-            "watcher",
-            "job_manager",
-            "anomaly_detection_isolator"
-          ]
-        },
+        "current": {"text": "$__all", "value": "$__all"},
         "includeAll": true,
         "label": "Service",
         "multi": true,
         "name": "service",
-        "options": [
-          {
-            "selected": true,
-            "text": "watcher",
-            "value": "watcher"
-          },
-          {
-            "selected": true,
-            "text": "job_manager",
-            "value": "job_manager"
-          },
-          {
-            "selected": true,
-            "text": "anomaly_detection_isolator",
-            "value": "anomaly_detection_isolator"
-          }
-        ],
-        "query": "watcher,job_manager,anomaly_detection_isolator",
+        "options": [],
+        "query": "nvidia-recovery-job-manager,nvidia-recovery-attribution-adapter,nvidia-recovery-slurm-advisor-controller",
         "type": "custom"
       },
       {
         "allValue": ".*",
-        "current": {
-          "text": "$__all",
-          "value": "$__all"
-        },
+        "current": {"text": "$__all", "value": "$__all"},
         "includeAll": true,
-        "label": "Operation",
+        "label": "Operation span",
         "multi": true,
         "name": "operation",
-        "options": [
-          {
-            "selected": false,
-            "text": "job_event.detection",
-            "value": "job_event.detection"
-          },
-          {
-            "selected": false,
-            "text": "job_anomaly.attribution",
-            "value": "job_anomaly.attribution"
-          }
-        ],
-        "query": "job_event.detection,job_anomaly.attribution",
+        "options": [],
+        "query": "job.recovery.trigger,job.recovery.attribution,job.recovery.advice,job.recovery.reconcile,job.recovery.scheduler_action,job.recovery.state_check",
         "type": "custom"
       },
       {
-        "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
-        },
+        "current": {"text": ".*", "value": ".*"},
+        "label": "Recovery sequence ID regex",
+        "name": "sequence_id",
+        "options": [],
+        "query": ".*",
+        "type": "textbox"
+      },
+      {
+        "current": {"text": ".*", "value": ".*"},
+        "label": "Job ID regex",
+        "name": "job_id",
+        "options": [],
+        "query": ".*",
+        "type": "textbox"
+      },
+      {
+        "current": {"text": "", "value": ""},
         "description": "Paste a Trace ID to view its waterfall",
         "label": "Trace ID",
-        "name": "traceID",
+        "name": "trace_id",
         "options": [],
         "query": "",
         "type": "textbox"
       }
     ]
   },
-  "time": {
-    "from": "now-3h",
-    "to": "now"
-  },
-  "timepicker": {
-    "refresh_intervals": [
-      "30s",
-      "1m",
-      "5m",
-      "15m",
-      "30m",
-      "1h",
-      "2h",
-      "1d"
-    ]
-  },
+  "time": {"from": "now-3h", "to": "now"},
+  "timepicker": {"refresh_intervals": ["30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]},
   "timezone": "browser",
-  "title": "Heimdall Traces",
-  "uid": "mm6vqfv",
-  "version": 12
+  "title": "NVIDIA Recovery Traces",
+  "uid": "nvidia-recovery-traces",
+  "version": 1
 }

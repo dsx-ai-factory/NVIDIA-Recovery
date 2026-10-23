@@ -6,6 +6,8 @@ Date: 2026-10-07
 
 Discussion: [PR #245](https://github.com/NVIDIA/NVIDIA-Recovery/pull/245)
 
+> **Implementation note (2026-10-08):** The [revised implementation](../architecture/recovery-observability-revision.md#implementation-update) implements the backend, controller, E2E evidence, and UI correlation changes; live Tempo qualification and removal of legacy `correlation_uuid` remain outstanding.
+
 > **Implementation note (2026-10-21):** The controller retries milestone
 > delivery only for temporary failures (unavailable or overloaded backend,
 > timeouts, and unmapped backend errors); rejected reports are counted and not
