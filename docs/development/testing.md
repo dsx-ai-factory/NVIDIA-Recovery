@@ -28,8 +28,8 @@ justify them; a repository-wide preflight is not the default gate.
 For file-scoped Python formatting and lint, pass the changed files explicitly:
 
 ```bash
-scripts/ci/format-python.sh watcher/main.py
-scripts/ci/lint-python.sh watcher/main.py
+scripts/ci/format-python.sh watcher/watcher/main.py
+scripts/ci/lint-python.sh watcher/watcher/main.py
 ```
 
 Both check without modifying files unless `--fix` is supplied. For a single Go
