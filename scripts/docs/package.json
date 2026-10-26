@@ -12,7 +12,7 @@
     "prepare": "python3 prepare.py"
   },
   "devDependencies": {
-    "fern-api": "5.152.0",
+    "fern-api": "5.172.0",
     "pnpm": "10.8.0"
   }
 }
