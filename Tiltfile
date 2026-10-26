@@ -203,6 +203,31 @@ if os.environ.get('DEPLOY_INFRA', '1') != '':
             labels=[INFRA_LABEL],
         )
 
+    # A local stand-in for the operator-managed OTLP endpoint: one collector
+    # receives every service's logs and traces, then routes traces to Tempo and
+    # logs to the selected store's native OTLP intake.
+    # The VictoriaLogs manifest declares the same monitoring Namespace.
+    k8s_yaml(TILT_DIR + '/services/tempo.yaml', allow_duplicates=True)
+    k8s_resource(
+        workload='tempo',
+        port_forwards=['3200:3200'],
+        labels=[INFRA_LABEL],
+    )
+    logs_otlp_endpoint = {
+        'loki': 'http://loki-gateway.monitoring.svc.cluster.local/otlp/v1/logs',
+        'victorialogs': 'http://victorialogs.monitoring.svc.cluster.local:9428/insert/opentelemetry/v1/logs',
+    }[log_backend]
+    k8s_yaml(blob(str(read_file(TILT_DIR + '/services/otel-collector.yaml')).replace(
+        '__LOGS_OTLP_ENDPOINT__',
+        logs_otlp_endpoint,
+    )))
+    k8s_resource(
+        workload='otel-collector',
+        objects=['nvidia-recovery-otlp:secret:monitoring', 'otel-collector:configmap:monitoring'],
+        resource_deps=['tempo', log_backend],
+        labels=[INFRA_LABEL],
+    )
+
     local_resource(
         'slurm-shared-storage',
         cmd=[
@@ -379,9 +404,11 @@ if os.environ.get('DEPLOY_INFRA', '1') != '':
 
 if os.environ.get('DEPLOY_STACK', '1') != '':
     stack_deps = []
-    if os.environ.get('DEPLOY_INFRA', '1') != '':
-        # Wait for the services that Heimdall uses before installing it.
-        stack_deps = ['prometheus', 'alloy', 'alloy-application', 'slurm-log-directories']
+    stack_exports_otlp = os.environ.get('DEPLOY_INFRA', '1') != ''
+    if stack_exports_otlp:
+        # Wait for the services that Heimdall uses before installing it. The
+        # Python services probe the OTLP endpoint only at startup.
+        stack_deps = ['prometheus', 'alloy', 'alloy-application', 'slurm-log-directories', 'otel-collector']
 
     stack_namespace = 'slurm'
     k8s_yaml(TILT_DIR + '/namespace.yaml')
@@ -472,6 +499,10 @@ if os.environ.get('DEPLOY_STACK', '1') != '':
             'attribution-adapter.enabled=false',
             'anomaly-detection-isolator.attribution_enabled=false',
         ]
+    if stack_exports_otlp:
+        # Send logs and traces to the infrastructure's local OTLP collector.
+        k8s_yaml(TILT_DIR + '/services/otlp-token.yaml')
+        stack_values += [E2E_DIR + '/values/otlp.yaml']
     if log_backend == 'victorialogs':
         # Apply last so the attribution overlay cannot reset the selected backend.
         stack_values += [E2E_DIR + '/values/stack-local-victorialogs.yaml']
@@ -549,6 +580,8 @@ if os.environ.get('DEPLOY_STACK', '1') != '':
     advisor_values = [TILT_DIR + '/services/slurm-advisor-controller/values.yaml']
     if kubernetes_service_auth_smoke:
         advisor_values += [TILT_DIR + '/services/slurm-advisor-controller/kubernetes-service-auth.yaml']
+    if stack_exports_otlp:
+        advisor_values += [E2E_DIR + '/values/otlp.yaml']
 
     k8s_yaml(helm(
         'deploy/helm/slurm-advisor-controller',

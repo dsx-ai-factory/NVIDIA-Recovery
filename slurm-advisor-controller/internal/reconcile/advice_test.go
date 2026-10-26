@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	zapobserver "go.uber.org/zap/zaptest/observer"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -373,7 +374,7 @@ func TestReconcileAdviceForJobStopsAfterFirstActionFailure(t *testing.T) {
 		constraints: &pb.NodeConstraints{Exclusions: []string{"c3"}},
 	})
 
-	_, err := controller.reconcileAdviceForJob(
+	_, err := reconcileAdviceFixture(&controller,
 		context.Background(),
 		advice,
 		cluster.JobExecutionRecord{JobID: "100", State: cluster.JobStateRunning},
@@ -381,7 +382,7 @@ func TestReconcileAdviceForJobStopsAfterFirstActionFailure(t *testing.T) {
 		nil,
 	)
 	if !errors.Is(err, firstErr) {
-		t.Fatalf("reconcileAdviceForJob() error = %v, want first action failure", err)
+		t.Fatalf("reconcileAdviceItem() error = %v, want first action failure", err)
 	}
 }
 
@@ -512,7 +513,7 @@ func TestReconcileAdviceForRequeuedAttemptReleasesWithoutAnotherRequeue(t *testi
 		},
 	})
 
-	result, err := controller.reconcileAdviceForJob(
+	result, err := reconcileAdviceFixture(&controller,
 		context.Background(),
 		advice,
 		cluster.JobExecutionRecord{JobID: "100", State: cluster.JobStateRequeued},
@@ -520,7 +521,7 @@ func TestReconcileAdviceForRequeuedAttemptReleasesWithoutAnotherRequeue(t *testi
 		nil,
 	)
 	if err != nil {
-		t.Fatalf("reconcileAdviceForJob() failed: %v", err)
+		t.Fatalf("reconcileAdviceItem() failed: %v", err)
 	}
 	if len(result.Skips) != 0 {
 		t.Fatalf("skips = %#v, want none", result.Skips)
@@ -605,11 +606,11 @@ func TestReconcileReleasedAdviceForExactAttempt(t *testing.T) {
 				executor.EXPECT().JobRelease(gomock.Any(), tt.job.JobID).Return(nil)
 			}
 			controller := Controller{ActionExecutor: executor}
-			result, err := controller.reconcileAdviceForJob(
+			result, err := reconcileAdviceFixture(&controller,
 				context.Background(), newAdvice(t, tt.advice), tt.job, cluster.JobModeAct, nil,
 			)
 			if err != nil {
-				t.Fatalf("reconcileAdviceForJob() failed: %v", err)
+				t.Fatalf("reconcileAdviceItem() failed: %v", err)
 			}
 			if tt.wantSkip == "" {
 				if len(result.Skips) != 0 {
@@ -678,11 +679,11 @@ func TestReconcileTerminatedAdviceForExactAttempt(t *testing.T) {
 			}
 			controller := Controller{ActionExecutor: executor}
 
-			result, err := controller.reconcileAdviceForJob(
+			result, err := reconcileAdviceFixture(&controller,
 				context.Background(), newAdvice(t, tt.advice), tt.job, cluster.JobModeAct, nil,
 			)
 			if err != nil {
-				t.Fatalf("reconcileAdviceForJob() failed: %v", err)
+				t.Fatalf("reconcileAdviceItem() failed: %v", err)
 			}
 			if tt.wantSkip == "" {
 				if len(result.Skips) != 0 {
@@ -734,17 +735,17 @@ func TestReconcileAdviceForJobRetriesFailedActionUntilSatisfied(t *testing.T) {
 			advice := newAdvice(t, adviceFixture{adviceID: "advice-100", jobID: "100", state: adviceState(tt.state)})
 			held := cluster.JobExecutionRecord{JobID: "100", State: cluster.JobStatePending, Held: true}
 
-			result, err := controller.reconcileAdviceForJob(context.Background(), advice, held, cluster.JobModeAct, nil)
+			result, err := reconcileAdviceFixture(&controller, context.Background(), advice, held, cluster.JobModeAct, nil)
 			if !errors.Is(err, actionErr) || len(result.TerminalOutcomes) != 0 {
 				t.Fatalf("first pass result = %#v, error = %v, want retryable failure", result, err)
 			}
-			if _, err := controller.reconcileAdviceForJob(
+			if _, err := reconcileAdviceFixture(&controller,
 				context.Background(), advice, held, cluster.JobModeAct, nil,
 			); err != nil {
 				t.Fatalf("retry pass failed: %v", err)
 			}
 			// The mock rejects a third scheduler call once Slurm shows the desired state.
-			result, err = controller.reconcileAdviceForJob(
+			result, err = reconcileAdviceFixture(&controller,
 				context.Background(), advice, tt.satisfied, cluster.JobModeAct, nil,
 			)
 			if err != nil {
@@ -772,7 +773,7 @@ func TestReconcileReleasedAdviceLogsSuccessfulRelease(t *testing.T) {
 		state:        adviceState(pb.AdviceState_ADVICE_STATE_RELEASED),
 	})
 
-	_, err := controller.reconcileAdviceForJob(
+	_, err := reconcileAdviceFixture(&controller,
 		context.Background(),
 		advice,
 		cluster.JobExecutionRecord{JobID: "100", AttemptIndex: 2, State: cluster.JobStatePending, Held: true},
@@ -780,7 +781,7 @@ func TestReconcileReleasedAdviceLogsSuccessfulRelease(t *testing.T) {
 		nil,
 	)
 	if err != nil {
-		t.Fatalf("reconcileAdviceForJob() failed: %v", err)
+		t.Fatalf("reconcileAdviceItem() failed: %v", err)
 	}
 
 	entries := logs.FilterMessage("applied advice job release").All()
@@ -851,7 +852,7 @@ func TestReconcileAdviceForJobObserveModePlansEveryMutatorPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			observation := &SyncObservation{}
 			controller := Controller{}
-			result, err := controller.reconcileAdviceForJob(
+			result, err := reconcileAdviceFixture(&controller,
 				context.Background(),
 				newAdvice(t, tt.advice),
 				tt.job,
@@ -859,7 +860,7 @@ func TestReconcileAdviceForJobObserveModePlansEveryMutatorPath(t *testing.T) {
 				observation,
 			)
 			if err != nil {
-				t.Fatalf("reconcileAdviceForJob() failed: %v", err)
+				t.Fatalf("reconcileAdviceItem() failed: %v", err)
 			}
 			if len(result.Skips) != 0 {
 				t.Fatalf("skips = %#v, want none", result.Skips)
@@ -909,7 +910,7 @@ func TestReconcileAdviceForJobObservesEveryApplication(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			observer := &recordingAuditObserver{}
 			controller := Controller{AuditObserver: observer}
-			_, err := controller.reconcileAdviceForJob(
+			_, err := reconcileAdviceFixture(&controller,
 				context.Background(),
 				newAdvice(t, test.advice),
 				cluster.JobExecutionRecord{JobID: "100", AttemptIndex: 2, State: cluster.JobStateRunning},
@@ -917,7 +918,7 @@ func TestReconcileAdviceForJobObservesEveryApplication(t *testing.T) {
 				nil,
 			)
 			if err != nil {
-				t.Fatalf("reconcileAdviceForJob() failed: %v", err)
+				t.Fatalf("reconcileAdviceItem() failed: %v", err)
 			}
 			if len(observer.advice) != 1 {
 				t.Fatalf("observations = %#v, want one", observer.advice)
@@ -959,7 +960,7 @@ func TestReconcileConstraintAdviceObservesCompletedAction(t *testing.T) {
 		Now:            func() time.Time { return completedAt },
 	}
 
-	result, err := controller.reconcileAdviceForJob(
+	result, err := reconcileAdviceFixture(&controller,
 		context.Background(),
 		newAdvice(t, adviceFixture{
 			adviceID: "constraints-100", jobID: "100", attemptIndex: 2,
@@ -971,7 +972,7 @@ func TestReconcileConstraintAdviceObservesCompletedAction(t *testing.T) {
 		nil,
 	)
 	if err != nil {
-		t.Fatalf("reconcileAdviceForJob() failed: %v", err)
+		t.Fatalf("reconcileAdviceItem() failed: %v", err)
 	}
 	if len(result.Skips) != 0 {
 		t.Fatalf("skips = %#v, want none", result.Skips)
@@ -1098,7 +1099,7 @@ func TestReconcileAdviceForJobRetriesReleaseAfterAttemptAdvances(t *testing.T) {
 				Options:        ControllerOptions{AdviceRequeueHoldDelay: 0},
 			}
 
-			_, err := controller.reconcileAdviceForJob(ctx, advice, cluster.JobExecutionRecord{
+			_, err := reconcileAdviceFixture(&controller, ctx, advice, cluster.JobExecutionRecord{
 				JobID:           "12345",
 				AttemptIndex:    1,
 				State:           cluster.JobStateRunning,
@@ -1108,7 +1109,7 @@ func TestReconcileAdviceForJobRetriesReleaseAfterAttemptAdvances(t *testing.T) {
 				t.Fatalf("first reconcile error = %v, want release failure", err)
 			}
 
-			result, err := controller.reconcileAdviceForJob(ctx, advice, cluster.JobExecutionRecord{
+			result, err := reconcileAdviceFixture(&controller, ctx, advice, cluster.JobExecutionRecord{
 				JobID:           "12345",
 				AttemptIndex:    2,
 				State:           cluster.JobStatePending,
@@ -1172,15 +1173,34 @@ func TestReconcileAdviceForJobRejectsUnsafeRestartContinuation(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			controller := Controller{ActionExecutor: newMockJobMutator(t)}
-			result, err := controller.reconcileAdviceForJob(
+			result, err := reconcileAdviceFixture(&controller,
 				context.Background(), newAdvice(t, testCase.advice), testCase.job, cluster.JobModeAct, nil,
 			)
 			if err != nil {
-				t.Fatalf("reconcileAdviceForJob() failed: %v", err)
+				t.Fatalf("reconcileAdviceItem() failed: %v", err)
 			}
 			if len(result.Skips) != 1 || result.Skips[0].Reason != testCase.wantReason {
 				t.Fatalf("Skips = %#v, want one %q skip", result.Skips, testCase.wantReason)
 			}
 		})
 	}
+}
+
+// reconcileAdviceFixture supplies admission facts to the production per-item
+// entry point. The controller itself owns observation start, finish, policy,
+// command execution, and status publication; tests do not recreate that lifecycle.
+func reconcileAdviceFixture(controller *Controller, ctx context.Context, advice *pb.Advice, job cluster.JobExecutionRecord, mode cluster.JobMode, observation *SyncObservation) (AdviceSyncResult, error) {
+	if advice.SchedulerMetadata == nil {
+		advice.SchedulerMetadata = &structpb.Struct{Fields: map[string]*structpb.Value{}}
+	}
+	if advice.SchedulerMetadata.Fields == nil {
+		advice.SchedulerMetadata.Fields = map[string]*structpb.Value{}
+	}
+	advice.SchedulerMetadata.Fields["scheduler"] = structpb.NewStringValue(cluster.SchedulerSlurm)
+	snapshot := newControllerSnapshot(controller.observedAt())
+	snapshot.EffectiveModes[jobAttemptRef(job)] = EffectiveModeDecision{Mode: mode}
+	if controller.HeimdallClient == nil {
+		controller.HeimdallClient = &fakeControllerClient{}
+	}
+	return controller.reconcileAdviceItem(ctx, snapshot, map[string]cluster.JobExecutionRecord{job.JobID: job}, advice, observation)
 }

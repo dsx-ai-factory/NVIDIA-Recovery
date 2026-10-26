@@ -9,6 +9,7 @@ from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as HttpOTLPSpanExporter
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ALWAYS_OFF
 from opentelemetry.trace import Span, SpanContext, TraceFlags, TraceState
 from pika.spec import BasicProperties
 from recovery_libs.tracing.traces import (
@@ -45,7 +46,7 @@ class TestTraces(unittest.TestCase):
             mock_resource.create.assert_called_once_with({"service.name": service_name})
 
             # Verify TracerProvider creation and configuration
-            mock_provider_class.assert_called_once_with(resource=mock_resource.create.return_value)
+            mock_provider_class.assert_called_once_with(resource=mock_resource.create.return_value, sampler=ALWAYS_OFF)
 
             # No span processor should be added when OTLP endpoint is not configured
             mock_provider.add_span_processor.assert_not_called()
@@ -166,7 +167,7 @@ class TestTraces(unittest.TestCase):
 
             # Verify TracerProvider creation and configuration
             mock_http_exporter.assert_called_once_with(
-                endpoint="http://localhost:4318", headers={"authorization": "Bearer test_token"}
+                endpoint="http://localhost:4318/v1/traces", headers={"authorization": "Bearer test_token"}
             )
 
             # Verify span processor was added
@@ -390,6 +391,20 @@ class TestTraces(unittest.TestCase):
         result = extract_trace_id_from_span(mock_span)
         self.assertIsNone(result)
 
+    def test_extract_trace_id_from_span_omits_sampled_out_trace(self):
+        # Nothing is exported for an unsampled span, so a stored ID would link to no trace.
+        span_context = SpanContext(
+            trace_id=0x1234567890ABCDEF1234567890ABCDEF,
+            span_id=0x1234567890ABCDEF,
+            is_remote=False,
+            trace_flags=TraceFlags(TraceFlags.DEFAULT),
+            trace_state=TraceState(),
+        )
+        mock_span = MagicMock(spec=Span)
+        mock_span.get_span_context.return_value = span_context
+
+        self.assertIsNone(extract_trace_id_from_span(mock_span))
+
     def test_extract_trace_id_from_span_with_exception(self):
         mock_span = MagicMock(spec=Span)
         mock_span.get_span_context.side_effect = Exception("Test exception")
@@ -402,6 +417,11 @@ class TestTraces(unittest.TestCase):
 
         result = extract_trace_id_from_rabbitmq_properties(properties)
         self.assertEqual(result, "1234567890abcdef1234567890abcdef")
+
+    def test_extract_trace_id_from_rabbitmq_properties_omits_sampled_out_trace(self):
+        properties = BasicProperties(headers={"traceparent": "00-1234567890abcdef1234567890abcdef-1234567890abcdef-00"})
+
+        self.assertIsNone(extract_trace_id_from_rabbitmq_properties(properties))
 
     def test_extract_trace_id_from_rabbitmq_properties_without_headers(self):
         properties = BasicProperties()

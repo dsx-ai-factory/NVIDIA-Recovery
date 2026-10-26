@@ -113,6 +113,16 @@ spec:
               value: {{ .Values.controller.auditTrail.bufferSize | quote }}
             - name: SLURM_ADVISOR_AUDIT_TRAIL_FLUSH_INTERVAL
               value: {{ .Values.controller.auditTrail.flushInterval | quote }}
+            - name: SLURM_ADVISOR_MILESTONE_QUEUE_CAPACITY
+              value: {{ .Values.controller.milestoneReporting.queueCapacity | quote }}
+            - name: SLURM_ADVISOR_MILESTONE_RPC_TIMEOUT
+              value: {{ .Values.controller.milestoneReporting.rpcTimeout | quote }}
+            - name: SLURM_ADVISOR_MILESTONE_MAX_ATTEMPTS
+              value: {{ .Values.controller.milestoneReporting.maxAttempts | quote }}
+            - name: SLURM_ADVISOR_MILESTONE_RETRY_DELAY
+              value: {{ .Values.controller.milestoneReporting.retryDelay | quote }}
+            - name: SLURM_ADVISOR_MILESTONE_SHUTDOWN_TIMEOUT
+              value: {{ .Values.controller.milestoneReporting.shutdownTimeout | quote }}
             - name: SLURM_ADVISOR_LOG_LINKS_ENABLED
               value: {{ .Values.controller.logLinks.enabled | quote }}
             {{- if .Values.controller.logLinks.enabled }}
@@ -154,7 +164,7 @@ spec:
             - name: SLURM_ADVISOR_METRICS_ADDR
               value: {{ printf "%s:%v" .Values.metrics.controller.bindAddress .Values.metrics.controller.port | quote }}
             {{- if (((.Values.global).otelcollector).enabled) }}
-            {{- include "heimdall.otelEnv" . | nindent 12 }}
+            {{- include "slurm-advisor-controller.otelEnv" . | nindent 12 }}
             {{- end }}
           {{- if .Values.metrics.controller.enabled }}
           ports:

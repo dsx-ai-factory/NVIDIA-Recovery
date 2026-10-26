@@ -1,6 +1,6 @@
 module github.com/dsx-ai-factory/nvidia-recovery/api-gateway
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/cockroachdb/errors v1.12.0

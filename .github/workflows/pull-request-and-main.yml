@@ -14,7 +14,7 @@ defaults:
     shell: bash
 
 env:
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27.3"
   BUF_VERSION: "1.54.0"
   NODE_VERSION: "22"
   PNPM_VERSION: "10.8.0"
@@ -182,6 +182,9 @@ jobs:
           helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
           helm dependency build deploy/helm/nvidia-recovery
           deploy/helm/scripts/check-charts.sh deploy/helm/*/Chart.yaml
+
+      - name: Check OTLP environment helper parity
+        run: deploy/helm/scripts/check-otel-env-parity.sh
 
   go-lint:
     name: Go Lint

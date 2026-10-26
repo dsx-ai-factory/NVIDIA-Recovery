@@ -1,6 +1,6 @@
 exclude: '^notifications/tests/golden_values/'
 default_language_version:
-  golang: '1.27.1'
+  golang: '1.27.3'
 repos:
 -   repo: local
     hooks:
@@ -34,6 +34,13 @@ repos:
         entry: deploy/helm/scripts/check-charts.sh
         language: script
         files: ^deploy/helm/[^/]+/
+        stages: [pre-commit, manual]
+    -   id: helm-otel-env-parity
+        name: helm OTLP environment helper parity
+        entry: deploy/helm/scripts/check-otel-env-parity.sh
+        language: script
+        files: ^deploy/helm/(nvidia-recovery|slurm-advisor-controller)/templates/_helpers\.tpl$|^deploy/helm/scripts/check-otel-env-parity\.sh$
+        pass_filenames: false
         stages: [pre-commit, manual]
     -   id: python-format
         name: python format check

@@ -171,6 +171,42 @@ wait budgets in slow environments. The lifecycle implementation and further
 settings live in [e2e.sh](../../scripts/ci/e2e/e2e.sh) and
 [env.sh](../../scripts/ci/e2e/env.sh); GitHub invokes the lifecycle script directly.
 
+With `DEPLOY_INFRA=1`, Tilt also deploys a local OTLP collector and a
+single-binary Tempo into the `monitoring` namespace. The collector stands in
+for the operator-managed OTLP endpoint: every recovery service, including the
+Slurm Advisor Controller, sends logs and traces to it over gRPC with one bearer
+token through `global.otelcollector`
+([otlp.yaml](../../scripts/ci/e2e/values/otlp.yaml)). It routes traces to
+Tempo and logs to the selected store's native OTLP intake
+([otel-collector.yaml](../../deploy/tilt/services/otel-collector.yaml)).
+[env.sh](../../scripts/ci/e2e/env.sh) then enables two evidence stages after
+each traced recovery:
+
+- `traced` reads the recovery's trace from Tempo. Scenarios 10 and 30 check
+  anomaly- and state-triggered restart; nightly scenario 37 checks DAG release
+  with restart-SLO exclusion.
+- `logs exported` requires Job Manager's and the controller's logs about the
+  job in Loki or VictoriaLogs, which covers both the Python and Go log
+  exporters and the endpoint's authentication.
+
+Against a cluster Tilt did not provision, set `E2E_TEMPO_SERVICE` to its Tempo
+query Service as `namespace/service:port`, which the suite port-forwards like
+the stack's own services, or `E2E_TEMPO_URL` to a query endpoint the runner can
+already reach; set `E2E_OTLP_LOGS=1` when its services export logs into the
+selected log store. An explicitly empty value skips that stage. Use eager
+recovery off, 100% recovery sampling, and remote audit delivery for these
+stages.
+
+The evaluator reads exact-attempt Advice and Tempo's production
+[`/api/v2/traces/{traceID}` endpoint](https://grafana.com/docs/tempo/latest/api_docs/),
+then requires the backend trigger, Advice, and SAC spans to share canonical
+sequence context. The successful release span and audit event must identify
+the same operation and completion microsecond. The credentialed attribution
+lane also requires its real attribution span. Later state confirmation cannot
+substitute for the release command. These checks add no test-only ingress;
+milestone persistence and delivery-retry identity are covered by backend and
+controller component tests because there is no public milestone-history API.
+
 ## Rerun scenarios on a ready test cluster
 
 You can reuse a dedicated, already-ready local cluster without starting Tilt

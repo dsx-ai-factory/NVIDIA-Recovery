@@ -25,6 +25,7 @@ func TestObserverEmitsPlannedAdviceApplication(t *testing.T) {
 	observer.newID = func() string { return "application-event" }
 
 	observer.ObserveAdviceApplication(reconcile.AdviceApplicationObservation{
+		OccurrenceID: "application-event", CompletedAt: producedAt,
 		AdviceID:        "advice-123",
 		JobID:           "123",
 		AttemptIndex:    2,
@@ -187,11 +188,14 @@ func TestObserverEmitsCompletedActionBeforeAppliedAdvice(t *testing.T) {
 	}
 
 	application := reconcile.AdviceApplicationObservation{
+		OccurrenceID: "application-event", CompletedAt: applicationAt,
+		Generation: 7, RecoverySequenceID: "sequence-456", TraceID: "trace-456", SpanID: "application-span",
 		AdviceID:     "advice-456",
 		JobID:        "456",
 		AttemptIndex: 3,
 		Outcome:      reconcile.AdviceApplicationOutcomeApplied,
 		Actions: []reconcile.SchedulerActionObservation{{
+			OccurrenceID: "action-event", TraceID: "trace-456", SpanID: "action-span",
 			Action:      reconcile.SchedulerActionCancel,
 			Outcome:     reconcile.SchedulerActionOutcomeSuccess,
 			CompletedAt: actionAt,
@@ -203,11 +207,13 @@ func TestObserverEmitsCompletedActionBeforeAppliedAdvice(t *testing.T) {
 	want := []audit.ProducerEvent{
 		audit.AdviceSchedulerActionCompletedEvent{
 			HeimdallJobID: "advice-456", JobID: "456", AttemptIndex: 3,
+			Generation: 7, RecoverySequenceID: "sequence-456", TraceID: "trace-456", SpanID: "action-span",
 			Action: "slurm.cancel", Success: true, ProducedAt: actionAt,
 			IdempotencyKey: "action-event",
 		}.ToProducerEvent(),
 		audit.AdviceApplicationAppliedEvent{
 			HeimdallJobID: "advice-456", JobID: "456", AttemptIndex: 3,
+			Generation: 7, RecoverySequenceID: "sequence-456", TraceID: "trace-456", SpanID: "application-span",
 			ProducedAt: applicationAt, IdempotencyKey: "application-event",
 		}.ToProducerEvent(),
 	}
@@ -303,6 +309,7 @@ func TestObserverEmitsFailedAdviceApplication(t *testing.T) {
 	observer.newID = func() string { return "event-id" }
 
 	observer.ObserveAdviceApplication(reconcile.AdviceApplicationObservation{
+		OccurrenceID: "event-id", CompletedAt: producedAt,
 		AdviceID: "failed", JobID: "456", AttemptIndex: 2,
 		Outcome: reconcile.AdviceApplicationOutcomeFailed,
 		Err:     errors.New("scheduler failed"),

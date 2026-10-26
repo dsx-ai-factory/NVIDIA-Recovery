@@ -2011,3 +2011,7 @@ func assertModeDecisionObservation(
 	}
 	t.Fatalf("mode decision %s/%s/%s/%d not found in %#v", defaultMode, effectiveMode, reason, count, observations)
 }
+
+func (*fakeControllerClient) RecordRecoveryMilestone(context.Context, *pb.RecordRecoveryMilestoneRequest) (*pb.RecordRecoveryMilestoneResponse, error) {
+	return &pb.RecordRecoveryMilestoneResponse{}, nil
+}

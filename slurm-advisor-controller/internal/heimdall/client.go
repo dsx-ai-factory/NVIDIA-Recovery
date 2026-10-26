@@ -19,6 +19,7 @@ type HeimdallClient interface {
 	GetJobs(ctx context.Context, opts ...PaginationOption) ([]*pb.Job, error)
 	ListAdvice(ctx context.Context, opts ...PaginationOption) ([]*pb.Advice, error)
 	UpdateAdviceReconciliationStatus(ctx context.Context, adviceID string, status *pb.AdviceReconciliationStatus) (*pb.AdviceReconciliationStatus, error)
+	RecordRecoveryMilestone(ctx context.Context, req *pb.RecordRecoveryMilestoneRequest) (*pb.RecordRecoveryMilestoneResponse, error)
 }
 
 type PaginationOptions struct {

@@ -5,6 +5,7 @@ package config
 
 import (
 	"encoding/json"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,35 @@ const (
 
 type SafetyChecks struct {
 	AcknowledgeSchedulerActions bool
+}
+
+// TracingConfig selects optional OTLP trace export.
+type TracingConfig struct {
+	// Endpoint is the full trace URL: the signal-specific endpoint as given, or
+	// the shared base endpoint with the OTLP/HTTP trace path appended.
+	Endpoint string
+	// Protocol selects grpc or HTTP/protobuf (http is an alias).
+	Protocol string
+	// Token is the bearer credential supplied by OTEL_EXPORTER_OTLP_TOKEN.
+	Token string
+}
+
+// MilestoneReportingConfig bounds the background worker that reports recovery
+// milestones to Job Manager. Reporting never delays scheduler commands; these
+// settings trade memory, backend load, and shutdown time against report loss.
+type MilestoneReportingConfig struct {
+	// QueueCapacity limits command results waiting to be reported; a full
+	// queue drops new reports.
+	QueueCapacity int
+	// RPCTimeout bounds each delivery attempt.
+	RPCTimeout time.Duration
+	// MaxAttempts includes the first delivery and applies only to temporary
+	// failures.
+	MaxAttempts int
+	// RetryDelay separates delivery attempts.
+	RetryDelay time.Duration
+	// ShutdownTimeout bounds draining queued reports when the process stops.
+	ShutdownTimeout time.Duration
 }
 
 type LogLinksConfig struct {
@@ -98,6 +128,8 @@ type Config struct {
 	VersionedSqueueJSON            bool
 	UpdateEligibleTimeAfterRequeue bool
 	Safety                         SafetyChecks
+	Tracing                        TracingConfig
+	MilestoneReporting             MilestoneReportingConfig
 	LogLinks                       LogLinksConfig
 
 	// UserAllowlist temporarily selects actions for named users without hiding other jobs.
@@ -118,6 +150,11 @@ type Config struct {
 	auditTrailMaxBatchSizeEnvSet       bool
 	auditTrailBufferSizeEnvSet         bool
 	auditTrailFlushIntervalEnvSet      bool
+	milestoneQueueCapacityEnvSet       bool
+	milestoneRPCTimeoutEnvSet          bool
+	milestoneMaxAttemptsEnvSet         bool
+	milestoneRetryDelayEnvSet          bool
+	milestoneShutdownTimeoutEnvSet     bool
 }
 
 type environmentConfig struct {
@@ -152,10 +189,17 @@ type environmentConfig struct {
 	AuditTrailMaxBatchSize         optionalInt        `envconfig:"SLURM_ADVISOR_AUDIT_TRAIL_MAX_BATCH_SIZE"`
 	AuditTrailBufferSize           optionalInt        `envconfig:"SLURM_ADVISOR_AUDIT_TRAIL_BUFFER_SIZE"`
 	AuditTrailFlushInterval        optionalDuration   `envconfig:"SLURM_ADVISOR_AUDIT_TRAIL_FLUSH_INTERVAL"`
+	MilestoneQueueCapacity         optionalInt        `envconfig:"SLURM_ADVISOR_MILESTONE_QUEUE_CAPACITY"`
+	MilestoneRPCTimeout            optionalDuration   `envconfig:"SLURM_ADVISOR_MILESTONE_RPC_TIMEOUT"`
+	MilestoneMaxAttempts           optionalInt        `envconfig:"SLURM_ADVISOR_MILESTONE_MAX_ATTEMPTS"`
+	MilestoneRetryDelay            optionalDuration   `envconfig:"SLURM_ADVISOR_MILESTONE_RETRY_DELAY"`
+	MilestoneShutdownTimeout       optionalDuration   `envconfig:"SLURM_ADVISOR_MILESTONE_SHUTDOWN_TIMEOUT"`
 	PartitionAllowlist             partitionAllowlist `envconfig:"SLURM_ADVISOR_PARTITION_ALLOWLIST"`
 	VersionedSqueueJSON            bool               `envconfig:"SLURM_ADVISOR_VERSIONED_SQUEUE_JSON"`
 	UpdateEligibleTimeAfterRequeue bool               `envconfig:"SLURM_ADVISOR_UPDATE_ELIGIBLE_TIME_AFTER_REQUEUE"`
 	AcknowledgeSchedulerActions    bool               `envconfig:"SLURM_ADVISOR_ACKNOWLEDGE_SCHEDULER_ACTIONS"`
+	OTLPTraceEndpoint              string             `envconfig:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
+	OTLPTraceProtocol              string             `envconfig:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
 	LogLinksEnabled                bool               `envconfig:"SLURM_ADVISOR_LOG_LINKS_ENABLED"`
 	LogLinksDestination            string             `envconfig:"SLURM_ADVISOR_LOG_LINKS_DESTINATION"`
 	LogLinksSourceRoots            jsonStringArray    `envconfig:"SLURM_ADVISOR_LOG_LINKS_SOURCE_ROOTS_JSON"`
@@ -187,6 +231,13 @@ func FromEnv() (Config, error) {
 		return Config{}, errors.New("SLURM_ADVISOR_SERVICE_ACCOUNT_TOKEN_PATH must not be empty")
 	}
 
+	// Traces sent to the shared endpoint use its protocol, including the
+	// controller's grpc default for logs, so one collector serves both signals.
+	// Only a trace-specific endpoint keeps the OTLP http/protobuf default.
+	traceProtocol := firstNonempty(settings.OTLPTraceProtocol, settings.OTLPProtocol)
+	if traceProtocol == "" && strings.TrimSpace(settings.OTLPTraceEndpoint) == "" {
+		traceProtocol = "grpc"
+	}
 	cfg := Config{
 		GatewayTLS:              tlsconfig.Config{Enabled: settings.TLSEnabled, CAFile: strings.TrimSpace(settings.TLSCAFile), ServerName: strings.TrimSpace(settings.TLSServerName)},
 		HeimdallEndpoint:        settings.HeimdallEndpoint,
@@ -225,6 +276,18 @@ func FromEnv() (Config, error) {
 		UpdateEligibleTimeAfterRequeue: settings.UpdateEligibleTimeAfterRequeue,
 		Safety: SafetyChecks{
 			AcknowledgeSchedulerActions: settings.AcknowledgeSchedulerActions,
+		},
+		Tracing: TracingConfig{
+			Endpoint: tracingEndpoint(settings.OTLPTraceEndpoint, settings.OTLPEndpoint, traceProtocol),
+			Protocol: traceProtocol,
+			Token:    strings.TrimSpace(settings.OTLPToken),
+		},
+		MilestoneReporting: MilestoneReportingConfig{
+			QueueCapacity:   settings.MilestoneQueueCapacity.value,
+			RPCTimeout:      settings.MilestoneRPCTimeout.value,
+			MaxAttempts:     settings.MilestoneMaxAttempts.value,
+			RetryDelay:      settings.MilestoneRetryDelay.value,
+			ShutdownTimeout: settings.MilestoneShutdownTimeout.value,
 		},
 		LogLinks: LogLinksConfig{
 			Enabled:                      settings.LogLinksEnabled,
@@ -267,6 +330,11 @@ func FromEnv() (Config, error) {
 		auditTrailMaxBatchSizeEnvSet:       settings.AuditTrailMaxBatchSize.set,
 		auditTrailBufferSizeEnvSet:         settings.AuditTrailBufferSize.set,
 		auditTrailFlushIntervalEnvSet:      settings.AuditTrailFlushInterval.set,
+		milestoneQueueCapacityEnvSet:       settings.MilestoneQueueCapacity.set,
+		milestoneRPCTimeoutEnvSet:          settings.MilestoneRPCTimeout.set,
+		milestoneMaxAttemptsEnvSet:         settings.MilestoneMaxAttempts.set,
+		milestoneRetryDelayEnvSet:          settings.MilestoneRetryDelay.set,
+		milestoneShutdownTimeoutEnvSet:     settings.MilestoneShutdownTimeout.set,
 	}
 
 	return WithDefaults(cfg), nil
@@ -432,6 +500,53 @@ func parseCSV(value string) []string {
 	return out
 }
 
+func (cfg MilestoneReportingConfig) validate() error {
+	if cfg.QueueCapacity <= 0 {
+		return errors.Newf("milestone queue capacity must be positive: %d", cfg.QueueCapacity)
+	}
+	if cfg.RPCTimeout <= 0 {
+		return errors.Newf("milestone RPC timeout must be positive: %s", cfg.RPCTimeout)
+	}
+	if cfg.MaxAttempts <= 0 {
+		return errors.Newf("milestone max attempts must be positive: %d", cfg.MaxAttempts)
+	}
+	if cfg.RetryDelay <= 0 {
+		return errors.Newf("milestone retry delay must be positive: %s", cfg.RetryDelay)
+	}
+	if cfg.ShutdownTimeout <= 0 {
+		return errors.Newf("milestone shutdown timeout must be positive: %s", cfg.ShutdownTimeout)
+	}
+	return nil
+}
+
+// tracingEndpoint follows the OTLP exporter specification: a signal-specific
+// endpoint is used as given, while the shared endpoint is a base URL to which
+// OTLP/HTTP appends /v1/traces. gRPC endpoints carry no signal path.
+func tracingEndpoint(traceEndpoint, sharedEndpoint, protocol string) string {
+	if endpoint := strings.TrimSpace(traceEndpoint); endpoint != "" {
+		return endpoint
+	}
+	shared := strings.TrimSpace(sharedEndpoint)
+	if shared == "" || strings.EqualFold(strings.TrimSpace(protocol), "grpc") {
+		return shared
+	}
+	endpoint, err := url.JoinPath(shared, "v1/traces")
+	if err != nil {
+		// Leave the value for the exporter to reject; trace export is optional.
+		return shared
+	}
+	return endpoint
+}
+
+func firstNonempty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
 func WithDefaults(cfg Config) Config {
 	if cfg.Mode == "" {
 		cfg.Mode = ModeObserve
@@ -494,9 +609,29 @@ func WithDefaults(cfg Config) Config {
 	if cfg.AuditTrailFlushInterval == 0 && !cfg.auditTrailFlushIntervalEnvSet {
 		cfg.AuditTrailFlushInterval = 30 * time.Second
 	}
+	milestones := &cfg.MilestoneReporting
+	if milestones.QueueCapacity == 0 && !cfg.milestoneQueueCapacityEnvSet {
+		milestones.QueueCapacity = 256
+	}
+	if milestones.RPCTimeout == 0 && !cfg.milestoneRPCTimeoutEnvSet {
+		milestones.RPCTimeout = 2 * time.Second
+	}
+	if milestones.MaxAttempts == 0 && !cfg.milestoneMaxAttemptsEnvSet {
+		milestones.MaxAttempts = 3
+	}
+	if milestones.RetryDelay == 0 && !cfg.milestoneRetryDelayEnvSet {
+		milestones.RetryDelay = 100 * time.Millisecond
+	}
+	if milestones.ShutdownTimeout == 0 && !cfg.milestoneShutdownTimeoutEnvSet {
+		milestones.ShutdownTimeout = 2 * time.Second
+	}
 	if cfg.Environment == "" {
 		cfg.Environment = "unspecified"
 	}
+	if cfg.Tracing.Protocol == "" {
+		cfg.Tracing.Protocol = "http/protobuf"
+	}
+	cfg.Tracing.Protocol = strings.ToLower(strings.TrimSpace(cfg.Tracing.Protocol))
 	if !cfg.metricsEnabledEnvSet {
 		cfg.MetricsEnabled = true
 	}
@@ -634,6 +769,9 @@ func (cfg Config) Validate() error {
 			"audit trail flush interval must be positive: %s",
 			cfg.AuditTrailFlushInterval,
 		)
+	}
+	if err := cfg.MilestoneReporting.validate(); err != nil {
+		return err
 	}
 	if err := cfg.LogLinks.validate(); err != nil {
 		return err

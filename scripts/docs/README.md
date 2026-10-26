@@ -23,8 +23,13 @@ Fern. Do not edit `fern/generated/` directly.
 ## Local checks
 
 Use Node.js 22 or newer and Python 3.12 with the repository's locked public
-Adapter environment. Fern 5.152.0 and pnpm 10.8.0 are pinned in this directory's
+Adapter environment. Fern 5.172.0 and pnpm 10.8.0 are pinned in this directory's
 npm lockfile; `fern.config.json` pins the same CLI version.
+
+The CLI pin does not pin the docs preview bundle: `fern docs dev`, which the
+render check uses, downloads Fern's latest bundle at run time. When Fern
+publishes a bundle the pinned CLI cannot serve, the render check fails with
+HTTP 500 on every branch at once; upgrade the CLI pin to fix it.
 
 From the repository root:
 
