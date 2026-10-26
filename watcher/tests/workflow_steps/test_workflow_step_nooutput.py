@@ -267,3 +267,63 @@ async def test_nooutput_per_job_timeout_override(
     )
 
     assert {c.kwargs.get("timeout") for c in spy.call_args_list} == {expected_timeout}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("registered", [True, False], ids=["late_registration", "still_missing"])
+@pytest.mark.parametrize("more_progress", [False, True], ids=["silent", "more_progress"])
+@pytest.mark.parametrize("grace_secs", [None, 60], ids=["default_grace", "configured_grace"])
+async def test_nooutput_retries_missing_job_without_more_progress(
+    mocker,
+    rules_engine_async,
+    workflow_step_nooutput_training_loop_phase_async,
+    workflow_item_nooutput_training_loop_phase_async,
+    checkpoint_nooutput_async,
+    registered,
+    more_progress,
+    grace_secs,
+):
+    """Late registration uses the override; a missing job gets one bounded fallback.
+
+    Neither the retry nor timer creation requires another progress event, and
+    resolving configuration does not restart the elapsed silence window.
+    """
+    engine = rules_engine_async
+    step = workflow_step_nooutput_training_loop_phase_async
+    step.attributes["interval"] = {"PRE_TRAINING": 960, "TRAINING_LOOP": 840}
+    if grace_secs is not None:
+        step.attributes["job_discovery_grace_period_secs"] = grace_secs
+    retry_delay = grace_secs if grace_secs is not None else 31
+    engine.run_log_query = AsyncMock(return_value=workflow_item_nooutput_training_loop_phase_async)
+    clock = mocker.patch("watcher.workflow.time")
+    clock.monotonic.return_value = 100
+    lookup = mocker.patch("watcher.workflow.get_job_info", new_callable=AsyncMock, return_value=None)
+    timer = mocker.spy(engine, "timed_counter_add")
+
+    await engine.workflow_step_nooutput(step, checkpoint_nooutput_async, bucket_keys=step.bucket_by)
+    lookup.assert_awaited_once()
+    timer.assert_not_called()
+
+    engine.run_log_query.return_value = workflow_item_nooutput_training_loop_phase_async if more_progress else []
+    clock.monotonic.return_value = 100 + retry_delay - 1
+    await engine.workflow_step_nooutput(step, checkpoint_nooutput_async, bucket_keys=step.bucket_by)
+    lookup.assert_awaited_once()
+    timer.assert_not_called()
+
+    if registered:
+        lookup.return_value = {
+            "job_id": "612685",
+            "aps_spec": {"anomaly_detection_config": {"log_based_timeout_threshold_trainingloop": 120}},
+        }
+    engine.run_log_query.return_value = []
+    clock.monotonic.return_value = 100 + retry_delay
+    await engine.workflow_step_nooutput(step, checkpoint_nooutput_async, bucket_keys=step.bucket_by)
+    assert lookup.await_count == 2
+    timer.assert_called_once()
+    expected_remaining = (120 if registered else 840) - (1 if more_progress else retry_delay)
+    assert timer.call_args.kwargs["timeout"] == expected_remaining
+
+    clock.monotonic.return_value = 101 + retry_delay
+    await engine.workflow_step_nooutput(step, checkpoint_nooutput_async, bucket_keys=step.bucket_by)
+    assert lookup.await_count == 2
+    timer.assert_called_once()
