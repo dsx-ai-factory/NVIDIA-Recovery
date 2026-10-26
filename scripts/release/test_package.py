@@ -61,6 +61,7 @@ class PackageTests(unittest.TestCase):
         for name in (
             "chart/advice-operator/main.go",
             "chart/charts/advice-operator/Chart.yaml",
+            "chart/deploy/helm/advice-operator/Chart.yaml",
             "chart/attribution-source/client.py",
             "chart/attribution-service/main.py",
             "chart/attribution-client/client.py",
@@ -71,6 +72,31 @@ class PackageTests(unittest.TestCase):
                 normalize(archive_bytes({name: b"excluded"}), archive)
                 with self.assertRaises(ValueError):
                     inspect_archive(archive, "chart", [])
+
+    def test_source_archive_omits_vendored_operator_and_retains_supported_components(self):
+        """Vendored source stays out of releases without dropping supported payloads."""
+        files = {
+            "source/advice-operator": b"",
+            "source/advice-operator/go.mod": b"module example/advice-operator",
+            "source/deploy/helm/advice-operator/Chart.yaml": b"name: advice-operator",
+            "source/api-gateway/go.mod": b"module example/api-gateway",
+            "source/deploy/helm/nvidia-recovery/Chart.yaml": b"name: nvidia-recovery",
+        }
+        archive = self.root / "source.tgz"
+        normalize(
+            archive_bytes(files),
+            archive,
+            excluded_roots=("advice-operator", "deploy/helm/advice-operator"),
+        )
+        with tarfile.open(archive) as result:
+            self.assertEqual(
+                set(result.getnames()),
+                {
+                    "source/api-gateway/go.mod",
+                    "source/deploy/helm/nvidia-recovery/Chart.yaml",
+                },
+            )
+        inspect_archive(archive, "source", ["api-gateway/go.mod"])
 
     def test_attribution_helm_chart_is_distributed(self):
         """The default-on provider chart belongs in source and packaged charts."""

@@ -1,0 +1,243 @@
+{{/*
+SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+*/ -}}
+{{- if .Values.rbac.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-leader-election
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+  namespace: {{ template "advice-operator.namespace" . }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-admin
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+- apiGroups:
+  - heimdall.nvidia.com
+  resources:
+  - advices
+  verbs:
+  - '*'
+- apiGroups:
+  - heimdall.nvidia.com
+  resources:
+  - advices/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-edit
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+    {{- if .Values.rbac.aggregateToEdit }}
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    {{- end }}
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+- apiGroups:
+  - heimdall.nvidia.com
+  resources:
+  - advices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - heimdall.nvidia.com
+  resources:
+  - advices/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-view
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+    {{- if .Values.rbac.aggregateToView }}
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+    {{- end }}
+    {{- if .Values.rbac.aggregateToEdit }}
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    {{- end }}
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+- apiGroups:
+  - heimdall.nvidia.com
+  resources:
+  - advices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - heimdall.nvidia.com
+  resources:
+  - advices/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-manager
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - heimdall.nvidia.com
+  resources:
+  - advices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - heimdall.nvidia.com
+  resources:
+  - advices/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - heimdall.nvidia.com
+  resources:
+  - advices/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - run.ai
+  resources:
+  - distributedworkloads
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-metrics-auth
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-metrics-reader
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-leader-election
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+  namespace: {{ template "advice-operator.namespace" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "advice-operator.fullname" . }}-leader-election
+subjects:
+- kind: ServiceAccount
+  name: {{ include "advice-operator.serviceAccountName" . }}
+  namespace: {{ template "advice-operator.namespace" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-manager
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "advice-operator.fullname" . }}-manager
+subjects:
+- kind: ServiceAccount
+  name: {{ include "advice-operator.serviceAccountName" . }}
+  namespace: {{ template "advice-operator.namespace" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "advice-operator.fullname" . }}-metrics-auth
+  labels:
+    {{- include "advice-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "advice-operator.fullname" . }}-metrics-auth
+subjects:
+- kind: ServiceAccount
+  name: {{ include "advice-operator.serviceAccountName" . }}
+  namespace: {{ template "advice-operator.namespace" . }}
+{{- end}}
