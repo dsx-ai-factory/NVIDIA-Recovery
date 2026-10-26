@@ -126,8 +126,9 @@ def loki_streams_to_entries(log_streams: str, source: Source) -> list[dict[str, 
     The log fetchers serialize records as Loki streams whose values are
     ``[timestamp_ns, line]`` pairs and whose ``node_name`` label identifies the emitting node.
     Values whose timestamp is not an integer are skipped, as the provider's legacy decoder did,
-    and so are malformed non-pair values. Only application logs carry the ``pod`` label as a
-    replica.
+    and so are values that are not a ``[timestamp, line]`` pair with a string line, so one
+    malformed value cannot reject the valid lines submitted with it. Only application logs carry
+    the ``pod`` label as a replica.
 
     Args:
         log_streams: JSON-encoded list of ``{"stream": {...}, "values": [[ts_ns, line], ...]}``.
@@ -142,11 +143,11 @@ def loki_streams_to_entries(log_streams: str, source: Source) -> list[dict[str, 
         stream_node = labels.get("node_name")
         replica = labels.get("pod") if source == Source.APPLOG else None
         for value in stream["values"]:
-            if len(value) != 2:
+            if not isinstance(value, list) or len(value) != 2 or not isinstance(value[1], str):
                 continue
             try:
                 ts = int(value[0])
-            except ValueError:
+            except (TypeError, ValueError):
                 continue
             body, node = _unwrap_log_payload(value[1], stream_node)
             entries.append({"body": body, "ts": ts, "resources": _node_resources(node, replica)})
