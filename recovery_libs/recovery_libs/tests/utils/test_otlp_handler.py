@@ -79,7 +79,7 @@ class TestOTLPHandlerInitialization:
         OTLPHandler(endpoint=endpoint, protocol=protocol)
 
         if expected_exporter == "http":
-            mock_http_exporter.assert_called_once_with(endpoint=endpoint)
+            mock_http_exporter.assert_called_once_with(endpoint="http://localhost:4318/v1/logs")
             mock_grpc_exporter.assert_not_called()
         else:
             mock_grpc_exporter.assert_called_once_with(endpoint=endpoint)
@@ -126,9 +126,9 @@ class TestOTLPHandlerInitialization:
             (
                 OTLPProtocol.HTTP,
                 "test-token",
-                {"endpoint": "http://localhost:4318", "headers": {"Authorization": "Bearer test-token"}},
+                {"endpoint": "http://localhost:4318/v1/logs", "headers": {"Authorization": "Bearer test-token"}},
             ),
-            (OTLPProtocol.HTTP, None, {"endpoint": "http://localhost:4318"}),
+            (OTLPProtocol.HTTP, None, {"endpoint": "http://localhost:4318/v1/logs"}),
             (
                 OTLPProtocol.GRPC,
                 "test-token",
@@ -142,7 +142,7 @@ class TestOTLPHandlerInitialization:
         self, protocol, token, expected_call, mock_http_exporter, mock_grpc_exporter, mock_logger_provider
     ):
         """Test token authentication for both HTTP and gRPC protocols."""
-        endpoint = expected_call["endpoint"]
+        endpoint = "http://localhost:4318" if protocol == OTLPProtocol.HTTP else "localhost:4317"
         handler = OTLPHandler(endpoint=endpoint, protocol=protocol, token=token)
 
         assert handler.token == token

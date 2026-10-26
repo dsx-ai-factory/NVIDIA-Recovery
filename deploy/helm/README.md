@@ -116,7 +116,10 @@ For the namespace, Secret-creation, and quick-start values steps, see
 [Optional external OTLP collector](../../docs/operators/operations.md#optional-external-otlp-collector).
 
 When enabled, every application receives `OTEL_EXPORTER_OTLP_PROTOCOL` and
-`OTEL_EXPORTER_OTLP_ENDPOINT`. With authentication enabled, the referenced
+`OTEL_EXPORTER_OTLP_ENDPOINT`. Set `protocol` to `grpc` or `http/protobuf`
+(`http` is accepted as an alias). The endpoint is the collector base URL shared
+by every signal: gRPC uses it as-is, while HTTP exporters send to its
+`/v1/traces` and `/v1/logs` paths, so do not include a signal path. With authentication enabled, the referenced
 Secret key is exposed as `OTEL_EXPORTER_OTLP_TOKEN` and used to construct the
 standard `OTEL_EXPORTER_OTLP_HEADERS` value. The Secret must already exist in
 the release namespace and its key must contain only the bearer token, not a

@@ -29,6 +29,7 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, LogRecordExporter
 from opentelemetry.sdk.resources import Resource
 
+from recovery_libs.utils.otlp_endpoint import OTLPSignal, resolve_otlp_signal_endpoint
 from recovery_libs.utils.types import OTLPProtocol
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,8 @@ def _get_shared_logger_provider(
     configurations will log a warning but use the existing provider.
 
     Args:
-        endpoint: OTLP endpoint URL.
+        endpoint: OTLP base endpoint URL. HTTP log export is sent to its
+            ``/v1/logs`` path unless ``OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`` is set.
         protocol: Protocol to use (HTTP or gRPC).
         token: Optional authentication token.
         service_name: Name of the service for resource attributes.
@@ -74,16 +76,17 @@ def _get_shared_logger_provider(
             _shared_logger_provider = LoggerProvider(resource=resource)
 
             # Create appropriate exporter based on protocol
+            logs_endpoint = resolve_otlp_signal_endpoint(endpoint, protocol, OTLPSignal.LOGS)
             exporter: LogRecordExporter
             if protocol == OTLPProtocol.HTTP:
                 if token:
-                    exporter = HTTPLogExporter(endpoint=endpoint, headers={"Authorization": f"Bearer {token}"})
+                    exporter = HTTPLogExporter(endpoint=logs_endpoint, headers={"Authorization": f"Bearer {token}"})
                 else:
-                    exporter = HTTPLogExporter(endpoint=endpoint)
+                    exporter = HTTPLogExporter(endpoint=logs_endpoint)
             elif token:
-                exporter = GRPCLogExporter(endpoint=endpoint, headers=(("authorization", f"Bearer {token}"),))
+                exporter = GRPCLogExporter(endpoint=logs_endpoint, headers=(("authorization", f"Bearer {token}"),))
             else:
-                exporter = GRPCLogExporter(endpoint=endpoint)
+                exporter = GRPCLogExporter(endpoint=logs_endpoint)
 
             _shared_logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
 
@@ -98,7 +101,7 @@ def _get_shared_logger_provider(
             atexit.register(_shutdown_shared_provider)
 
             logger.debug(
-                f"Initialized shared OTLP LoggerProvider: endpoint={endpoint}, "
+                f"Initialized shared OTLP LoggerProvider: endpoint={logs_endpoint}, "
                 f"protocol={protocol.value}, service={service_name}"
             )
         else:
@@ -174,8 +177,9 @@ class OTLPHandler(logging.Handler):
         """Initialize the OTLP logging handler.
 
         Args:
-            endpoint: OTLP endpoint URL (e.g., "http://localhost:4318" or
-                "localhost:4317" for gRPC).
+            endpoint: OTLP base endpoint URL (e.g., "http://localhost:4318" or
+                "localhost:4317" for gRPC). For HTTP, logs are sent to its
+                ``/v1/logs`` path, as with the OTEL_EXPORTER_OTLP_ENDPOINT contract.
             protocol: Protocol to use for communication. Either OTLPProtocol.HTTP
                 or OTLPProtocol.GRPC. Defaults to OTLPProtocol.GRPC.
             token: Optional authentication token. If provided, it will be sent
