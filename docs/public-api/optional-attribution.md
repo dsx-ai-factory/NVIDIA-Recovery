@@ -21,12 +21,13 @@ workflow. The generated SDK is now under
 `nvidia_attribution_client`. Source preparation also includes the root `LICENSE`
 required by the upstream service Dockerfile, including for older sparse caches.
 
-The adapter creates sessions and reads results through V2, and ingests existing
-log formats through the provider's V1 compatibility endpoint, which shares those
-sessions. Prometheus vector and matrix results are flattened into the supported
-`prometheus_metrics` format; samples must retain `__name__` and the configured
-hostname label. This compatibility update does not enable the currently disabled
-metric collection queries.
+The adapter uses the provider's V2 API for session creation, observation
+ingestion, and results. V2 ingestion accepts only `entry_timeseries` entries, so
+the adapter converts fetched log streams and Prometheus vector or matrix results
+into entries that declare each line's timestamp and node. Each observation
+declares its query window, and the provider discards entries outside it. Metric
+samples must retain `__name__` and the configured hostname label. The currently
+disabled metric collection queries remain disabled.
 Provider-boundary tests and local image checks do not constitute deployed GPU
 qualification.
 

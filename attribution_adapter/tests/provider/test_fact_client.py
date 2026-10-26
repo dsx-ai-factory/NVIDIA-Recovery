@@ -25,6 +25,11 @@ def _settings(default_ranks_per_node=8):
     return s
 
 
+def _declared_window(payload):
+    interval = payload["context"]["time_interval"]
+    return datetime.fromisoformat(interval["start"]), datetime.fromisoformat(interval["end"])
+
+
 def _job_status():
     return SlurmJobExecutionStatus(
         job_id="123",
@@ -177,25 +182,35 @@ def test_create_request_default_ranks_per_node_is_configurable(mock_post):
 
 
 @patch("attribution_adapter.fact_client.requests.post")
-def test_supply_logs_posts_observation(mock_post):
-    """Legacy Loki payloads use the provider's supported V1 ingestion route."""
+def test_supply_logs_posts_v2_entry_timeseries(mock_post):
+    """Loki streams become V2 entries that keep each line's time, node and replica."""
     mock_post.return_value = MagicMock(
-        ok=True, status_code=200, text='{"observation_id": 42, "model_type": "ObservationResponseV1"}'
+        ok=True, status_code=201, text='{"observation_id": 42, "model_type": "ObservationResponseV2"}'
     )
-    client = FACTClient(_settings())
-    obs_id = client.supply_logs(
-        "att-1",
-        '[{"stream":{},"values":[]}]',
-        Source.APPLOG,
-        datetime(2026, 1, 1, tzinfo=UTC),
-        datetime(2026, 1, 1, 1, tzinfo=UTC),
-    )
+    streams = [
+        {
+            "stream": {"node_name": "nodeA", "pod": "worker-0"},
+            "values": [
+                ["1767225600000000001", "[rank0] CUDA error"],
+                ["1767225601000000000", '{"body": "[rank1] NCCL timeout"}'],
+            ],
+        },
+        {"stream": {}, "values": [["1767225602000000000", "[rank2] unscoped"]]},
+    ]
+    start, end = datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 1, 1, tzinfo=UTC)
+    obs_id = FACTClient(_settings()).supply_logs("att-1", json.dumps(streams), Source.APPLOG, start, end)
+
     assert obs_id == 42
-    assert mock_post.call_args.args[0] == "http://fact.test/v1/attributor/att-1/observation"
+    assert mock_post.call_args.args[0] == "http://fact.test/v2/attributor/att-1/observation"
     payload = json.loads(mock_post.call_args.kwargs["data"])
-    assert payload["context"]["format"] == "raw_loki_streams"
+    assert _declared_window(payload) == (start, end)
     assert payload["context"]["source"] == "applog"
-    assert json.loads(payload["body"]) == [{"stream": {}, "values": []}]
+    node_a = [{"kind": "node", "hostname": "nodeA"}, {"kind": "replica", "name": "worker-0"}]
+    assert json.loads(payload["body"]) == [
+        {"body": "[rank0] CUDA error", "ts": 1767225600000000001, "resources": node_a},
+        {"body": "[rank1] NCCL timeout", "ts": 1767225601000000000, "resources": node_a},
+        {"body": "[rank2] unscoped", "ts": 1767225602000000000, "resources": None},
+    ]
 
 
 @patch("attribution_adapter.fact_client.requests.get")
@@ -347,7 +362,7 @@ def test_supply_metrics_happy_path(mock_post, result_type):
     mock_post.return_value = MagicMock(
         ok=True,
         status_code=200,
-        text='{"observation_id": 7, "model_type":"ObservationResponseV1"}',
+        text='{"observation_id": 7, "model_type":"ObservationResponseV2"}',
     )
     client = FACTClient(_settings())
     labels = {"__name__": "node_infiniband_link_downed_total", "net_host_name": "nodeA", "device": "mlx5_0"}
@@ -356,29 +371,35 @@ def test_supply_metrics_happy_path(mock_post, result_type):
         series["value"] = [1767225600, "1"]
     else:
         series["values"] = [[1767225600, "1"], [1767225660, "2"]]
-    result = client.supply_metrics("att-1", {"resultType": result_type, "result": [series]}, Source.NODE_METRICS)
+    start, end = datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 1, 1, tzinfo=UTC)
+    result = client.supply_metrics(
+        "att-1", {"resultType": result_type, "result": [series]}, Source.NODE_METRICS, start, end
+    )
     assert result == 7
     assert isinstance(result, int)
     # Verify correct endpoint, data encoding (not double-encoded JSON), and Content-Type header
     call_kwargs = mock_post.call_args.kwargs
-    assert mock_post.call_args.args[0] == "http://fact.test/v1/attributor/att-1/observation"
+    assert mock_post.call_args.args[0] == "http://fact.test/v2/attributor/att-1/observation"
     assert call_kwargs.get("headers") == {"Content-Type": "application/json"}
     assert "data" in call_kwargs
     assert "json" not in call_kwargs
     payload = json.loads(call_kwargs["data"])
-    assert payload["context"]["format"] == "prometheus_metrics"
-    expected = [
-        {
-            "timestamp": 1767225600,
-            "value": "1",
-            "metric": labels["__name__"],
-            "labels": labels,
-            "node": "nodeA",
-            "component": "mlx5_0",
+    assert _declared_window(payload) == (start, end)
+    assert payload["context"]["source"] == "node_metrics"
+
+    def entry(ts, value):
+        return {
+            "body": (
+                f"time: {ts}, metric_name: node_infiniband_link_downed_total, metric_value: {value}, "
+                "threshold: None, cluster: None, node: nodeA, component: mlx5_0"
+            ),
+            "ts": ts * 1_000_000_000,
+            "resources": [{"kind": "node", "hostname": "nodeA"}],
         }
-    ]
+
+    expected = [entry(1767225600, 1)]
     if result_type == "matrix":
-        expected.append({**expected[0], "timestamp": 1767225660, "value": "2"})
+        expected.append(entry(1767225660, 2))
     assert json.loads(payload["body"]) == expected
 
 
@@ -392,6 +413,8 @@ def test_supply_metrics_rejects_missing_node_identity():
             "att-1",
             {"resultType": "vector", "result": [{"metric": {"__name__": "errors"}, "value": [1, "2"]}]},
             Source.NODE_METRICS,
+            datetime(2026, 1, 1, tzinfo=UTC),
+            datetime(2026, 1, 1, 1, tzinfo=UTC),
         )
     post.assert_not_called()
 

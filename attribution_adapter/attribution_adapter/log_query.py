@@ -58,7 +58,7 @@ def _datetime_to_ns(value: datetime) -> int:
 
 
 def serialize_records_for_fact(records: Iterable[LogRecord]) -> str:
-    """Serialize normalized records using FACT's existing RAW_LOKI_STREAMS shape.
+    """Serialize normalized records as Loki streams for ``FACTClient.supply_logs``.
 
     Records with the same field set are grouped into one stream. Occurrences
     are preserved, including records with identical timestamps and bodies.

@@ -6,24 +6,21 @@ import json
 import time
 
 # Standard library imports
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+from typing import Any
 
 import requests
-
-# V1 observation models preserve the adapter's raw log/metric formats. V1 and
-# V2 share attribution sessions; creation and diagnosis still use the V2 API.
 from nvidia_attribution_client.models.attribution_parameters import AttributionParameters
 from nvidia_attribution_client.models.attribution_response_v2 import AttributionResponseV2
 from nvidia_attribution_client.models.attributor_info_v2 import AttributorInfoV2
 from nvidia_attribution_client.models.attributor_metadata import AttributorMetadata
 from nvidia_attribution_client.models.attributor_workload_info_v2 import AttributorWorkloadInfoV2
-from nvidia_attribution_client.models.format import Format
 from nvidia_attribution_client.models.new_response_v2 import NewResponseV2
-from nvidia_attribution_client.models.observation_context_v1 import ObservationContextV1
-from nvidia_attribution_client.models.observation_response_v1 import ObservationResponseV1
-from nvidia_attribution_client.models.observation_v1 import ObservationV1
+from nvidia_attribution_client.models.observation_context_v2 import ObservationContextV2
+from nvidia_attribution_client.models.observation_response_v2 import ObservationResponseV2
+from nvidia_attribution_client.models.observation_v2 import ObservationV2
 from nvidia_attribution_client.models.source import Source
-from nvidia_attribution_client.models.time_interval import TimeInterval
+from nvidia_attribution_client.models.time_interval_v2 import TimeIntervalV2
 from nvidia_attribution_client.models.workload_type_enum import WorkloadTypeEnum
 
 # Third party imports
@@ -88,6 +85,121 @@ ADI_FACT_GET_ATTRIBUTION_TIME = Histogram(
     "adi_downstream_fact_get_attribution_time",
     "Time taken to get an attribution in FACT",
 )
+
+
+def _node_resources(node: str | None, replica: str | None = None) -> list[dict[str, str]] | None:
+    """Declare the entry's node (and replica), or None so the provider parses the body per source."""
+    resources: list[dict[str, str]] = []
+    if node:
+        resources.append({"kind": "node", "hostname": node})
+    if replica:
+        resources.append({"kind": "replica", "name": replica})
+    return resources or None
+
+
+def _unwrap_log_payload(payload: str, node: str | None) -> tuple[str, str | None]:
+    """Return the matchable body and node of one structured log value.
+
+    Rules match the message text, so JSON envelopes (``body``/``attributes.hostname``,
+    ``message``, or CloudEvents ``data.message``/``data.hostname``) are unwrapped as the
+    provider's legacy Loki decoder did. A stream's ``node_name`` label takes precedence over a
+    hostname inside the payload. Non-JSON or unrecognized payloads are matched verbatim.
+    """
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        return payload, node
+    if not isinstance(parsed, dict):
+        return payload, node
+    if node is None and isinstance(attributes := parsed.get("attributes"), dict):
+        node = attributes.get("hostname")
+    body = parsed.get("body") or parsed.get("message") or ""
+    if not body and isinstance(data := parsed.get("data"), dict):
+        body = data.get("message") or ""
+        node = node or data.get("hostname")
+    return body or payload, node
+
+
+def loki_streams_to_entries(log_streams: str, source: Source) -> list[dict[str, Any]]:
+    """Convert Loki-shaped streams into V2 ``entry_timeseries`` entries.
+
+    The log fetchers serialize records as Loki streams whose values are
+    ``[timestamp_ns, line]`` pairs and whose ``node_name`` label identifies the emitting node.
+    Values whose timestamp is not an integer are skipped, as the provider's legacy decoder did,
+    and so are malformed non-pair values. Only application logs carry the ``pod`` label as a
+    replica.
+
+    Args:
+        log_streams: JSON-encoded list of ``{"stream": {...}, "values": [[ts_ns, line], ...]}``.
+        source: The observation source the streams were queried for.
+
+    Returns:
+        One entry per log value.
+    """
+    entries: list[dict[str, Any]] = []
+    for stream in json.loads(log_streams):
+        labels = stream.get("stream") or {}
+        stream_node = labels.get("node_name")
+        replica = labels.get("pod") if source == Source.APPLOG else None
+        for value in stream["values"]:
+            if len(value) != 2:
+                continue
+            try:
+                ts = int(value[0])
+            except ValueError:
+                continue
+            body, node = _unwrap_log_payload(value[1], stream_node)
+            entries.append({"body": body, "ts": ts, "resources": _node_resources(node, replica)})
+    return entries
+
+
+def _metric_value(raw: Any) -> Any:
+    """Render a sample value as the provider's metric rules compare it: int when integral."""
+    if not isinstance(raw, str):
+        return raw
+    try:
+        return int(raw)
+    except ValueError:
+        return float(raw)
+
+
+def prometheus_to_entries(metrics: dict, hostname_label: str) -> list[dict[str, Any]]:
+    """Convert a Prometheus vector or matrix result into V2 ``entry_timeseries`` entries.
+
+    Metric rules match a rendered body rather than structured fields, so each sample is rendered
+    in the provider's documented metric-body form. Each entry declares its node because the
+    provider never parses one from a metric body; a sample without the hostname label is rejected
+    so hardware evidence cannot be attributed to an unrelated job node.
+
+    Args:
+        metrics: Prometheus query ``data`` with ``resultType`` and ``result``.
+        hostname_label: The label that names the sample's node.
+
+    Returns:
+        One entry per sample.
+
+    Raises:
+        ValueError: If the result type is unsupported or a series lacks the hostname label.
+    """
+    if metrics.get("resultType") not in {"vector", "matrix"}:
+        raise ValueError("Attribution metrics require a Prometheus vector or matrix result")
+    entries: list[dict[str, Any]] = []
+    for series in metrics["result"]:
+        labels = series["metric"]
+        node = labels.get(hostname_label)
+        if not node:
+            raise ValueError("Attribution metric is missing the configured hostname label")
+        values = series["values"] if metrics["resultType"] == "matrix" else [series["value"]]
+        for timestamp, value in values:
+            body = (
+                f"time: {timestamp}, metric_name: {labels['__name__']}, metric_value: {_metric_value(value)}, "
+                f"threshold: None, cluster: {labels.get('s_cluster')}, node: {node}, "
+                f"component: {labels.get('device', '')}"
+            )
+            # Prometheus timestamps are float seconds; the provider resolves time to microseconds.
+            ts = round(float(timestamp) * 1_000_000) * 1_000
+            entries.append({"body": body, "ts": ts, "resources": _node_resources(node)})
+    return entries
 
 
 class FACTClient:
@@ -253,7 +365,7 @@ class FACTClient:
 
         Args:
             attribution_id (str): ID of the attribution request to add logs to
-            log_lines (str): log lines to analyze
+            log_lines (str): JSON-encoded Loki streams of ``[timestamp_ns, line]`` values
             source (Source): Source type of the logs (e.g. SYSLOG, APPLOG)
             logs_start_time (datetime): Start time of the log interval
             logs_end_time (datetime): End time of the log interval
@@ -264,16 +376,16 @@ class FACTClient:
         Raises:
             requests.exceptions.RequestException: If the API call fails
         """
-        endpoint = f"{self.fact_url}/v1/attributor/{attribution_id}/observation"
+        endpoint = f"{self.fact_url}/v2/attributor/{attribution_id}/observation"
 
-        observation = ObservationV1(
-            context=ObservationContextV1(
-                time_interval=TimeInterval(start=logs_start_time, end=logs_end_time),
-                resources="",
+        # V2 accepts only `entry_timeseries`; the declared interval is the query window, and the
+        # provider discards entries outside it.
+        observation = ObservationV2(
+            context=ObservationContextV2(
+                time_interval=TimeIntervalV2(start=logs_start_time, end=logs_end_time),
                 source=source,
-                format=Format.RAW_LOKI_STREAMS,
             ),
-            body=log_lines,
+            body=json.dumps(loki_streams_to_entries(log_lines, source)),
         )
 
         self.logger.info(f"Sending logs to FACT: {observation.model_dump_json()}")
@@ -304,14 +416,21 @@ class FACTClient:
                 response=response,
             )
 
-        observation_response = ObservationResponseV1.from_json(response.text)
+        observation_response = ObservationResponseV2.from_json(response.text)
         if observation_response is None:
             raise ValueError(f"Failed to parse FACT observation response: {response.text}")
         self.logger.debug(f"Submitted logs to FACT: {observation_response.observation_id}")
         ADI_FACT_SUBMIT_OBSERVATION_SUCCESS_COUNTER.inc()
         return observation_response.observation_id
 
-    def supply_metrics(self, attribution_id: str, metrics: dict, source: Source) -> int:
+    def supply_metrics(
+        self,
+        attribution_id: str,
+        metrics: dict,
+        source: Source,
+        metrics_start_time: datetime,
+        metrics_end_time: datetime,
+    ) -> int:
         """Supply metrics data to an existing attribution request.
 
         Takes metrics data and sends it to FACT as an observation for analysis. The metrics are
@@ -322,6 +441,8 @@ class FACTClient:
             metrics (dict): Prometheus vector or matrix data. Each series must
                 retain its metric name and the configured hostname label.
             source (Source): Source type of the metrics
+            metrics_start_time (datetime): Start of the metrics query window
+            metrics_end_time (datetime): End of the metrics query window
 
         Returns:
             int: Observation ID for the submitted metrics
@@ -330,42 +451,14 @@ class FACTClient:
             ValueError: If the result type or node identity is unsupported
             requests.exceptions.RequestException: If the API call fails
         """
-        endpoint = f"{self.fact_url}/v1/attributor/{attribution_id}/observation"
+        endpoint = f"{self.fact_url}/v2/attributor/{attribution_id}/observation"
 
-        # The provider accepts flattened Prometheus samples, not the query API's
-        # vector/matrix envelope. Preserve each sample's labels and node identity
-        # so hardware evidence cannot be attributed to an unrelated job node.
-        if metrics.get("resultType") not in {"vector", "matrix"}:
-            raise ValueError("Attribution metrics require a Prometheus vector or matrix result")
-        samples = []
-        for series in metrics["result"]:
-            labels = series["metric"]
-            node = labels.get(self.settings.prometheus_hostname_label)
-            if not node:
-                raise ValueError("Attribution metric is missing the configured hostname label")
-            values = series["values"] if metrics["resultType"] == "matrix" else [series["value"]]
-            for timestamp, value in values:
-                samples.append(
-                    {
-                        "timestamp": timestamp,
-                        "value": value,
-                        "metric": labels["__name__"],
-                        "labels": labels,
-                        "node": node,
-                        "component": labels.get("device", ""),
-                    }
-                )
-
-        observation = ObservationV1(
-            context=ObservationContextV1(
-                time_interval=TimeInterval(
-                    start=datetime.now(tz=UTC) - timedelta(minutes=10), end=datetime.now(tz=UTC)
-                ),
-                resources="",
+        observation = ObservationV2(
+            context=ObservationContextV2(
+                time_interval=TimeIntervalV2(start=metrics_start_time, end=metrics_end_time),
                 source=source,
-                format=Format.PROMETHEUS_METRICS,
             ),
-            body=json.dumps(samples),
+            body=json.dumps(prometheus_to_entries(metrics, self.settings.prometheus_hostname_label)),
         )
 
         self.logger.info(f"Sending metrics to FACT: {observation.model_dump_json()}")
@@ -389,7 +482,7 @@ class FACTClient:
                 f"Error submitting metrics to FACT, status {response.status_code}: {response.text}"
             )
 
-        observation_response = ObservationResponseV1.from_json(response.text)
+        observation_response = ObservationResponseV2.from_json(response.text)
         if observation_response is None:
             raise ValueError(f"Failed to parse FACT metrics observation response: {response.text}")
         self.logger.info(f"Submitted metrics to FACT: {observation_response.observation_id}")
