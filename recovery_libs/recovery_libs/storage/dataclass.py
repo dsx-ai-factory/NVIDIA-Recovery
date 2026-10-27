@@ -1107,6 +1107,7 @@ class ApplicationIntentionRecord(DataClassBase):
     job_id: Mapped[str] = mapped_column(String(64), kw_only=True)
     desired_state: Mapped[str] = mapped_column(String(32), kw_only=True)
     reason: Mapped[str | None] = mapped_column(Text, default=None, kw_only=True)
+    audit_attempt_index: Mapped[int | None] = mapped_column(Integer, default=None, kw_only=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTimeMicrosecondsType, kw_only=True)
 
     __table_args__ = (

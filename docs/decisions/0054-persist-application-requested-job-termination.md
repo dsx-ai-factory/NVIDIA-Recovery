@@ -52,6 +52,13 @@ existing mode, ownership, and action-acknowledgement safeguards. For an
 already-final attempt the same Advice records the terminal decision and SAC
 observes it as already satisfied.
 
+The first durable request also emits a best-effort
+`application_termination_requested` audit event tagged to the latest known
+attempt. If the request arrives before registration, Job Manager defers that
+event until the first attempt is observed. Later Advice and scheduler-action
+events remain scoped to the exact attempts they affect. A repeated idempotent
+request does not emit another request event.
+
 Job Manager also checks the durable intention after every attempt upsert and
 again when a late attribution result is about to produce recovery Advice for
 an exact attempt. This second check covers an attempt that was already observed

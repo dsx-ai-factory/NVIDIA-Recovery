@@ -95,6 +95,7 @@ from recovery_libs.utils.time import parse_event_timestamp, source_timestamp_in_
 
 from job_manager import periodic_tasks, storage_utils
 from job_manager.attribution_request import emit_attribution_request_if_needed
+from job_manager.audit.application_intentions import audit_application_termination_requested
 from job_manager.config import (
     KubernetesLeaderElectionSettings,
     MySQLConnectionSettings,
@@ -394,6 +395,28 @@ class JobManager:
             created_at=stored.created_at,
         )
 
+    def audit_application_intention_for_attempt(self, record: SlurmJobExecutionRecord) -> None:
+        """Emit the job-level request event once, tagged to the latest known attempt."""
+        try:
+            intention, claimed = self.storage.claim_application_intention_audit_attempt(
+                record.job_id,
+                record.job_attempt_index,
+            )
+        except RecoveryStorageException as error:
+            logger.exception(
+                "Failed to associate application termination request audit event with job %s attempt %s",
+                record.job_id,
+                record.job_attempt_index,
+                extra={
+                    "job_id": record.job_id,
+                    "job_attempt_index": record.job_attempt_index,
+                    "error": str(error),
+                },
+            )
+            return
+        if claimed and intention is not None:
+            audit_application_termination_requested(intention, self.audit_buffer)
+
     def reconcile_latest_application_intention(self, job_id: str) -> None:
         """Best-effort background reconciliation for a newly accepted request.
 
@@ -404,6 +427,7 @@ class JobManager:
         try:
             latest_attempt = self.storage.read_job_record(job_id=job_id)
             if latest_attempt is not None:
+                self.audit_application_intention_for_attempt(latest_attempt)
                 self.reconcile_application_intention(latest_attempt)
         except Exception as error:
             logger.exception(
@@ -452,6 +476,8 @@ class JobManager:
 
         if intention is None:
             return ApplicationIntentionReconciliation.NOT_REQUESTED
+        if intention.audit_attempt_index is None:
+            self.audit_application_intention_for_attempt(record)
         if intention.desired_state != ApplicationIntentionDesiredState.CANCELLED.value:
             logger.error(
                 "Ignoring unsupported application intention state %s for job %s",

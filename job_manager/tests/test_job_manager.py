@@ -14,7 +14,12 @@ from unittest.mock import MagicMock, call, patch
 import pika
 import uvicorn
 from job_manager.advice_mapping import storage_to_http_advice
-from job_manager.audit.events import AdviceCreatedEvent, AdviceUpdatedEvent, JobAttemptUpdatedEvent
+from job_manager.audit.events import (
+    AdviceCreatedEvent,
+    AdviceUpdatedEvent,
+    ApplicationTerminationRequestedEvent,
+    JobAttemptUpdatedEvent,
+)
 from job_manager.constants import DEFAULT_SYSTEM_MAX_REQUEUE_TIMES, WORKFLOW_CONTROLLER
 from job_manager.main import app, start_http_server
 from job_manager.metrics import LEADER_STATUS_GAUGE
@@ -110,6 +115,7 @@ class TestJobManager(unittest.TestCase):
         self._config = create_basic_service_config()
         self._job_manager = JobManager(config=self._config, shutdown_event=Event())
         self._job_manager.storage = MagicMock(spec=MySQLStorage)
+        self._job_manager.storage.claim_application_intention_audit_attempt.return_value = (None, False)
         self._job_manager.attribution_storage = MagicMock(spec=AttributionStorage)
         self._job_manager.notifications_client = MagicMock(spec=NotificationsApi)
 
@@ -135,6 +141,7 @@ class TestJobManager(unittest.TestCase):
         stored.id = 7
         self._job_manager.storage.create_or_get_application_intention.return_value = (stored, True)
         self._job_manager.storage.read_job_record.return_value = None
+        self._job_manager.audit_buffer = MagicMock()
 
         result = self._job_manager.create_application_intention(
             ApplicationIntentionInput(
@@ -148,15 +155,85 @@ class TestJobManager(unittest.TestCase):
         self.assertEqual(result.job_id, "job-42")
         self.assertEqual(result.reason, "training converged")
         self._job_manager.storage.read_job_record.assert_not_called()
+        self._job_manager.audit_buffer.add.assert_not_called()
+
+    def test_claimed_application_intention_audit_uses_latest_attempt(self):
+        created_at = datetime.now(UTC)
+        stored = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="training converged",
+            audit_attempt_index=3,
+            created_at=created_at,
+        )
+        stored.id = 7
+        self._job_manager.storage.claim_application_intention_audit_attempt.return_value = (stored, True)
+        self._job_manager.audit_buffer = MagicMock()
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+
+        self._job_manager.audit_application_intention_for_attempt(record)
+
+        self._job_manager.storage.claim_application_intention_audit_attempt.assert_called_once_with("job-42", 3)
+        self._job_manager.audit_buffer.add.assert_called_once()
+        audit_event = self._job_manager.audit_buffer.add.call_args.args[0]
+        self.assertIsInstance(audit_event, ApplicationTerminationRequestedEvent)
+        self.assertEqual(audit_event.payload.application_intention_id, 7)
+        self.assertEqual(audit_event.payload.job_id, "job-42")
+        self.assertEqual(audit_event.payload.attempt_index, 3)
+        self.assertEqual(audit_event.payload.desired_state, "CANCELLED")
+        self.assertEqual(audit_event.payload.reason, "training converged")
+        self.assertEqual(audit_event.payload.requested_at, created_at)
+
+    def test_already_claimed_application_intention_does_not_repeat_request_audit(self):
+        stored = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="training converged",
+            audit_attempt_index=2,
+            created_at=datetime.now(UTC),
+        )
+        stored.id = 7
+        self._job_manager.storage.claim_application_intention_audit_attempt.return_value = (stored, False)
+        self._job_manager.audit_buffer = MagicMock()
+
+        self._job_manager.audit_application_intention_for_attempt(
+            create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+        )
+
+        self._job_manager.audit_buffer.add.assert_not_called()
+
+    def test_request_audit_failure_does_not_reject_durable_application_intention(self):
+        stored = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason=None,
+            audit_attempt_index=3,
+            created_at=datetime.now(UTC),
+        )
+        stored.id = 7
+        self._job_manager.storage.claim_application_intention_audit_attempt.return_value = (stored, True)
+        self._job_manager.audit_buffer = MagicMock()
+        self._job_manager.audit_buffer.add.side_effect = RuntimeError("audit buffer unavailable")
+
+        with patch("job_manager.audit.application_intentions.logger.exception") as log_exception:
+            self._job_manager.audit_application_intention_for_attempt(
+                create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+            )
+
+        log_exception.assert_called_once()
 
     def test_reconcile_latest_application_intention_runs_outside_acceptance_path(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
         self._job_manager.storage.read_job_record.return_value = record
 
-        with patch.object(self._job_manager, "reconcile_application_intention") as reconcile:
+        with (
+            patch.object(self._job_manager, "audit_application_intention_for_attempt") as audit_request,
+            patch.object(self._job_manager, "reconcile_application_intention") as reconcile,
+        ):
             self._job_manager.reconcile_latest_application_intention("job-42")
 
         self._job_manager.storage.read_job_record.assert_called_once_with(job_id="job-42")
+        audit_request.assert_called_once_with(record)
         reconcile.assert_called_once_with(record)
 
     def test_reconcile_latest_application_intention_tolerates_background_failure(self):

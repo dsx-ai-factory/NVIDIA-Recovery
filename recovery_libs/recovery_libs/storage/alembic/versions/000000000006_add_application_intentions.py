@@ -28,6 +28,7 @@ def upgrade() -> None:
         sa.Column("job_id", sa.String(length=64), nullable=False),
         sa.Column("desired_state", sa.String(length=32), nullable=False),
         sa.Column("reason", sa.Text(), nullable=True),
+        sa.Column("audit_attempt_index", sa.Integer(), nullable=True),
         sa.Column("created_at", mysql.TIMESTAMP(fsp=6), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("job_id", name="uq_application_intention_job_id"),
