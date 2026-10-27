@@ -7,8 +7,8 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-    "pre-commit==4.6.2",
-    "ruff==0.17.0",
+    "pre-commit==4.7.0",
+    "ruff==0.17.2",
 ]
 e2e = [
     "httpx==0.28.1",
