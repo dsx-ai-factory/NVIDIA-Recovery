@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import math
 import re
 import statistics
 import time
@@ -47,6 +48,8 @@ from watcher.lib.utils.constants import (
     EVENT_TYPES_REQUIRING_DETECTION_CHECK,
     JOB_ATTRIBUTES_NOOUTPUT_PREFIX,
     JOB_LAST_EVENT_PREFIX,
+    JOB_NOOUTPUT_DISCOVERY_GRACE_SECS,
+    JOB_NOOUTPUT_PENDING_PREFIX,
     JOB_PHASE_ORDERED,
     JOB_PHASE_VALID_TRANSITIONS,
     JOB_STATE_CACHE_CLEANUP_KEY_PREFIXES,
@@ -1162,6 +1165,9 @@ class RulesEngine:
         all_jobs_cache_key_name = generate_unique_cache_key(key_suffix=all_jobs_cache_key_name_seed)
         interval_config = workflow_step.attributes["interval"]
         jm_endpoint = self.config.datasources.job_manager.endpoint  # type: ignore[union-attr]
+        discovery_grace_secs = (
+            workflow_step.attributes.get("job_discovery_grace_period_secs") or JOB_NOOUTPUT_DISCOVERY_GRACE_SECS
+        )
         last_iteration_enabled = workflow_step.attributes.get("last_iteration_enabled", False)
         last_iteration_regex = workflow_step.attributes.get("last_iteration_regex", None)
         last_iteration_operation_schema = workflow_step.attributes.get("last_iteration_operation_schema", None)
@@ -1175,6 +1181,7 @@ class RulesEngine:
         # ephemeral per-job aps_spec cache, scoped to a single workflow_step_nooutput invocation.
         # Used to avoid redundant Job Manager lookups when computing per-job timeout overrides.
         aps_spec_cache: dict[str, ApsSlurmJobSpec | None] = {}
+        missing_jobs: set[str] = set()
 
         async def _get_aps_spec(job_id: str) -> ApsSlurmJobSpec | None:
             if job_id in aps_spec_cache:
@@ -1182,6 +1189,8 @@ class RulesEngine:
             aps_spec: ApsSlurmJobSpec | None = None
             if jm_endpoint:
                 jm_info = await get_job_info(endpoint=jm_endpoint, job_id=job_id)
+                if not jm_info:
+                    missing_jobs.add(job_id)
                 aps_spec = parse_aps_spec_from_job_info(jm_info)
             aps_spec_cache[job_id] = aps_spec
             return aps_spec
@@ -1226,8 +1235,30 @@ class RulesEngine:
                         f"[{workflow_step.name}] detected new event for job ({key}) (job_phase={job_phase.value}): {job_id}"
                     )
 
-                # add/update timer in timed cache, honoring per-job aps_spec threshold override
+                # update job attributes in cache
+                self.kvstore[f"{JOB_ATTRIBUTES_NOOUTPUT_PREFIX}{key}"] = WorkflowStepNooutputJobAttributes(
+                    job_id=job_id,
+                    job_phase=job_phase,
+                    detection_time=generate_job_status_detection_time_now(),
+                )
+                logger.info(f"[{workflow_step.name}] job phase set for job {job_id} ({key}): {job_phase.value}")
+
+                # A pending lookup belongs to this bucket and is advanced by the scan
+                # below, even when logs stop. New activity must not postpone the retry.
+                pending_key = f"{JOB_NOOUTPUT_PENDING_PREFIX}{key}"
+                observed_at = time.monotonic()
+                if pending_key in self.kvstore:
+                    retry_at, _ = self.kvstore[pending_key]
+                    self.kvstore[pending_key] = (retry_at, observed_at)
+                    continue
+
                 aps_spec = await _get_aps_spec(job_id)
+                if job_id in missing_jobs and not self.timed_counter_does_key_exist(key=key):
+                    self.kvstore[pending_key] = (
+                        observed_at + discovery_grace_secs,
+                        observed_at,
+                    )
+                    continue
                 effective_timeout = get_nooutput_timeout(
                     aps_spec=aps_spec,
                     job_phase=job_phase,
@@ -1238,14 +1269,6 @@ class RulesEngine:
                     item=WorkflowStepNooutputEventType.OBSERVED,  # type: ignore[arg-type]
                     timeout=effective_timeout,
                 )
-
-                # update job attributes in cache
-                self.kvstore[f"{JOB_ATTRIBUTES_NOOUTPUT_PREFIX}{key}"] = WorkflowStepNooutputJobAttributes(
-                    job_id=job_id,
-                    job_phase=job_phase,
-                    detection_time=generate_job_status_detection_time_now(),
-                )
-                logger.info(f"[{workflow_step.name}] job phase set for job {job_id} ({key}): {job_phase.value}")
 
         # Parse interval config
         for k, v in interval_config.items():
@@ -1359,6 +1382,33 @@ class RulesEngine:
                 continue
 
             job_phase = job_attributes.job_phase
+
+            # Defer only unresolved jobs; never sleep in the shared workflow loop.
+            # Retry once after the grace period, without requiring another log event.
+            pending_key = f"{JOB_NOOUTPUT_PENDING_PREFIX}{key}"
+            if pending_key in self.kvstore:
+                retry_at, observed_at = self.kvstore[pending_key]
+                if query_failed:
+                    self.kvstore[pending_key] = (retry_at, time.monotonic())
+                    continue
+                if time.monotonic() < retry_at:
+                    continue
+                aps_spec = await _get_aps_spec(str(job_id))
+                effective_timeout = get_nooutput_timeout(
+                    aps_spec=aps_spec,
+                    job_phase=job_phase,
+                    default_timeout=int(cache_timeout[job_phase]),
+                )
+                # Preserve elapsed silence instead of starting a fresh full timeout.
+                remaining = max(0, math.ceil(effective_timeout - (time.monotonic() - observed_at)))
+                self.timed_counter_create_key(key=key, timeout=effective_timeout)
+                if remaining:
+                    self.timed_counter_add(
+                        key=key,
+                        item=WorkflowStepNooutputEventType.OBSERVED,  # type: ignore[arg-type]
+                        timeout=remaining,
+                    )
+                del self.kvstore[pending_key]
 
             # Update the job counter when a backend query fails to avoid false positives.
             if query_failed:
