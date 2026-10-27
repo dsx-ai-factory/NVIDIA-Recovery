@@ -257,6 +257,35 @@ class TestJobManager(unittest.TestCase):
 
         self.assertEqual(result, ApplicationIntentionReconciliation.NOT_REQUESTED)
 
+    def test_reconcile_application_intention_blocks_late_recovery_when_lookup_fails(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="FAILED")
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+            "temporary application intention lookup failure"
+        )
+
+        result = self._job_manager.reconcile_application_intention(
+            record,
+            fail_closed_on_lookup_error=True,
+        )
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.RETRY_REQUIRED)
+        self.assertTrue(result.blocks_recovery)
+
+    def test_reconcile_application_intention_ignores_unsupported_stored_state(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="FAILED")
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state="UNSUPPORTED",
+            created_at=datetime.now(UTC),
+        )
+
+        result = self._job_manager.reconcile_application_intention(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.NOT_REQUESTED)
+        self.assertFalse(result.blocks_recovery)
+
     def test_legacy_relay_flag_preserves_direct_attribution_only(self):
         """Old overrides cannot restore the retired watcher-message route."""
         self._config["service"]["job_anomaly_message_relay_enabled"] = True
@@ -1750,6 +1779,30 @@ class TestJobManager(unittest.TestCase):
             patch("job_manager.service.create_terminal_advice_for_job", return_value=None),
             patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as restart,
         ):
+            callback = self._job_manager.get_anomaly_isolator_message_callback()
+            callback(
+                MagicMock(),
+                MagicMock(),
+                pika.spec.BasicProperties(),
+                attribution_result.to_json().encode(),
+            )
+
+        restart.assert_not_called()
+
+    def test_failed_application_intention_lookup_blocks_late_restart_attribution(self):
+        attribution_result = create_example_anoamly_attribution_result()
+        attempt = create_example_slurm_job_record(
+            job_id=attribution_result.job_id,
+            attempt_index=attribution_result.job_attempt_index,
+            state="FAILED",
+        )
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_job_record.return_value = attempt
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+            "temporary application intention lookup failure"
+        )
+
+        with patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as restart:
             callback = self._job_manager.get_anomaly_isolator_message_callback()
             callback(
                 MagicMock(),

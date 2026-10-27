@@ -416,6 +416,8 @@ class JobManager:
     def reconcile_application_intention(
         self,
         record: SlurmJobExecutionRecord,
+        *,
+        fail_closed_on_lookup_error: bool = False,
     ) -> ApplicationIntentionReconciliation:
         """Apply a durable application intention to one observed job attempt.
 
@@ -424,9 +426,12 @@ class JobManager:
         upsert retries ``RETRY_REQUIRED`` on the next poll, including for an
         attempt first observed after the request was stored.
 
-        Storage lookup failures fail open for ordinary recovery. This keeps job
-        ingestion available during a rolling migration where the new table may
-        not exist yet; the error remains visible in Job Manager logs.
+        Storage lookup failures fail open for ordinary scheduler updates. This
+        keeps job ingestion available during a rolling migration where the new
+        table may not exist yet. Late attribution passes
+        ``fail_closed_on_lookup_error=True`` because publishing competing
+        restart Advice before cancellation intent can be checked would violate
+        the application's terminal request.
         """
         if not self._is_advice_management_enabled():
             return ApplicationIntentionReconciliation.NOT_REQUESTED
@@ -439,7 +444,11 @@ class JobManager:
                 record.job_id,
                 extra={"job_id": record.job_id, "error": str(error)},
             )
-            return ApplicationIntentionReconciliation.NOT_REQUESTED
+            return (
+                ApplicationIntentionReconciliation.RETRY_REQUIRED
+                if fail_closed_on_lookup_error
+                else ApplicationIntentionReconciliation.NOT_REQUESTED
+            )
 
         if intention is None:
             return ApplicationIntentionReconciliation.NOT_REQUESTED
@@ -449,7 +458,7 @@ class JobManager:
                 intention.desired_state,
                 record.job_id,
             )
-            return ApplicationIntentionReconciliation.RETRY_REQUIRED
+            return ApplicationIntentionReconciliation.NOT_REQUESTED
 
         try:
             existing_advice = self.storage.read_advice_by_job(
@@ -1134,7 +1143,10 @@ class JobManager:
                         job_attempt_index=res.job_attempt_index,
                     )
                     application_intention_result = (
-                        self.reconcile_application_intention(attributed_record)
+                        self.reconcile_application_intention(
+                            attributed_record,
+                            fail_closed_on_lookup_error=True,
+                        )
                         if attributed_record is not None
                         else ApplicationIntentionReconciliation.NOT_REQUESTED
                     )
