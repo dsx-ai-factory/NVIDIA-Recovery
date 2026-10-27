@@ -641,6 +641,36 @@ message JobDagDependency {
   TriggerCondition trigger = 3;
 }
 
+// State requested directly by the application for a scheduler job.
+enum ApplicationIntentionDesiredState {
+  APPLICATION_INTENTION_DESIRED_STATE_UNSPECIFIED = 0;
+  // Stop recovery and cancel the current or next observed attempt.
+  APPLICATION_INTENTION_DESIRED_STATE_CANCELLED = 1;
+}
+
+// CreateApplicationIntentionRequest records an application-owned job decision.
+message CreateApplicationIntentionRequest {
+  // Scheduler job ID. The job does not need to be registered yet.
+  string job_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // Desired terminal state. CANCELLED is the only supported value.
+  ApplicationIntentionDesiredState desired_state = 2 [(google.api.field_behavior) = REQUIRED];
+  // Optional human-readable reason retained with the durable request.
+  optional string reason = 3;
+}
+
+// Durable application request accepted by Job Manager.
+message ApplicationIntention {
+  int64 id = 1;
+  string job_id = 2;
+  ApplicationIntentionDesiredState desired_state = 3;
+  optional string reason = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message CreateApplicationIntentionResponse {
+  ApplicationIntention application_intention = 1;
+}
+
 // Public API for the NVIDIA Recovery service.
 service HeimdallService {
   // Returns a paginated list of jobs.
@@ -679,6 +709,18 @@ service HeimdallService {
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       summary: "Create or update job"
       description: "Create a new job or update an existing one. If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created."
+    };
+  }
+
+  // Records an application request to stop recovery and cancel a scheduler job.
+  rpc CreateApplicationIntention(CreateApplicationIntentionRequest) returns (CreateApplicationIntentionResponse) {
+    option (google.api.http) = {
+      post: "/v1/application-intentions"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Request job cancellation"
+      description: "Persist an idempotent job-level cancellation request. It applies to the latest known attempt and to attempts first observed after the request."
     };
   }
 

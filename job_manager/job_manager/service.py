@@ -52,6 +52,9 @@ from recovery_libs.schema.event_type import EventType
 from recovery_libs.schema.job_manager.models import (
     Advice,
     AdviceState,
+    ApplicationIntention,
+    ApplicationIntentionDesiredState,
+    ApplicationIntentionInput,
     JobAnomaly,
     JobAnomalyHandledBy,
     JobCheckpointInfo,
@@ -71,6 +74,7 @@ from recovery_libs.storage.attribution_storage import AttributionStorage
 from recovery_libs.storage.base import RecoveryStorageException
 from recovery_libs.storage.dataclass import (
     AdviceRecord,
+    ApplicationIntentionRecord,
     DagDependency,
     DagDependencyActionStatus,
     SlurmJobExecutionRecord,
@@ -134,6 +138,7 @@ from job_manager.notification_utils import build_recovery_notification, invalid_
 from job_manager.recovery import RecoveryService
 from job_manager.storage_utils import (
     create_advice_issue_from_event,
+    create_terminal_advice_for_job,
     maybe_persist_job_released_terminal_advice_from_attribution,
     maybe_persist_requeue_terminal_advice,
     persist_dag_release_advice,
@@ -349,6 +354,66 @@ class JobManager:
             job_attempt_index,
             **updates,
         )
+
+    def create_application_intention(self, request: ApplicationIntentionInput) -> ApplicationIntention:
+        """Persist an application cancellation request and reconcile the latest known attempt.
+
+        The intention is job-scoped and may arrive before Job Manager has seen an
+        attempt. Storage therefore accepts it independently of the job table. If
+        an attempt is already known, this call immediately materializes the
+        exact-attempt Terminated Advice consumed by the scheduler adapter.
+        """
+        stored, _created = self.storage.create_or_get_application_intention(
+            ApplicationIntentionRecord(
+                job_id=request.job_id,
+                desired_state=request.desired_state.value,
+                reason=request.reason,
+                created_at=datetime.now(UTC),
+            )
+        )
+        latest_attempt = self.storage.read_job_record(job_id=request.job_id)
+        if latest_attempt is not None:
+            self.reconcile_application_intention(latest_attempt)
+        return ApplicationIntention(
+            id=stored.id,
+            job_id=stored.job_id,
+            desired_state=ApplicationIntentionDesiredState(stored.desired_state),
+            reason=stored.reason,
+            created_at=stored.created_at,
+        )
+
+    def reconcile_application_intention(self, record: SlurmJobExecutionRecord) -> bool:
+        """Apply a durable application intention to one observed job attempt.
+
+        Returns ``True`` whenever a cancellation intention exists. Callers use
+        that result to avoid starting recovery attribution for an attempt the
+        application has already asked Heimdall to terminate. Reconciliation is
+        level-triggered: every scheduler upsert retries the terminal Advice
+        write, including attempts first observed after the request was stored.
+        """
+        intention = self.storage.read_application_intention(record.job_id)
+        if intention is None:
+            return False
+        if intention.desired_state != ApplicationIntentionDesiredState.CANCELLED.value:
+            logger.error(
+                "Ignoring unsupported application intention state %s for job %s",
+                intention.desired_state,
+                record.job_id,
+            )
+            return True
+
+        create_terminal_advice_for_job(
+            self.storage,
+            audit_buffer=self.audit_buffer,
+            job_id=record.job_id,
+            job_attempt_index=record.job_attempt_index,
+            terminal_advice=JobTerminalAdvice.APPLICATION_REQUESTED_CANCELLATION,
+            audit_reason=intention.reason,
+            status=storage_to_http_job_status(record),
+            on_advice_persisted=self.propagate_terminated_advice_for_dag_dependents,
+            on_advice_ready=self._begin_sequence_for_advice,
+        )
+        return True
 
     def propagate_terminated_advice_for_dag_dependents(
         self,
@@ -986,7 +1051,22 @@ class JobManager:
                         f"Successfully persisted the anomaly attribution for job {res.job_id} result in the database."
                     )
 
-                    if self._is_advice_management_enabled():
+                    # The application may have requested cancellation after
+                    # this attempt was observed but before attribution
+                    # completed. Re-check the durable job-level intent for the
+                    # exact attributed attempt so a late result cannot publish
+                    # Restarted Advice after the application asked recovery to
+                    # stop.
+                    attributed_record = self.storage.read_job_record(
+                        job_id=res.job_id,
+                        job_attempt_index=res.job_attempt_index,
+                    )
+                    application_termination_requested = (
+                        self.reconcile_application_intention(attributed_record)
+                        if attributed_record is not None
+                        else False
+                    )
+                    if self._is_advice_management_enabled() and not application_termination_requested:
                         maybe_persist_job_released_terminal_advice_from_attribution(
                             self.storage,
                             res,

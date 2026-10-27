@@ -358,6 +358,46 @@
                 }
             }
         },
+        "/application-intentions": {
+            "post": {
+                "summary": "Post Application Intention",
+                "description": "Record a job-level cancellation request from an application.\n\nThe request is idempotent by job ID. It may be accepted before the job is\nregistered; Job Manager will materialize exact-attempt Terminated Advice\nwhen the current or a later attempt is observed.",
+                "operationId": "post_application_intention",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ApplicationIntentionInput",
+                                "description": "A durable application request for the scheduler job."
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApplicationIntention"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/jobs": {
             "post": {
                 "summary": "Post Jobs",
@@ -2172,6 +2212,87 @@
                 "type": "object",
                 "title": "AnomalyDetectionConfig",
                 "description": "Anomaly detection configuration that the user can control per job.\n\nAttributes:\n    log_based_crash_enabled (bool): Whether to enable log-based crash detection for the job.\n        If set to False, a CRASH anomaly will be generated immediately when the job enters FAILED\n        state, without waiting for log analysis. Default is True (log-based detection enabled).\n    log_based_timeout_enabled (bool): Whether to enable log-based no-output timeout detection\n        (HANGNOOUTPUT) for the job. When set to False, the watcher service will suppress\n        HANGNOOUTPUT anomaly publication for the job. Default is True (detection enabled).\n    log_based_timeout_threshold_pretraining (int): Per-job no-output timeout threshold (in\n        seconds) applied during the pre-training phase. The watcher uses this value as the\n        silence window after which a HANGNOOUTPUT anomaly may be raised. Must be a positive\n        integer. Default is 960 seconds (16 minutes).\n    log_based_timeout_threshold_trainingloop (int): Per-job no-output timeout threshold (in\n        seconds) applied during the training loop phase. The watcher uses this value as the\n        silence window after which a HANGNOOUTPUT anomaly may be raised. Must be a positive\n        integer. Default is 840 seconds (14 minutes)."
+            },
+            "ApplicationIntention": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int64",
+                        "title": "Id"
+                    },
+                    "job_id": {
+                        "type": "string",
+                        "title": "Job Id"
+                    },
+                    "desired_state": {
+                        "$ref": "#/components/schemas/ApplicationIntentionDesiredState"
+                    },
+                    "reason": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Reason"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "job_id",
+                    "desired_state",
+                    "created_at"
+                ],
+                "title": "ApplicationIntention",
+                "description": "Durably accepted application intention for a scheduler job."
+            },
+            "ApplicationIntentionDesiredState": {
+                "type": "string",
+                "enum": [
+                    "CANCELLED"
+                ],
+                "title": "ApplicationIntentionDesiredState",
+                "description": "Desired states that an application may request for its scheduler job."
+            },
+            "ApplicationIntentionInput": {
+                "properties": {
+                    "job_id": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "title": "Job Id"
+                    },
+                    "desired_state": {
+                        "$ref": "#/components/schemas/ApplicationIntentionDesiredState"
+                    },
+                    "reason": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "maxLength": 1024
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Reason"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "job_id",
+                    "desired_state"
+                ],
+                "title": "ApplicationIntentionInput",
+                "description": "Application request to stop a scheduler job and prevent later retries."
             },
             "ApsSlurmJobSpec-Input": {
                 "properties": {

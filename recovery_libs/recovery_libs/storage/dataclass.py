@@ -1092,6 +1092,29 @@ class RecoverySequenceRecord(DataClassBase):
     )
 
 
+class ApplicationIntentionRecord(DataClassBase):
+    """Persistent job-level instruction supplied by the running application.
+
+    The record intentionally has no foreign key to an execution attempt. An
+    application can report an unrecoverable condition before SAC has published
+    the first attempt, and the instruction must also apply to retry attempts
+    created after the original request.
+    """
+
+    __tablename__ = "application_intentions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(64), kw_only=True)
+    desired_state: Mapped[str] = mapped_column(String(32), kw_only=True)
+    reason: Mapped[str | None] = mapped_column(Text, default=None, kw_only=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTimeMicrosecondsType, kw_only=True)
+
+    __table_args__ = (
+        UniqueConstraint("job_id", name="uq_application_intention_job_id"),
+        Index("idx_application_intention_created_at", "created_at"),
+    )
+
+
 class RecoveryMilestoneRecord(DataClassBase):
     """One idempotently reported scheduler-action completion occurrence."""
 

@@ -30,6 +30,8 @@ from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_
 from recovery_libs.schema.job_manager.models import (
     Advice,
     AdviceReconciliationStatus,
+    ApplicationIntention,
+    ApplicationIntentionInput,
     GetRecoverySequenceRequest,
     GetRecoverySequenceResponse,
     GetWorkflowsResponse,
@@ -384,6 +386,34 @@ def get_job_groups(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
 
 
+@app.post(
+    "/application-intentions",
+    operation_id="post_application_intention",
+    response_model=ApplicationIntention,
+)
+def post_application_intention(
+    intention: ApplicationIntentionInput = Body(
+        ...,
+        description="A durable application request for the scheduler job.",
+    ),
+) -> ApplicationIntention:
+    """Record a job-level cancellation request from an application.
+
+    The request is idempotent by job ID. It may be accepted before the job is
+    registered; Job Manager will materialize exact-attempt Terminated Advice
+    when the current or a later attempt is observed.
+    """
+    try:
+        return job_manager.create_application_intention(intention)  # type: ignore[union-attr]
+    except RecoveryStorageException as error:
+        logger.exception(
+            "Failed to persist application intention for job %s",
+            intention.job_id,
+            extra={"error": str(error)},
+        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(error)) from error
+
+
 @app.post("/jobs", operation_id="post_jobs")
 def post_jobs(
     job: SlurmJobExecutionStatus = Body(..., description="The job to upsert."),
@@ -532,6 +562,15 @@ def post_jobs(
         if updated_record.state == SlurmJobFinalStates.COMPLETED.value:
             job_manager._evaluate_dag_dependencies_for_completed_job(updated_record)  # type: ignore[union-attr]
 
+        # An application cancellation is a durable job-level intent. Reconcile
+        # it after creation-time DAG registration so a terminal parent can
+        # propagate to its descendants, and before attribution can generate a
+        # competing Restarted decision. Future attempts repeat this check when
+        # they are first observed.
+        application_termination_requested = job_manager.reconcile_application_intention(  # type: ignore[union-attr]
+            updated_record
+        )
+
         # Persist terminal cancellation/limit Advice at the scheduler-state
         # boundary so recovery outcomes remain visible. State-based anomaly handling
         # remains transition-triggered, but Advice reconciliation is level-based:
@@ -559,7 +598,7 @@ def post_jobs(
         # Attribution produces the terminal Restarted/Terminated Advice that a
         # scheduler adapter is allowed to act on. Emit only after the anomaly is
         # durable so ADI and the controller cannot observe a partial attempt.
-        if updated_record.anomalies:
+        if updated_record.anomalies and not application_termination_requested:
             job_manager._maybe_emit_attribution_request(updated_record)  # type: ignore[union-attr]
 
         action = "created" if created else "updated"

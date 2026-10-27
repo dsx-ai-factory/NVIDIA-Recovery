@@ -25,6 +25,8 @@ from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_
 from recovery_libs.schema.job_manager.models import (
     AdviceReconciliationDisposition,
     AdviceReconciliationReason,
+    ApplicationIntention,
+    ApplicationIntentionDesiredState,
     GetRecoverySequenceResponse,
     JobAnomaly,
     JobCheckpointInfo,
@@ -74,6 +76,7 @@ class TestHttpService(unittest.TestCase):
         job_manager_mock.upsert_job_record.side_effect = lambda *args, **kwargs: JobManager.upsert_job_record(
             job_manager_mock, *args, **kwargs
         )
+        job_manager_mock.reconcile_application_intention.return_value = False
 
     def test_start_http_server(self):
         with patch.object(uvicorn, attribute="run") as http_server_mock:
@@ -88,6 +91,73 @@ class TestHttpService(unittest.TestCase):
                 http_server_mock.call_args.kwargs["port"],
                 self._config["service"]["http"]["port"],
             )
+
+    def test_post_application_intention_accepts_job_before_registration(self):
+        created_at = datetime.now(UTC)
+        accepted = ApplicationIntention(
+            id=9,
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED,
+            reason="training converged",
+            created_at=created_at,
+        )
+        with patch("job_manager.main.job_manager") as job_manager_mock:
+            job_manager_mock.create_application_intention.return_value = accepted
+            response = self._client.post(
+                "/application-intentions",
+                json={
+                    "job_id": "job-42",
+                    "desired_state": "CANCELLED",
+                    "reason": "training converged",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["job_id"], "job-42")
+        self.assertEqual(response.json()["desired_state"], "CANCELLED")
+        request = job_manager_mock.create_application_intention.call_args.args[0]
+        self.assertEqual(request.job_id, "job-42")
+        self.assertEqual(request.reason, "training converged")
+
+    def test_post_application_intention_rejects_unsupported_desired_state(self):
+        response = self._client.post(
+            "/application-intentions",
+            json={"job_id": "job-42", "desired_state": "RUNNING"},
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_post_jobs_applies_existing_application_intention_before_attribution(self):
+        now = datetime.now(UTC)
+        payload = {
+            "job_id": "job-42",
+            "job_attempt_index": 1,
+            "workflow_id": "workflow-test",
+            "state": "FAILED",
+            "last_updated_at": now.isoformat(),
+        }
+        persisted_record = create_example_slurm_job_record(
+            job_id="job-42",
+            attempt_index=1,
+            state="FAILED",
+            last_updated_at=now,
+        )
+        persisted_record.anomalies = [
+            JobAnomaly(anomaly_type=EventType.CRASH, timestamp=now, uuid=str(uuid6.uuid7()))
+        ]
+
+        with patch("job_manager.main.job_manager") as job_manager_mock:
+            self._use_real_job_upsert_boundary(job_manager_mock)
+            job_manager_mock.storage.read_job_record.return_value = persisted_record
+            job_manager_mock.storage.upsert_job_record.return_value = (persisted_record, True, None)
+            job_manager_mock.reconcile_application_intention.return_value = True
+            job_manager_mock._is_dag_support_enabled.return_value = False
+
+            response = self._client.post("/jobs", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        job_manager_mock.reconcile_application_intention.assert_called_once_with(persisted_record)
+        job_manager_mock._maybe_emit_attribution_request.assert_not_called()
 
     def test_get_status_endpoint_not_ready(self):
         with patch("job_manager.main.job_manager") as job_manager_mock:

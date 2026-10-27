@@ -61,6 +61,46 @@ func TestParseJobAndAttemptIndex(t *testing.T) {
 	}
 }
 
+func TestCreateApplicationIntention(t *testing.T) {
+	createdAt := time.Now().UTC().Truncate(time.Microsecond)
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/application-intentions" {
+			t.Fatalf("request = %s %s, want POST /application-intentions", r.Method, r.URL.Path)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body["job_id"] != "42" || body["desired_state"] != "CANCELLED" {
+			t.Fatalf("unexpected request body: %#v", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"id":7,"job_id":"42","desired_state":"CANCELLED","reason":"training converged","created_at":%q}`, createdAt.Format(time.RFC3339Nano))
+	}))
+	defer backend.Close()
+	reason := "training converged"
+
+	response, err := NewJobClientSource(backend.URL).CreateApplicationIntention(
+		context.Background(),
+		&v1.CreateApplicationIntentionRequest{
+			JobId:        "42",
+			DesiredState: v1.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED,
+			Reason:       &reason,
+		},
+	)
+
+	if err != nil {
+		t.Fatalf("CreateApplicationIntention() failed: %v", err)
+	}
+	got := response.GetApplicationIntention()
+	if got.GetId() != 7 || got.GetJobId() != "42" || got.GetReason() != reason {
+		t.Fatalf("unexpected response: %#v", got)
+	}
+	if !got.GetCreatedAt().AsTime().Equal(createdAt) {
+		t.Fatalf("created_at = %v, want %v", got.GetCreatedAt().AsTime(), createdAt)
+	}
+}
+
 type testSlurmJobExecutionStatus struct {
 	jobId             string
 	jobAttemptIndex   int32

@@ -11,6 +11,9 @@ model_advice_reconciliation_reason.go
 model_advice_reconciliation_status.go
 model_advice_state.go
 model_anomaly_detection_config.go
+model_application_intention.go
+model_application_intention_desired_state.go
+model_application_intention_input.go
 model_aps_slurm_job_spec_input.go
 model_aps_slurm_job_spec_output.go
 model_auto_resume_mode_enum.go

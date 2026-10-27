@@ -182,6 +182,29 @@ paths:
           format: int32
       tags:
         - HeimdallService
+  /v1/application-intentions:
+    post:
+      summary: Request job cancellation
+      description: Persist an idempotent job-level cancellation request. It applies to the latest known attempt and to attempts first observed after the request.
+      operationId: HeimdallService_CreateApplicationIntention
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CreateApplicationIntentionResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          description: CreateApplicationIntentionRequest records an application-owned job decision.
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1CreateApplicationIntentionRequest'
+      tags:
+        - HeimdallService
   /v1/workflows:
     get:
       summary: Returns the workflows.
@@ -882,6 +905,32 @@ definitions:
        - API_KEY_STATUS_ACTIVE: Legacy active status value. Disabled endpoints do not create active keys.
        - API_KEY_STATUS_EXPIRED: Legacy expired status value.
        - API_KEY_STATUS_SUSPENDED: Legacy suspended status value.
+  v1ApplicationIntention:
+    type: object
+    properties:
+      id:
+        type: string
+        format: int64
+      jobId:
+        type: string
+      desiredState:
+        $ref: '#/definitions/v1ApplicationIntentionDesiredState'
+      reason:
+        type: string
+      createdAt:
+        type: string
+        format: date-time
+    description: Durable application request accepted by Job Manager.
+  v1ApplicationIntentionDesiredState:
+    type: string
+    enum:
+      - APPLICATION_INTENTION_DESIRED_STATE_UNSPECIFIED
+      - APPLICATION_INTENTION_DESIRED_STATE_CANCELLED
+    default: APPLICATION_INTENTION_DESIRED_STATE_UNSPECIFIED
+    description: |-
+      State requested directly by the application for a scheduler job.
+
+       - APPLICATION_INTENTION_DESIRED_STATE_CANCELLED: Stop recovery and cancel the current or next observed attempt.
   v1AuditEvent:
     type: object
     properties:
@@ -962,6 +1011,27 @@ definitions:
       key:
         $ref: '#/definitions/v1ApiKey'
         description: Legacy response field. Disabled endpoints always return an error instead.
+  v1CreateApplicationIntentionRequest:
+    type: object
+    properties:
+      jobId:
+        type: string
+        description: Scheduler job ID. The job does not need to be registered yet.
+      desiredState:
+        $ref: '#/definitions/v1ApplicationIntentionDesiredState'
+        description: Desired terminal state. CANCELLED is the only supported value.
+      reason:
+        type: string
+        description: Optional human-readable reason retained with the durable request.
+    description: CreateApplicationIntentionRequest records an application-owned job decision.
+    required:
+      - jobId
+      - desiredState
+  v1CreateApplicationIntentionResponse:
+    type: object
+    properties:
+      applicationIntention:
+        $ref: '#/definitions/v1ApplicationIntention'
   v1CreateAuditEventsRequest:
     type: object
     properties:

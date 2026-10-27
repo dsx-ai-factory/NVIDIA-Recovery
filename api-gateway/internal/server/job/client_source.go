@@ -32,6 +32,35 @@ func NewJobClientSource(jobManagerEndpoint string) *JobClientSource {
 	}
 }
 
+// CreateApplicationIntention persists a job-level cancellation request in Job Manager.
+func (j *JobClientSource) CreateApplicationIntention(ctx context.Context, req *v1.CreateApplicationIntentionRequest) (*v1.CreateApplicationIntentionResponse, error) {
+	logger := util.GetZapLoggerFromContext(ctx)
+	input := jobmanagerBindings.NewApplicationIntentionInput(
+		req.JobId,
+		jobmanagerBindings.APPLICATIONINTENTIONDESIREDSTATE_CANCELLED,
+	)
+	if req.Reason != nil {
+		input.SetReason(*req.Reason)
+	}
+
+	stored, err := j.jobManager.CreateApplicationIntention(ctx, *input)
+	if err != nil {
+		logger.Error("failed to create application intention in Job Manager", zap.Error(err))
+		return nil, err
+	}
+
+	intention := &v1.ApplicationIntention{
+		Id:           int64(stored.Id),
+		JobId:        stored.JobId,
+		DesiredState: v1.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED,
+		CreatedAt:    timestamppb.New(stored.CreatedAt),
+	}
+	if reason, ok := stored.GetReasonOk(); ok && reason != nil {
+		intention.Reason = reason
+	}
+	return &v1.CreateApplicationIntentionResponse{ApplicationIntention: intention}, nil
+}
+
 // GetJob implements JobSource.
 func (j *JobClientSource) GetJob(ctx context.Context, req *v1.GetJobRequest) (*v1.GetJobResponse, error) {
 	logger := util.GetZapLoggerFromContext(ctx)

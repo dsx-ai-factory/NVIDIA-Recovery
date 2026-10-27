@@ -45,6 +45,8 @@ from recovery_libs.schema.aps_spec.spec import (
 from recovery_libs.schema.event_type import EventType
 from recovery_libs.schema.job_manager.models import (
     AdviceState,
+    ApplicationIntentionDesiredState,
+    ApplicationIntentionInput,
     Issue,
     JobAnomaly,
     JobAnomalyHandledBy,
@@ -55,6 +57,7 @@ from recovery_libs.schema.watcher.model import Event as EventWatcher
 from recovery_libs.storage.attribution_storage import AttributionStorage
 from recovery_libs.storage.base import RecoveryStorageException, UpdateJobResult
 from recovery_libs.storage.dataclass import (
+    ApplicationIntentionRecord,
     DagDependency,
     DagDependencyActionStatus,
     DagDependencyReasonCode,
@@ -118,6 +121,61 @@ class TestJobManager(unittest.TestCase):
             publisher.call_args.kwargs["publisher_config"].exchange_name,
             "attribution_request_exchange",
         )
+
+    def test_create_application_intention_accepts_request_before_job_registration(self):
+        created_at = datetime.now(UTC)
+        stored = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="training converged",
+            created_at=created_at,
+        )
+        stored.id = 7
+        self._job_manager.storage.create_or_get_application_intention.return_value = (stored, True)
+        self._job_manager.storage.read_job_record.return_value = None
+
+        result = self._job_manager.create_application_intention(
+            ApplicationIntentionInput(
+                job_id="job-42",
+                desired_state=ApplicationIntentionDesiredState.CANCELLED,
+                reason="training converged",
+            )
+        )
+
+        self.assertEqual(result.id, 7)
+        self.assertEqual(result.job_id, "job-42")
+        self.assertEqual(result.reason, "training converged")
+        self._job_manager.storage.read_job_record.assert_called_once_with(job_id="job-42")
+
+    def test_reconcile_application_intention_terminates_observed_attempt(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="training converged",
+            created_at=datetime.now(UTC),
+        )
+
+        with patch("job_manager.service.create_terminal_advice_for_job") as persist_terminal:
+            found = self._job_manager.reconcile_application_intention(record)
+
+        self.assertTrue(found)
+        persist_terminal.assert_called_once()
+        call_kwargs = persist_terminal.call_args.kwargs
+        self.assertEqual(call_kwargs["job_id"], "job-42")
+        self.assertEqual(call_kwargs["job_attempt_index"], 3)
+        self.assertEqual(call_kwargs["terminal_advice"].value, "application_requested_cancellation")
+        self.assertEqual(call_kwargs["audit_reason"], "training converged")
+
+    def test_reconcile_application_intention_is_noop_without_request(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="RUNNING")
+        self._job_manager.storage.read_application_intention.return_value = None
+
+        with patch("job_manager.service.create_terminal_advice_for_job") as persist_terminal:
+            found = self._job_manager.reconcile_application_intention(record)
+
+        self.assertFalse(found)
+        persist_terminal.assert_not_called()
 
     def test_legacy_relay_flag_preserves_direct_attribution_only(self):
         """Old overrides cannot restore the retired watcher-message route."""
@@ -1553,6 +1611,42 @@ class TestJobManager(unittest.TestCase):
                 ],
                 any_order=True,
             )
+
+    def test_application_intention_wins_over_late_restart_attribution(self):
+        attribution_result = create_example_anoamly_attribution_result()
+        attempt = create_example_slurm_job_record(
+            job_id=attribution_result.job_id,
+            attempt_index=attribution_result.job_attempt_index,
+            state="FAILED",
+        )
+        intention = ApplicationIntentionRecord(
+            job_id=attribution_result.job_id,
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="application cannot continue",
+            created_at=datetime.now(UTC),
+        )
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_job_record.return_value = attempt
+        self._job_manager.storage.read_application_intention.return_value = intention
+
+        with (
+            patch("job_manager.service.create_terminal_advice_for_job") as persist_terminal,
+            patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as persist_restart,
+        ):
+            callback = self._job_manager.get_anomaly_isolator_message_callback()
+            callback(
+                MagicMock(),
+                MagicMock(),
+                pika.spec.BasicProperties(),
+                attribution_result.to_json().encode(),
+            )
+
+        self._job_manager.storage.read_job_record.assert_called_with(
+            job_id=attribution_result.job_id,
+            job_attempt_index=attribution_result.job_attempt_index,
+        )
+        persist_terminal.assert_called_once()
+        persist_restart.assert_not_called()
 
     def test_find_stale_jobs_not_executed(self):
         self._job_manager.is_leader = False
