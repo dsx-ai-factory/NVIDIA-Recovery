@@ -17,7 +17,7 @@ from job_manager.audit.events import (
 )
 from job_manager.constants import WATCHER, WORKFLOW_CONTROLLER
 from job_manager.main import app, start_http_server
-from job_manager.service import JobManager
+from job_manager.service import ApplicationIntentionReconciliation, JobManager
 from recovery_libs.audit import AuditEventLevel
 from recovery_libs.schema.aps_spec.spec import AutoResumeModeEnum
 from recovery_libs.schema.event_type import EventType
@@ -76,7 +76,7 @@ class TestHttpService(unittest.TestCase):
         job_manager_mock.upsert_job_record.side_effect = lambda *args, **kwargs: JobManager.upsert_job_record(
             job_manager_mock, *args, **kwargs
         )
-        job_manager_mock.reconcile_application_intention.return_value = False
+        job_manager_mock.reconcile_application_intention.return_value = ApplicationIntentionReconciliation.NOT_REQUESTED
 
     def test_start_http_server(self):
         with patch.object(uvicorn, attribute="run") as http_server_mock:
@@ -149,7 +149,9 @@ class TestHttpService(unittest.TestCase):
             self._use_real_job_upsert_boundary(job_manager_mock)
             job_manager_mock.storage.read_job_record.return_value = persisted_record
             job_manager_mock.storage.upsert_job_record.return_value = (persisted_record, True, None)
-            job_manager_mock.reconcile_application_intention.return_value = True
+            job_manager_mock.reconcile_application_intention.return_value = (
+                ApplicationIntentionReconciliation.TERMINATED
+            )
             job_manager_mock._is_dag_support_enabled.return_value = False
 
             response = self._client.post("/jobs", json=payload)
@@ -157,6 +159,38 @@ class TestHttpService(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         job_manager_mock.reconcile_application_intention.assert_called_once_with(persisted_record)
         job_manager_mock._maybe_emit_attribution_request.assert_not_called()
+
+    def test_post_jobs_remains_available_when_application_intention_table_is_unavailable(self):
+        now = datetime.now(UTC)
+        payload = {
+            "job_id": "job-rolling-migration",
+            "job_attempt_index": 0,
+            "workflow_id": "workflow-test",
+            "state": "RUNNING",
+            "last_updated_at": now.isoformat(),
+        }
+        persisted_record = create_example_slurm_job_record(
+            job_id="job-rolling-migration",
+            attempt_index=0,
+            state="RUNNING",
+            last_updated_at=now,
+        )
+
+        with patch("job_manager.main.job_manager") as manager:
+            self._use_real_job_upsert_boundary(manager)
+            manager._is_advice_management_enabled.return_value = True
+            manager.storage.upsert_job_record.return_value = (persisted_record, False, persisted_record)
+            manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+                "application_intentions does not exist"
+            )
+            manager.reconcile_application_intention.side_effect = JobManager.reconcile_application_intention.__get__(
+                manager, JobManager
+            )
+
+            response = self._client.post("/jobs", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        manager.storage.read_application_intention.assert_called_once_with("job-rolling-migration")
 
     def test_get_status_endpoint_not_ready(self):
         with patch("job_manager.main.job_manager") as job_manager_mock:

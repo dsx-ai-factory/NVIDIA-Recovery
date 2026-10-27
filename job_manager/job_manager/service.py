@@ -151,6 +151,20 @@ MESSAGE_MAX_DELIVERY_TIMES = 5
 DEFAULT_MESSAGE_DELIVERY_RETRY_DELAY = 30
 SLURM_JOB_FINAL_STATE_SET = {s.value for s in SlurmJobFinalStates}
 
+
+class ApplicationIntentionReconciliation(Enum):
+    """Outcome of applying a durable application intention to one attempt."""
+
+    NOT_REQUESTED = "not_requested"
+    TERMINATED = "terminated"
+    RETRY_REQUIRED = "retry_required"
+
+    @property
+    def blocks_recovery(self) -> bool:
+        """Whether a competing recovery decision must be suppressed."""
+        return self is not ApplicationIntentionReconciliation.NOT_REQUESTED
+
+
 # Slurm <23.11 reports a bare COMPLETING state while the epilog runs, masking
 # the base final state. The state reason is already available during that
 # window, so use it to overlap anomaly handling with the epilog and preserve
@@ -399,27 +413,66 @@ class JobManager:
                 extra={"job_id": job_id, "error": str(error)},
             )
 
-    def reconcile_application_intention(self, record: SlurmJobExecutionRecord) -> bool:
+    def reconcile_application_intention(
+        self,
+        record: SlurmJobExecutionRecord,
+    ) -> ApplicationIntentionReconciliation:
         """Apply a durable application intention to one observed job attempt.
 
-        Returns ``True`` whenever a cancellation intention exists. Callers use
-        that result to avoid starting recovery attribution for an attempt the
-        application has already asked Heimdall to terminate. Reconciliation is
-        level-triggered: every scheduler upsert retries the terminal Advice
-        write, including attempts first observed after the request was stored.
+        The result distinguishes a completed terminal write from one that must
+        be retried. Both outcomes block competing recovery Advice. A scheduler
+        upsert retries ``RETRY_REQUIRED`` on the next poll, including for an
+        attempt first observed after the request was stored.
+
+        Storage lookup failures fail open for ordinary recovery. This keeps job
+        ingestion available during a rolling migration where the new table may
+        not exist yet; the error remains visible in Job Manager logs.
         """
-        intention = self.storage.read_application_intention(record.job_id)
+        if not self._is_advice_management_enabled():
+            return ApplicationIntentionReconciliation.NOT_REQUESTED
+
+        try:
+            intention = self.storage.read_application_intention(record.job_id)
+        except RecoveryStorageException as error:
+            logger.exception(
+                "Failed to read application intention for job %s; continuing without application reconciliation",
+                record.job_id,
+                extra={"job_id": record.job_id, "error": str(error)},
+            )
+            return ApplicationIntentionReconciliation.NOT_REQUESTED
+
         if intention is None:
-            return False
+            return ApplicationIntentionReconciliation.NOT_REQUESTED
         if intention.desired_state != ApplicationIntentionDesiredState.CANCELLED.value:
             logger.error(
                 "Ignoring unsupported application intention state %s for job %s",
                 intention.desired_state,
                 record.job_id,
             )
-            return True
+            return ApplicationIntentionReconciliation.RETRY_REQUIRED
 
-        create_terminal_advice_for_job(
+        try:
+            existing_advice = self.storage.read_advice_by_job(
+                job_id=record.job_id,
+                attempt_index=record.job_attempt_index,
+            )
+        except RecoveryStorageException as error:
+            logger.exception(
+                "Failed to check application termination Advice for job %s attempt %s",
+                record.job_id,
+                record.job_attempt_index,
+                extra={
+                    "job_id": record.job_id,
+                    "job_attempt_index": record.job_attempt_index,
+                    "error": str(error),
+                },
+            )
+            return ApplicationIntentionReconciliation.RETRY_REQUIRED
+
+        if existing_advice is not None and existing_advice.advice_state == AdviceState.TERMINATED.value:
+            return ApplicationIntentionReconciliation.TERMINATED
+
+        persisted = create_terminal_advice_for_job(
             self.storage,
             audit_buffer=self.audit_buffer,
             job_id=record.job_id,
@@ -430,7 +483,9 @@ class JobManager:
             on_advice_persisted=self.propagate_terminated_advice_for_dag_dependents,
             on_advice_ready=self._begin_sequence_for_advice,
         )
-        return True
+        if persisted is None:
+            return ApplicationIntentionReconciliation.RETRY_REQUIRED
+        return ApplicationIntentionReconciliation.TERMINATED
 
     def propagate_terminated_advice_for_dag_dependents(
         self,
@@ -1078,12 +1133,12 @@ class JobManager:
                         job_id=res.job_id,
                         job_attempt_index=res.job_attempt_index,
                     )
-                    application_termination_requested = (
+                    application_intention_result = (
                         self.reconcile_application_intention(attributed_record)
                         if attributed_record is not None
-                        else False
+                        else ApplicationIntentionReconciliation.NOT_REQUESTED
                     )
-                    if self._is_advice_management_enabled() and not application_termination_requested:
+                    if self._is_advice_management_enabled() and not application_intention_result.blocks_recovery:
                         maybe_persist_job_released_terminal_advice_from_attribution(
                             self.storage,
                             res,

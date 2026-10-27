@@ -574,9 +574,7 @@ def post_jobs(
         # propagate to its descendants, and before attribution can generate a
         # competing Restarted decision. Future attempts repeat this check when
         # they are first observed.
-        application_termination_requested = job_manager.reconcile_application_intention(  # type: ignore[union-attr]
-            updated_record
-        )
+        application_intention_result = job_manager.reconcile_application_intention(updated_record)  # type: ignore[union-attr]
 
         # Persist terminal cancellation/limit Advice at the scheduler-state
         # boundary so recovery outcomes remain visible. State-based anomaly handling
@@ -605,7 +603,7 @@ def post_jobs(
         # Attribution produces the terminal Restarted/Terminated Advice that a
         # scheduler adapter is allowed to act on. Emit only after the anomaly is
         # durable so ADI and the controller cannot observe a partial attempt.
-        if updated_record.anomalies and not application_termination_requested:
+        if updated_record.anomalies and not application_intention_result.blocks_recovery:
             job_manager._maybe_emit_attribution_request(updated_record)  # type: ignore[union-attr]
 
         action = "created" if created else "updated"
