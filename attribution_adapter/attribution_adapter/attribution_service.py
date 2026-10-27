@@ -566,7 +566,7 @@ class AttributionService:
                     f"Supplying metrics to FACT for job id: {job_status.job_id}, query: {query}, start time: {start_time}, end time: {end_time}"
                 )
                 if metrics is not None:
-                    self.fact_client.supply_metrics(attribution_id, metrics, type)
+                    self.fact_client.supply_metrics(attribution_id, metrics, type, start_time, end_time)
         except Exception as e:
             logger.exception(
                 f"Error processing prometheus metrics for job id: {job_status.job_id}",
@@ -686,7 +686,7 @@ class AttributionService:
 
                 metrics = self.metrics_fetcher.get_metrics(query, ss_start_time, ss_end_time)
                 if metrics is not None:
-                    self.fact_client.supply_metrics(fact_attribution_id, metrics, type)
+                    self.fact_client.supply_metrics(fact_attribution_id, metrics, type, ss_start_time, ss_end_time)
         except Exception as e:
             logger.exception(
                 f"Error processing slow signals metrics for job id: {job_status.job_id}",

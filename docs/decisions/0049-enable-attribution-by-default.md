@@ -5,7 +5,7 @@ Status: accepted
 Date: 2026-10-06
 
 > **Implementation note (2026-10-12):** Default-on packaging uses the renamed
-> upstream SDK and compatible ingestion API as documented in the
+> upstream SDK and its V2 API, including `entry_timeseries` ingestion, as documented in the
 > [source prerequisites](../public-api/optional-attribution.md); public provider/client
 > publication, a clean public amd64 build, and deployed diagnosis qualification
 > remain release gates.

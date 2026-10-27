@@ -319,7 +319,7 @@ Standalone deployments use the same nested setting. Helm escapes literal dollar
 signs as JSON `\u0024` to prevent dotenv interpolation from changing query text.
 Use that encoding too when hand-authoring a dotenv value containing dollar signs;
 direct environment variables do not undergo dotenv interpolation. The adapter
-continues sending FACT its existing `RAW_LOKI_STREAMS` compatibility payload.
+converts fetched records into the provider's V2 `entry_timeseries` entries.
 
 ### Dependency health queries
 
