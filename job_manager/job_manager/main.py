@@ -14,7 +14,7 @@ from typing import Any, Literal, cast
 
 import uvicorn
 import yaml
-from fastapi import Body, FastAPI, HTTPException, Query, Response, status
+from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Query, Response, status
 from fastapi.openapi.utils import get_openapi
 from fastapi_mcp import FastApiMCP
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -392,6 +392,7 @@ def get_job_groups(
     response_model=ApplicationIntention,
 )
 def post_application_intention(
+    background_tasks: BackgroundTasks,
     intention: ApplicationIntentionInput = Body(
         ...,
         description="A durable application request for the scheduler job.",
@@ -399,12 +400,18 @@ def post_application_intention(
 ) -> ApplicationIntention:
     """Record a job-level cancellation request from an application.
 
-    The request is idempotent by job ID. It may be accepted before the job is
-    registered; Job Manager will materialize exact-attempt Terminated Advice
-    when the current or a later attempt is observed.
+    A successful response means that Job Manager durably accepted the
+    idempotent request. It does not wait for Advice creation or scheduler
+    cancellation. Job Manager starts best-effort reconciliation after sending
+    the response and retries from normal job and attribution updates.
     """
     try:
-        return job_manager.create_application_intention(intention)  # type: ignore[union-attr]
+        accepted = job_manager.create_application_intention(intention)  # type: ignore[union-attr]
+        background_tasks.add_task(
+            job_manager.reconcile_latest_application_intention,  # type: ignore[union-attr]
+            accepted.job_id,
+        )
+        return accepted
     except RecoveryStorageException as error:
         logger.exception(
             "Failed to persist application intention for job %s",

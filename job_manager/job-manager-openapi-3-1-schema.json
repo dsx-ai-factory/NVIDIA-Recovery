@@ -361,7 +361,7 @@
         "/application-intentions": {
             "post": {
                 "summary": "Post Application Intention",
-                "description": "Record a job-level cancellation request from an application.\n\nThe request is idempotent by job ID. It may be accepted before the job is\nregistered; Job Manager will materialize exact-attempt Terminated Advice\nwhen the current or a later attempt is observed.",
+                "description": "Record a job-level cancellation request from an application.\n\nA successful response means that Job Manager durably accepted the\nidempotent request. It does not wait for Advice creation or scheduler\ncancellation. Job Manager starts best-effort reconciliation after sending\nthe response and retries from normal job and attribution updates.",
                 "operationId": "post_application_intention",
                 "requestBody": {
                     "content": {

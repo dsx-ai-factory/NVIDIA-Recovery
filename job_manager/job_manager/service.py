@@ -356,12 +356,13 @@ class JobManager:
         )
 
     def create_application_intention(self, request: ApplicationIntentionInput) -> ApplicationIntention:
-        """Persist an application cancellation request and reconcile the latest known attempt.
+        """Persist an application cancellation request without waiting for action.
 
         The intention is job-scoped and may arrive before Job Manager has seen an
-        attempt. Storage therefore accepts it independently of the job table. If
-        an attempt is already known, this call immediately materializes the
-        exact-attempt Terminated Advice consumed by the scheduler adapter.
+        attempt. Storage therefore accepts it independently of the job table.
+        Advice creation is deliberately excluded from this request path so the
+        application receives an acknowledgement as soon as the intention is
+        durable.
         """
         stored, _created = self.storage.create_or_get_application_intention(
             ApplicationIntentionRecord(
@@ -371,9 +372,6 @@ class JobManager:
                 created_at=datetime.now(UTC),
             )
         )
-        latest_attempt = self.storage.read_job_record(job_id=request.job_id)
-        if latest_attempt is not None:
-            self.reconcile_application_intention(latest_attempt)
         return ApplicationIntention(
             id=stored.id,
             job_id=stored.job_id,
@@ -381,6 +379,25 @@ class JobManager:
             reason=stored.reason,
             created_at=stored.created_at,
         )
+
+    def reconcile_latest_application_intention(self, job_id: str) -> None:
+        """Best-effort background reconciliation for a newly accepted request.
+
+        The durable intention remains authoritative if this task is interrupted.
+        A later scheduler upsert or attribution result evaluates it again, so an
+        HTTP 200 response never depends on this task completing successfully.
+        """
+        try:
+            latest_attempt = self.storage.read_job_record(job_id=job_id)
+            if latest_attempt is not None:
+                self.reconcile_application_intention(latest_attempt)
+        except Exception as error:
+            logger.exception(
+                "Background reconciliation failed for application intention on job %s; "
+                "a later job update will retry it",
+                job_id,
+                extra={"job_id": job_id, "error": str(error)},
+            )
 
     def reconcile_application_intention(self, record: SlurmJobExecutionRecord) -> bool:
         """Apply a durable application intention to one observed job attempt.

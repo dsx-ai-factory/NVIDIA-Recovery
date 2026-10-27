@@ -72,10 +72,12 @@ unspecified for a partial update. A nullable backend state is returned as
 
 Application cancellation accepts `jobId`, the required `CANCELLED` desired
 state, and an optional reason of at most 1,024 characters. The request may
-arrive before the job is registered. It is idempotent by scheduler job ID and
-permanent in this version: the first accepted reason and timestamp are
-retained, and there is no release or revocation operation. Job Manager turns
-the request into exact-attempt Terminated Advice; SAC remains responsible for
+arrive before the job is registered. HTTP 200 means the intention is durably
+accepted; it does not wait for terminal Advice, DAG propagation, SAC polling,
+or Slurm cancellation. It is idempotent by scheduler job ID and permanent in
+this version: the first accepted reason and timestamp are retained, and there
+is no release or revocation operation. Job Manager turns the request into
+exact-attempt Terminated Advice in the background; SAC remains responsible for
 the scheduler cancellation. Authentication is mandatory outside explicit
 insecure evaluation mode.
 

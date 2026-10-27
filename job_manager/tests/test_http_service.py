@@ -118,6 +118,7 @@ class TestHttpService(unittest.TestCase):
         request = job_manager_mock.create_application_intention.call_args.args[0]
         self.assertEqual(request.job_id, "job-42")
         self.assertEqual(request.reason, "training converged")
+        job_manager_mock.reconcile_latest_application_intention.assert_called_once_with("job-42")
 
     def test_post_application_intention_rejects_unsupported_desired_state(self):
         response = self._client.post(
@@ -142,9 +143,7 @@ class TestHttpService(unittest.TestCase):
             state="FAILED",
             last_updated_at=now,
         )
-        persisted_record.anomalies = [
-            JobAnomaly(anomaly_type=EventType.CRASH, timestamp=now, uuid=str(uuid6.uuid7()))
-        ]
+        persisted_record.anomalies = [JobAnomaly(anomaly_type=EventType.CRASH, timestamp=now, uuid=str(uuid6.uuid7()))]
 
         with patch("job_manager.main.job_manager") as job_manager_mock:
             self._use_real_job_upsert_boundary(job_manager_mock)

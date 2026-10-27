@@ -3406,9 +3406,10 @@ PostApplicationIntention Post Application Intention
 
 Record a job-level cancellation request from an application.
 
-The request is idempotent by job ID. It may be accepted before the job is
-registered; Job Manager will materialize exact-attempt Terminated Advice
-when the current or a later attempt is observed.
+A successful response means that Job Manager durably accepted the
+idempotent request. It does not wait for Advice creation or scheduler
+cancellation. Job Manager starts best-effort reconciliation after sending
+the response and retries from normal job and attribution updates.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@return ApiPostApplicationIntentionRequest

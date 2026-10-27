@@ -145,7 +145,25 @@ class TestJobManager(unittest.TestCase):
         self.assertEqual(result.id, 7)
         self.assertEqual(result.job_id, "job-42")
         self.assertEqual(result.reason, "training converged")
+        self._job_manager.storage.read_job_record.assert_not_called()
+
+    def test_reconcile_latest_application_intention_runs_outside_acceptance_path(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+        self._job_manager.storage.read_job_record.return_value = record
+
+        with patch.object(self._job_manager, "reconcile_application_intention") as reconcile:
+            self._job_manager.reconcile_latest_application_intention("job-42")
+
         self._job_manager.storage.read_job_record.assert_called_once_with(job_id="job-42")
+        reconcile.assert_called_once_with(record)
+
+    def test_reconcile_latest_application_intention_tolerates_background_failure(self):
+        self._job_manager.storage.read_job_record.side_effect = RecoveryStorageException("database unavailable")
+
+        with patch("job_manager.service.logger.exception") as log_exception:
+            self._job_manager.reconcile_latest_application_intention("job-42")
+
+        log_exception.assert_called_once()
 
     def test_reconcile_application_intention_terminates_observed_attempt(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")

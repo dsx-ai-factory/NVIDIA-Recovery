@@ -42,17 +42,23 @@ to exact attempts, while the intention applies to the current attempt and any
 successor sharing the scheduler job ID. The table has no foreign key to a job
 attempt so an intention can be accepted before Job Manager registers the job.
 
-When Job Manager accepts the intention, it evaluates the latest known attempt.
-For a non-final attempt it publishes exact-attempt `TERMINATED` Advice, which
-SAC translates to cancellation subject to its existing mode, ownership, and
-action-acknowledgement safeguards. For an already-final attempt the same Advice
-records the terminal decision and SAC observes it as already satisfied.
+Job Manager acknowledges the request as soon as the intention is durably
+stored. HTTP 200 means "accepted and persisted"; it does not mean that Advice
+has been created or that Slurm has cancelled the job. After sending the
+response, Job Manager performs a best-effort background reconciliation of the
+latest known attempt. For a non-final attempt it publishes exact-attempt
+`TERMINATED` Advice, which SAC translates to cancellation subject to its
+existing mode, ownership, and action-acknowledgement safeguards. For an
+already-final attempt the same Advice records the terminal decision and SAC
+observes it as already satisfied.
 
 Job Manager also checks the durable intention after every attempt upsert and
 again when a late attribution result is about to produce recovery Advice for
 an exact attempt. This second check covers an attempt that was already observed
 when the application request arrived but whose recovery decision was still in
-flight. Every applicable attempt gets `TERMINATED` Advice with
+flight. These level-triggered checks also recover if Job Manager stops after
+acknowledging the application but before its background task creates Advice.
+Every applicable attempt gets `TERMINATED` Advice with
 `application_requested_cancellation` provenance. Existing storage rules keep
 `TERMINATED` Advice sticky, so late attribution or another policy writer cannot
 replace it with `RESTARTED`.
@@ -76,9 +82,10 @@ new SAC policy or command path is introduced.
 
 Applications need only their scheduler job ID. Repeated requests are
 idempotent, and the decision remains effective across Job Manager and SAC
-restarts. A job that races through requeue can briefly produce another attempt,
-but that attempt cannot continue once the normal Advice loop observes its
-terminal recommendation.
+restarts. Applications do not block on Job Manager policy evaluation, DAG
+propagation, SAC polling, or the Slurm command. A job that races through requeue
+can briefly produce another attempt, but that attempt cannot continue once the
+normal Advice loop observes its terminal recommendation.
 
 The shared Job Manager schema gains one additive table and therefore requires
 an Alembic migration and human-reviewed rollout. Existing job and Advice table
