@@ -55,7 +55,7 @@ def generate_anomaly_event_for_failed_jobs(
     audit_buffer: AuditBuffer[ProducerEvent],
     time_window_secs: int,
     threshold_secs: int,
-    on_anomaly_persisted: Callable[[SlurmJobExecutionRecord], None] | None = None,
+    on_anomaly_persisted: Callable[[SlurmJobExecutionRecord], object] | None = None,
     *,
     advice_enabled: bool = False,
 ) -> None:
