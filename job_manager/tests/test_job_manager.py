@@ -841,7 +841,7 @@ class TestJobManager(unittest.TestCase):
                 side_effect=lambda *_args, **_kwargs: reconciliation_order.append("dag_registered"),
             ),
             patch.object(self._job_manager, "refresh_dag_dependency_observability_for_observed_job"),
-            patch.object(self._job_manager, "_maybe_emit_attribution_request") as emit_attribution,
+            patch("job_manager.service.emit_attribution_request_if_needed") as emit_attribution,
             patch(
                 "job_manager.service.create_terminal_advice_for_job",
                 side_effect=lambda *_args, **_kwargs: (
@@ -939,7 +939,7 @@ class TestJobManager(unittest.TestCase):
         with (
             patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"),
             patch.object(self._job_manager, "reconcile_anomaly_advice"),
-            patch.object(self._job_manager, "_maybe_emit_attribution_request") as emit_attribution,
+            patch("job_manager.service.emit_attribution_request_if_needed") as emit_attribution,
             patch(
                 "job_manager.service.create_terminal_advice_for_job", return_value=persisted_advice
             ) as persist_terminal,

@@ -1237,19 +1237,39 @@ class JobManager:
         result: AnomalyAttributionResult,
     ) -> None:
         """Delay a transiently blocked attribution result using the existing retry route."""
+        # This exact result is the only input that can produce its recovery
+        # Advice, so it remains retryable until reconciliation succeeds.
+        self._redeliver_message(
+            channel,
+            method,
+            properties,
+            body,
+            description=f"Anomaly attribution for job {result.job_id}",
+            max_delivery_times=None,
+        )
+
+    def _redeliver_message(
+        self,
+        channel: pika.channel,
+        method: pika.spec.Basic.Deliver,
+        properties: pika.spec.BasicProperties,
+        body: bytes,
+        *,
+        description: str,
+        max_delivery_times: int | None,
+    ) -> bool:
+        """Publish one message through the configured delayed route when eligible."""
         routing_key = self.config["service"]["event_bus"].get("anomaly_dead_letter_routing_key")
         if not routing_key:
-            logger.error(
-                "Anomaly attribution for job %s cannot be retried because the dead-letter route is not configured",
-                result.job_id,
-            )
-            return
+            logger.error("%s cannot be retried because the dead-letter route is not configured", description)
+            return False
 
         headers = properties.headers or {}
         delivery_times = int(headers.get("message_delivery_times", 0))
-        # This exact attribution result is the only input that can produce its
-        # recovery Advice. Keep it delayed while storage is unavailable rather
-        # than applying the Watcher event cap and silently losing recovery.
+        if max_delivery_times is not None and delivery_times >= max_delivery_times:
+            logger.error("%s exceeded its maximum delayed deliveries", description)
+            return False
+
         retry_properties = copy(properties)
         retry_properties.headers = {**headers, "message_delivery_times": delivery_times + 1}
         rabbitmq.publish_message(
@@ -1259,6 +1279,7 @@ class JobManager:
             message_body=body,  # type: ignore[arg-type]
             properties=retry_properties,
         )
+        return True
 
     def get_job_update_message_callback(
         self,
@@ -1365,9 +1386,7 @@ class JobManager:
                     # observes the job. Register DAG edges before creating
                     # terminal Advice, then suppress any competing attribution
                     # request for the cancelled attempt.
-                    application_intention_result = self.reconcile_application_intention(record)
-                    if not application_intention_result.blocks_recovery:
-                        self._maybe_emit_attribution_request(record)
+                    self._maybe_emit_attribution_request(record)
                 else:
                     known_record = self.storage.read_job_record(record.job_id, record.job_attempt_index)
                     if known_record is None:
@@ -1512,9 +1531,7 @@ class JobManager:
                     if not record.anomalies:
                         record.anomalies = known_record.anomalies
                     self.reconcile_anomaly_advice(record)
-                    application_intention_result = self.reconcile_application_intention(record)
-                    if not application_intention_result.blocks_recovery:
-                        self._maybe_emit_attribution_request(record)
+                    self._maybe_emit_attribution_request(record)
             except EventBusError as e:
                 logger.exception(f"Event bus error. Raw message: {body.decode()}", extra={"error": str(e)})
             except RecoveryStorageException as e:
@@ -1707,24 +1724,15 @@ class JobManager:
 
     def _redeliver_watcher_event(self, channel, method, properties, body: bytes, event: Event) -> None:
         """Reuse the bounded delayed route for missing registration or failed durable writes."""
-        routing_key = self.config["service"]["event_bus"].get("anomaly_dead_letter_routing_key")
-        if not routing_key:
-            logger.error("anomaly_dead_letter_routing_key is not configured; event cannot be retried.")
+        if not self._redeliver_message(
+            channel,
+            method,
+            properties,
+            body,
+            description=f"Watcher event {event.model_dump_json()}",
+            max_delivery_times=MESSAGE_MAX_DELIVERY_TIMES,
+        ):
             return
-        headers = properties.headers or {}
-        delivery_times = int(headers.get("message_delivery_times", 0))
-        if delivery_times >= MESSAGE_MAX_DELIVERY_TIMES:
-            logger.error("Watcher event exceeded its maximum delayed deliveries; event=%s", event.model_dump_json())
-            return
-        retry_properties = copy(properties)
-        retry_properties.headers = {**headers, "message_delivery_times": delivery_times + 1}
-        rabbitmq.publish_message(
-            channel=channel,
-            exchange_name=method.exchange,
-            routing_key=routing_key,
-            message_body=body,  # type: ignore[arg-type]
-            properties=retry_properties,
-        )
         if event.type == EventType.CHECKPOINTSAVE:
             CHECKPOINT_MESSAGE_REDELIVERY_COUNTER.inc(1)
         else:
