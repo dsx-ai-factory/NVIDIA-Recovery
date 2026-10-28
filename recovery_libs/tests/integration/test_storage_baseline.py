@@ -27,11 +27,12 @@ from sqlalchemy.exc import SQLAlchemyError
 BASELINE_REVISION = "000000000001"
 DAG_OBSERVABILITY_REVISION = "000000000002"
 ADVICE_LIFECYCLE_REVISION = "000000000004"
-HEAD_REVISION = "000000000005"
+HEAD_REVISION = "000000000006"
 ALEMBIC_DIRECTORY = Path(storage_dataclass.__file__).parent / "alembic"
 APPLICATION_TABLES = {
     "advice",
     "advice_reconciliation_status",
+    "application_intentions",
     "dag_dependency",
     "global_events",
     "job_events",

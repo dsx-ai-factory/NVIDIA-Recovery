@@ -25,6 +25,10 @@ func NewJobsSyntheticSource() JobSource {
 	return &JobsSyntheticSource{}
 }
 
+func (s *JobsSyntheticSource) CreateApplicationIntention(ctx context.Context, req *pb.CreateApplicationIntentionRequest) (*pb.CreateApplicationIntentionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "application intentions are not available from the synthetic source")
+}
+
 func (s *JobsSyntheticSource) GetRecoverySequence(ctx context.Context, req *pb.GetRecoverySequenceRequest) (*pb.GetRecoverySequenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "recovery sequences are not available from the synthetic source")
 }

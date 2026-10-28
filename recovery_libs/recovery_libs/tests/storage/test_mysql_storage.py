@@ -20,6 +20,7 @@ from recovery_libs.storage.base import RecoveryStorageException, RecoveryStorage
 from recovery_libs.storage.dataclass import (
     AdviceReconciliationStatusRecord,
     AdviceRecord,
+    ApplicationIntentionRecord,
     JobEvent,
     SlurmJobExecutionRecord,
     SlurmJobFinalStates,
@@ -87,6 +88,92 @@ def test_bootstrap_without_schema_upgrade(connection, mysql_storage):
     assert result is True
     connection.bootstrap.assert_called_with(schema_upgrade=False)
     connection.ready.assert_called_once()
+
+
+def test_create_application_intention_persists_first_request(mysql_storage, session):
+    session.scalars.return_value.first.return_value = None
+    intention = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="training converged",
+        created_at=datetime.now(UTC),
+    )
+    intention.id = 1
+
+    stored, created = mysql_storage.create_or_get_application_intention(intention)
+
+    assert stored is intention
+    assert created is True
+    session.add.assert_called_once_with(intention)
+    session.commit.assert_called_once()
+    session.refresh.assert_called_once_with(intention)
+    session.expunge.assert_called_once_with(intention)
+
+
+def test_create_application_intention_returns_existing_absorbing_request(mysql_storage, session):
+    existing = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="first reason",
+        created_at=datetime.now(UTC),
+    )
+    existing.id = 1
+    session.scalars.return_value.first.return_value = existing
+    duplicate = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="later reason",
+        created_at=datetime.now(UTC),
+    )
+
+    stored, created = mysql_storage.create_or_get_application_intention(duplicate)
+
+    assert stored is existing
+    assert created is False
+    assert stored.reason == "first reason"
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
+def test_claim_application_intention_audit_attempt_uses_latest_known_attempt(mysql_storage, session):
+    existing = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="training converged",
+        created_at=datetime.now(UTC),
+    )
+    existing.id = 1
+    session.scalars.return_value.first.return_value = existing
+
+    stored, claimed = mysql_storage.claim_application_intention_audit_attempt("job-42", 3)
+
+    assert stored is existing
+    assert claimed is True
+    assert stored.audit_attempt_index == 3
+    session.commit.assert_called_once()
+    session.refresh.assert_called_once_with(existing)
+    session.expunge.assert_called_once_with(existing)
+
+
+def test_claim_application_intention_audit_attempt_is_idempotent(mysql_storage, session):
+    existing = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="training converged",
+        audit_attempt_index=2,
+        created_at=datetime.now(UTC),
+    )
+    existing.id = 1
+    session.scalars.return_value.first.return_value = existing
+
+    stored, claimed = mysql_storage.claim_application_intention_audit_attempt("job-42", 3)
+
+    assert stored is existing
+    assert claimed is False
+    assert stored.audit_attempt_index == 2
+    session.commit.assert_not_called()
+    session.refresh.assert_not_called()
+    session.expunge.assert_called_once_with(existing)
 
 
 def test_bootstrap_returns_false_when_schema_is_not_at_head(connection, mysql_storage):

@@ -93,6 +93,21 @@ def _audit_event(event_type: str, payload: dict) -> AuditEventBase:
             id="attribution response received",
         ),
         pytest.param(
+            "application_termination_requested",
+            {
+                "application_intention_id": 7,
+                "job_id": "12345",
+                "attempt_index": 3,
+                "desired_state": "CANCELLED",
+                "reason": "application cannot continue safely",
+                "requested_at": "2026-10-27T21:00:00Z",
+            },
+            "Application termination requested",
+            "Application requested that recovery stop and the job be terminated",
+            AuditEventHumanSummaryGranularityClass.COARSE,
+            id="application termination requested",
+        ),
+        pytest.param(
             "job_attempt_observed",
             {
                 "job_id": "12345",

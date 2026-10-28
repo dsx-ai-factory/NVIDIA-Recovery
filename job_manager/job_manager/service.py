@@ -52,6 +52,9 @@ from recovery_libs.schema.event_type import EventType
 from recovery_libs.schema.job_manager.models import (
     Advice,
     AdviceState,
+    ApplicationIntention,
+    ApplicationIntentionDesiredState,
+    ApplicationIntentionInput,
     JobAnomaly,
     JobAnomalyHandledBy,
     JobCheckpointInfo,
@@ -71,6 +74,7 @@ from recovery_libs.storage.attribution_storage import AttributionStorage
 from recovery_libs.storage.base import RecoveryStorageException
 from recovery_libs.storage.dataclass import (
     AdviceRecord,
+    ApplicationIntentionRecord,
     DagDependency,
     DagDependencyActionStatus,
     SlurmJobExecutionRecord,
@@ -91,6 +95,7 @@ from recovery_libs.utils.time import parse_event_timestamp, source_timestamp_in_
 
 from job_manager import periodic_tasks, storage_utils
 from job_manager.attribution_request import emit_attribution_request_if_needed
+from job_manager.audit.application_intentions import audit_application_termination_requested
 from job_manager.config import (
     KubernetesLeaderElectionSettings,
     MySQLConnectionSettings,
@@ -134,6 +139,7 @@ from job_manager.notification_utils import build_recovery_notification, invalid_
 from job_manager.recovery import RecoveryService
 from job_manager.storage_utils import (
     create_advice_issue_from_event,
+    create_terminal_advice_for_job,
     maybe_persist_job_released_terminal_advice_from_attribution,
     maybe_persist_requeue_terminal_advice,
     persist_dag_release_advice,
@@ -145,6 +151,20 @@ from job_manager.storage_utils import (
 MESSAGE_MAX_DELIVERY_TIMES = 5
 DEFAULT_MESSAGE_DELIVERY_RETRY_DELAY = 30
 SLURM_JOB_FINAL_STATE_SET = {s.value for s in SlurmJobFinalStates}
+
+
+class ApplicationIntentionReconciliation(Enum):
+    """Outcome of applying a durable application intention to one attempt."""
+
+    NOT_REQUESTED = "not_requested"
+    TERMINATED = "terminated"
+    RETRY_REQUIRED = "retry_required"
+
+    @property
+    def blocks_recovery(self) -> bool:
+        """Whether a competing recovery decision must be suppressed."""
+        return self is not ApplicationIntentionReconciliation.NOT_REQUESTED
+
 
 # Slurm <23.11 reports a bare COMPLETING state while the epilog runs, masking
 # the base final state. The state reason is already available during that
@@ -350,6 +370,158 @@ class JobManager:
             **updates,
         )
 
+    def create_application_intention(self, request: ApplicationIntentionInput) -> ApplicationIntention:
+        """Persist an application cancellation request without waiting for action.
+
+        The intention is job-scoped and may arrive before Job Manager has seen an
+        attempt. Storage therefore accepts it independently of the job table.
+        Advice creation is deliberately excluded from this request path so the
+        application receives an acknowledgement as soon as the intention is
+        durable.
+        """
+        stored, _created = self.storage.create_or_get_application_intention(
+            ApplicationIntentionRecord(
+                job_id=request.job_id,
+                desired_state=request.desired_state.value,
+                reason=request.reason,
+                created_at=datetime.now(UTC),
+            )
+        )
+        return ApplicationIntention(
+            id=stored.id,
+            job_id=stored.job_id,
+            desired_state=ApplicationIntentionDesiredState(stored.desired_state),
+            reason=stored.reason,
+            created_at=stored.created_at,
+        )
+
+    def audit_application_intention_for_attempt(self, record: SlurmJobExecutionRecord) -> None:
+        """Emit the job-level request event once, tagged to the latest known attempt."""
+        try:
+            intention, claimed = self.storage.claim_application_intention_audit_attempt(
+                record.job_id,
+                record.job_attempt_index,
+            )
+        except RecoveryStorageException as error:
+            logger.exception(
+                "Failed to associate application termination request audit event with job %s attempt %s",
+                record.job_id,
+                record.job_attempt_index,
+                extra={
+                    "job_id": record.job_id,
+                    "job_attempt_index": record.job_attempt_index,
+                    "error": str(error),
+                },
+            )
+            return
+        if claimed and intention is not None:
+            audit_application_termination_requested(intention, self.audit_buffer)
+
+    def reconcile_latest_application_intention(self, job_id: str) -> None:
+        """Best-effort background reconciliation for a newly accepted request.
+
+        The durable intention remains authoritative if this task is interrupted.
+        A later scheduler upsert or attribution result evaluates it again, so an
+        HTTP 200 response never depends on this task completing successfully.
+        """
+        try:
+            latest_attempt = self.storage.read_job_record(job_id=job_id)
+            if latest_attempt is not None:
+                self.audit_application_intention_for_attempt(latest_attempt)
+                self.reconcile_application_intention(latest_attempt)
+        except Exception as error:
+            logger.exception(
+                "Background reconciliation failed for application intention on job %s; "
+                "a later job update will retry it",
+                job_id,
+                extra={"job_id": job_id, "error": str(error)},
+            )
+
+    def reconcile_application_intention(
+        self,
+        record: SlurmJobExecutionRecord,
+        *,
+        fail_closed_on_lookup_error: bool = False,
+    ) -> ApplicationIntentionReconciliation:
+        """Apply a durable application intention to one observed job attempt.
+
+        The result distinguishes a completed terminal write from one that must
+        be retried. Both outcomes block competing recovery Advice. A scheduler
+        upsert retries ``RETRY_REQUIRED`` on the next poll, including for an
+        attempt first observed after the request was stored.
+
+        Storage lookup failures fail open for ordinary scheduler updates. This
+        keeps job ingestion available during a rolling migration where the new
+        table may not exist yet. Late attribution passes
+        ``fail_closed_on_lookup_error=True`` because publishing competing
+        restart Advice before cancellation intent can be checked would violate
+        the application's terminal request.
+        """
+        if not self._is_advice_management_enabled():
+            return ApplicationIntentionReconciliation.NOT_REQUESTED
+
+        try:
+            intention = self.storage.read_application_intention(record.job_id)
+        except RecoveryStorageException as error:
+            logger.exception(
+                "Failed to read application intention for job %s; continuing without application reconciliation",
+                record.job_id,
+                extra={"job_id": record.job_id, "error": str(error)},
+            )
+            return (
+                ApplicationIntentionReconciliation.RETRY_REQUIRED
+                if fail_closed_on_lookup_error
+                else ApplicationIntentionReconciliation.NOT_REQUESTED
+            )
+
+        if intention is None:
+            return ApplicationIntentionReconciliation.NOT_REQUESTED
+        if intention.audit_attempt_index is None:
+            self.audit_application_intention_for_attempt(record)
+        if intention.desired_state != ApplicationIntentionDesiredState.CANCELLED.value:
+            logger.error(
+                "Ignoring unsupported application intention state %s for job %s",
+                intention.desired_state,
+                record.job_id,
+            )
+            return ApplicationIntentionReconciliation.NOT_REQUESTED
+
+        try:
+            existing_advice = self.storage.read_advice_by_job(
+                job_id=record.job_id,
+                attempt_index=record.job_attempt_index,
+            )
+        except RecoveryStorageException as error:
+            logger.exception(
+                "Failed to check application termination Advice for job %s attempt %s",
+                record.job_id,
+                record.job_attempt_index,
+                extra={
+                    "job_id": record.job_id,
+                    "job_attempt_index": record.job_attempt_index,
+                    "error": str(error),
+                },
+            )
+            return ApplicationIntentionReconciliation.RETRY_REQUIRED
+
+        if existing_advice is not None and existing_advice.advice_state == AdviceState.TERMINATED.value:
+            return ApplicationIntentionReconciliation.TERMINATED
+
+        persisted = create_terminal_advice_for_job(
+            self.storage,
+            audit_buffer=self.audit_buffer,
+            job_id=record.job_id,
+            job_attempt_index=record.job_attempt_index,
+            terminal_advice=JobTerminalAdvice.APPLICATION_REQUESTED_CANCELLATION,
+            audit_reason=intention.reason,
+            status=storage_to_http_job_status(record),
+            on_advice_persisted=self.propagate_terminated_advice_for_dag_dependents,
+            on_advice_ready=self._begin_sequence_for_advice,
+        )
+        if persisted is None:
+            return ApplicationIntentionReconciliation.RETRY_REQUIRED
+        return ApplicationIntentionReconciliation.TERMINATED
+
     def propagate_terminated_advice_for_dag_dependents(
         self,
         advice_record: AdviceRecord,
@@ -490,13 +662,25 @@ class JobManager:
             )
         )
 
-    def _maybe_emit_attribution_request(self, record: SlurmJobExecutionRecord) -> None:
-        """Emit AttributionRequest to ADI for an anomalous attempt (once, gated).
+    def _maybe_emit_attribution_request(
+        self,
+        record: SlurmJobExecutionRecord,
+    ) -> ApplicationIntentionReconciliation:
+        """Reconcile application intent, then emit attribution once when recovery remains eligible.
 
         Safe to call from any anomaly-record or terminal-transition path after the
-        record is persisted; the emitter gates on anomaly eligibility and de-dups via an
-        atomic claim, so redundant calls are no-ops.
+        record is persisted. The fail-closed intention check prevents an attribution
+        request from starting a restart sequence while cancellation state is unavailable.
+        The emitter then gates on anomaly eligibility and de-dups via an atomic claim, so
+        redundant calls are no-ops.
         """
+        application_intention_result = self.reconcile_application_intention(
+            record,
+            fail_closed_on_lookup_error=True,
+        )
+        if application_intention_result.blocks_recovery:
+            return application_intention_result
+
         event_bus = self.config["service"].get("event_bus", {})
         emit_attribution_request_if_needed(
             record,
@@ -507,6 +691,7 @@ class JobManager:
             straggler_enabled=self.config["service"].get("adi_straggler_emit_enabled", False),
             recovery_context_provider=lambda: self._recovery_context_for_attribution(record),
         )
+        return application_intention_result
 
     def _recovery_context_for_attribution(self, record: SlurmJobExecutionRecord) -> Context | None:
         anomalies = record.anomalies or []
@@ -638,6 +823,14 @@ class JobManager:
             queue_name=service_config["event_bus"]["anomaly_attribution_queue"],
             routing_keys=[service_config["event_bus"]["anomaly_attribution_routing_key"]],
             callback_func=self.get_anomaly_isolator_message_callback(),
+            delay_secs=service_config["event_bus"].get(
+                "anomaly_queue_delivery_retry_delay_secs",
+                DEFAULT_MESSAGE_DELIVERY_RETRY_DELAY,
+            ),
+            dead_letter_routing_key=service_config["event_bus"].get("anomaly_dead_letter_routing_key"),
+            dead_letter_redelivery_routing_key=service_config["event_bus"].get(
+                "anomaly_dead_letter_redelivery_routing_key"
+            ),
         )
 
         self.event_bus_consumers[WATCHER] = RabbitMQConsumer(
@@ -975,10 +1168,35 @@ class JobManager:
                     span.set_attribute("job_anomaly.type", res.anomaly_type)
                     span.set_attribute("job_anomaly.uuid", res.anomaly_uuid)
 
-                    # Store node attributions
+                    # The application may have requested cancellation after
+                    # this attempt was observed but before attribution
+                    # completed. Re-check the durable job-level intent for the
+                    # exact attributed attempt so a late result cannot publish
+                    # Restarted Advice after the application asked recovery to
+                    # stop.
+                    attributed_record = self.storage.read_job_record(
+                        job_id=res.job_id,
+                        job_attempt_index=res.job_attempt_index,
+                    )
+                    application_intention_result = (
+                        self.reconcile_application_intention(
+                            attributed_record,
+                            fail_closed_on_lookup_error=True,
+                        )
+                        if attributed_record is not None
+                        else ApplicationIntentionReconciliation.NOT_REQUESTED
+                    )
+                    if application_intention_result is ApplicationIntentionReconciliation.RETRY_REQUIRED:
+                        self._redeliver_anomaly_attribution_result(channel, method, properties, body, res)
+                        span.set_status(
+                            Status(StatusCode.ERROR, "Application intention reconciliation requires retry.")
+                        )
+                        return
+
+                    # Reconcile the cancellation guard before these writes so
+                    # delayed redelivery cannot duplicate attribution data.
                     for job_execution_error, node_events in res.node_attributions.items():
                         self.attribution_storage.store_attribution(job_execution_error, node_events)  # type: ignore[arg-type]
-                    # Store global attributions
                     for job_execution_error, global_events in res.global_attributions.items():
                         self.attribution_storage.store_attribution(job_execution_error, global_events)  # type: ignore[arg-type]
 
@@ -986,7 +1204,7 @@ class JobManager:
                         f"Successfully persisted the anomaly attribution for job {res.job_id} result in the database."
                     )
 
-                    if self._is_advice_management_enabled():
+                    if self._is_advice_management_enabled() and not application_intention_result.blocks_recovery:
                         maybe_persist_job_released_terminal_advice_from_attribution(
                             self.storage,
                             res,
@@ -1009,6 +1227,59 @@ class JobManager:
                     span.set_status(Status(StatusCode.ERROR, "Failed to persist anomaly attribution result."))
 
         return process_anomaly_isolator_message
+
+    def _redeliver_anomaly_attribution_result(
+        self,
+        channel: pika.channel,
+        method: pika.spec.Basic.Deliver,
+        properties: pika.spec.BasicProperties,
+        body: bytes,
+        result: AnomalyAttributionResult,
+    ) -> None:
+        """Delay a transiently blocked attribution result using the existing retry route."""
+        # This exact result is the only input that can produce its recovery
+        # Advice, so it remains retryable until reconciliation succeeds.
+        self._redeliver_message(
+            channel,
+            method,
+            properties,
+            body,
+            description=f"Anomaly attribution for job {result.job_id}",
+            max_delivery_times=None,
+        )
+
+    def _redeliver_message(
+        self,
+        channel: pika.channel,
+        method: pika.spec.Basic.Deliver,
+        properties: pika.spec.BasicProperties,
+        body: bytes,
+        *,
+        description: str,
+        max_delivery_times: int | None,
+    ) -> bool:
+        """Publish one message through the configured delayed route when eligible."""
+        routing_key = self.config["service"]["event_bus"].get("anomaly_dead_letter_routing_key")
+        if not routing_key:
+            logger.error("%s cannot be retried because the dead-letter route is not configured", description)
+            return False
+
+        headers = properties.headers or {}
+        delivery_times = int(headers.get("message_delivery_times", 0))
+        if max_delivery_times is not None and delivery_times >= max_delivery_times:
+            logger.error("%s exceeded its maximum delayed deliveries", description)
+            return False
+
+        retry_properties = copy(properties)
+        retry_properties.headers = {**headers, "message_delivery_times": delivery_times + 1}
+        rabbitmq.publish_message(
+            channel=channel,
+            exchange_name=method.exchange,
+            routing_key=routing_key,
+            message_body=body,  # type: ignore[arg-type]
+            properties=retry_properties,
+        )
+        return True
 
     def get_job_update_message_callback(
         self,
@@ -1098,7 +1369,6 @@ class JobManager:
                     sanitize_log_file_paths_for_retry(record, self.storage)
                     self.storage.create_job_record(job_record=record)
                     self.reconcile_anomaly_advice(record)
-                    self._maybe_emit_attribution_request(record)
 
                     if self._is_dag_support_enabled():
                         # Register DAG dependencies if the job has them
@@ -1111,6 +1381,12 @@ class JobManager:
                         # Evaluate DAG dependencies if the job completed (new attempt already in final COMPLETED state)
                         if record.state == SlurmJobFinalStates.COMPLETED.value:
                             self._evaluate_dag_dependencies_for_completed_job(record)
+
+                    # A request can be accepted before this consumer first
+                    # observes the job. Register DAG edges before creating
+                    # terminal Advice, then suppress any competing attribution
+                    # request for the cancelled attempt.
+                    self._maybe_emit_attribution_request(record)
                 else:
                     known_record = self.storage.read_job_record(record.job_id, record.job_attempt_index)
                     if known_record is None:
@@ -1131,6 +1407,7 @@ class JobManager:
 
                             self.refresh_dag_dependency_observability_for_observed_job(record)
 
+                        self.reconcile_application_intention(record)
                         return
                     effective_final_state = resolve_effective_final_state(record)
                     known_effective_final_state = resolve_effective_final_state(known_record)
@@ -1447,24 +1724,15 @@ class JobManager:
 
     def _redeliver_watcher_event(self, channel, method, properties, body: bytes, event: Event) -> None:
         """Reuse the bounded delayed route for missing registration or failed durable writes."""
-        routing_key = self.config["service"]["event_bus"].get("anomaly_dead_letter_routing_key")
-        if not routing_key:
-            logger.error("anomaly_dead_letter_routing_key is not configured; event cannot be retried.")
+        if not self._redeliver_message(
+            channel,
+            method,
+            properties,
+            body,
+            description=f"Watcher event {event.model_dump_json()}",
+            max_delivery_times=MESSAGE_MAX_DELIVERY_TIMES,
+        ):
             return
-        headers = properties.headers or {}
-        delivery_times = int(headers.get("message_delivery_times", 0))
-        if delivery_times >= MESSAGE_MAX_DELIVERY_TIMES:
-            logger.error("Watcher event exceeded its maximum delayed deliveries; event=%s", event.model_dump_json())
-            return
-        retry_properties = copy(properties)
-        retry_properties.headers = {**headers, "message_delivery_times": delivery_times + 1}
-        rabbitmq.publish_message(
-            channel=channel,
-            exchange_name=method.exchange,
-            routing_key=routing_key,
-            message_body=body,  # type: ignore[arg-type]
-            properties=retry_properties,
-        )
         if event.type == EventType.CHECKPOINTSAVE:
             CHECKPOINT_MESSAGE_REDELIVERY_COUNTER.inc(1)
         else:
@@ -1637,7 +1905,16 @@ class JobManager:
         if watcher_event is not None:
             self.persist_anomaly_advice(latest_job_record, watcher_event)
 
-        self._maybe_emit_attribution_request(latest_job_record)
+        application_intention_result = self._maybe_emit_attribution_request(latest_job_record)
+        if application_intention_result is ApplicationIntentionReconciliation.RETRY_REQUIRED:
+            # The Watcher consumer auto-acknowledges deliveries. Surface a
+            # storage failure so its existing delayed-redelivery path retains
+            # the anomaly until the cancellation guard can be evaluated.
+            raise RecoveryStorageException(
+                f"Application intention reconciliation requires retry for job {latest_job_record.job_id}"
+            )
+        if application_intention_result.blocks_recovery:
+            return
 
         if self._is_advice_management_enabled():
             maybe_persist_requeue_terminal_advice(

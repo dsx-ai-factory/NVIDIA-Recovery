@@ -14,7 +14,7 @@ from typing import Any, Literal, cast
 
 import uvicorn
 import yaml
-from fastapi import Body, FastAPI, HTTPException, Query, Response, status
+from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Query, Response, status
 from fastapi.openapi.utils import get_openapi
 from fastapi_mcp import FastApiMCP
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -30,6 +30,8 @@ from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_
 from recovery_libs.schema.job_manager.models import (
     Advice,
     AdviceReconciliationStatus,
+    ApplicationIntention,
+    ApplicationIntentionInput,
     GetRecoverySequenceRequest,
     GetRecoverySequenceResponse,
     GetWorkflowsResponse,
@@ -91,7 +93,7 @@ from job_manager.job_scheduler_metadata import (
     project_job_scheduler_fields,
 )
 from job_manager.logger import logger
-from job_manager.service import JobManager, resolve_effective_final_state
+from job_manager.service import DEFAULT_MESSAGE_DELIVERY_RETRY_DELAY, JobManager, resolve_effective_final_state
 from job_manager.storage_utils import (
     maybe_persist_requeue_terminal_advice,
     sanitize_log_file_paths_for_retry,
@@ -384,6 +386,41 @@ def get_job_groups(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
 
 
+@app.post(
+    "/application-intentions",
+    operation_id="post_application_intention",
+    response_model=ApplicationIntention,
+)
+def post_application_intention(
+    background_tasks: BackgroundTasks,
+    intention: ApplicationIntentionInput = Body(
+        ...,
+        description="A durable application request for the scheduler job.",
+    ),
+) -> ApplicationIntention:
+    """Record a job-level cancellation request from an application.
+
+    A successful response means that Job Manager durably accepted the
+    idempotent request. It does not wait for Advice creation or scheduler
+    cancellation. Job Manager starts best-effort reconciliation after sending
+    the response and retries from normal job and attribution updates.
+    """
+    try:
+        accepted = job_manager.create_application_intention(intention)  # type: ignore[union-attr]
+        background_tasks.add_task(
+            job_manager.reconcile_latest_application_intention,  # type: ignore[union-attr]
+            accepted.job_id,
+        )
+        return accepted
+    except RecoveryStorageException as error:
+        logger.exception(
+            "Failed to persist application intention for job %s",
+            intention.job_id,
+            extra={"error": str(error)},
+        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(error)) from error
+
+
 @app.post("/jobs", operation_id="post_jobs")
 def post_jobs(
     job: SlurmJobExecutionStatus = Body(..., description="The job to upsert."),
@@ -532,6 +569,13 @@ def post_jobs(
         if updated_record.state == SlurmJobFinalStates.COMPLETED.value:
             job_manager._evaluate_dag_dependencies_for_completed_job(updated_record)  # type: ignore[union-attr]
 
+        # An application cancellation is a durable job-level intent. Reconcile
+        # it after creation-time DAG registration so a terminal parent can
+        # propagate to its descendants, and before attribution can generate a
+        # competing Restarted decision. Future attempts repeat this check when
+        # they are first observed.
+        application_intention_result = job_manager.reconcile_application_intention(updated_record)  # type: ignore[union-attr]
+
         # Persist terminal cancellation/limit Advice at the scheduler-state
         # boundary so recovery outcomes remain visible. State-based anomaly handling
         # remains transition-triggered, but Advice reconciliation is level-based:
@@ -559,7 +603,7 @@ def post_jobs(
         # Attribution produces the terminal Restarted/Terminated Advice that a
         # scheduler adapter is allowed to act on. Emit only after the anomaly is
         # durable so ADI and the controller cannot observe a partial attempt.
-        if updated_record.anomalies:
+        if updated_record.anomalies and not application_intention_result.blocks_recovery:
             job_manager._maybe_emit_attribution_request(updated_record)  # type: ignore[union-attr]
 
         action = "created" if created else "updated"
@@ -1756,13 +1800,27 @@ def validate_service_config(config: dict[str, Any]) -> None:
                 "one or more are missing."
             )
 
-    if service_config.get("anomaly_queue_delivery_retry_delay_secs", 0) > 0 and (
-        not service_config.get("anomaly_dead_letter_routing_key")
-        or not service_config.get("anomaly_dead_letter_redelivery_routing_key")
-    ):
+    event_bus_config = service_config["event_bus"]
+    advice_management_enabled = service_config.get("advice_management_enabled", False)
+    anomaly_retry_delay = event_bus_config.get(
+        "anomaly_queue_delivery_retry_delay_secs",
+        DEFAULT_MESSAGE_DELIVERY_RETRY_DELAY if advice_management_enabled else 0,
+    )
+    dead_letter_routing_key = event_bus_config.get("anomaly_dead_letter_routing_key")
+    redelivery_routing_key = event_bus_config.get("anomaly_dead_letter_redelivery_routing_key")
+    if anomaly_retry_delay > 0 and (not dead_letter_routing_key or not redelivery_routing_key):
         raise RuntimeError(
             "'anomaly_dead_letter_routing_key' and 'anomaly_dead_letter_redelivery_routing_key' must be specified "
             "when 'anomaly_queue_delivery_retry_delay_secs' is greater than 0."
+        )
+    if anomaly_retry_delay > 0 and dead_letter_routing_key == redelivery_routing_key:
+        raise RuntimeError(
+            "'anomaly_dead_letter_routing_key' and 'anomaly_dead_letter_redelivery_routing_key' must be different."
+        )
+    if advice_management_enabled and anomaly_retry_delay <= 0:
+        raise RuntimeError(
+            "'anomaly_queue_delivery_retry_delay_secs' must be greater than 0 when Advice management is enabled "
+            "so transiently blocked attribution results can be retried safely."
         )
 
     if (

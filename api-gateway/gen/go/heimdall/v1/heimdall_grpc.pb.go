@@ -26,6 +26,7 @@ const (
 	HeimdallService_GetJob_FullMethodName                           = "/heimdall.v1.HeimdallService/GetJob"
 	HeimdallService_GetJobsBySchedulerId_FullMethodName             = "/heimdall.v1.HeimdallService/GetJobsBySchedulerId"
 	HeimdallService_CreateOrUpdateJob_FullMethodName                = "/heimdall.v1.HeimdallService/CreateOrUpdateJob"
+	HeimdallService_CreateApplicationIntention_FullMethodName       = "/heimdall.v1.HeimdallService/CreateApplicationIntention"
 	HeimdallService_GetWorkflows_FullMethodName                     = "/heimdall.v1.HeimdallService/GetWorkflows"
 	HeimdallService_GetWorkflow_FullMethodName                      = "/heimdall.v1.HeimdallService/GetWorkflow"
 	HeimdallService_ListAdvice_FullMethodName                       = "/heimdall.v1.HeimdallService/ListAdvice"
@@ -46,6 +47,8 @@ type HeimdallServiceClient interface {
 	GetJobsBySchedulerId(ctx context.Context, in *GetJobsBySchedulerIdRequest, opts ...grpc.CallOption) (*GetJobsBySchedulerIdResponse, error)
 	// Creates or updates a job.
 	CreateOrUpdateJob(ctx context.Context, in *CreateOrUpdateJobRequest, opts ...grpc.CallOption) (*CreateOrUpdateJobResponse, error)
+	// Records an application request to stop recovery and cancel a scheduler job.
+	CreateApplicationIntention(ctx context.Context, in *CreateApplicationIntentionRequest, opts ...grpc.CallOption) (*CreateApplicationIntentionResponse, error)
 	// Returns the workflows.
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
 	// Returns the workflow with the given ID.
@@ -98,6 +101,15 @@ func (c *heimdallServiceClient) GetJobsBySchedulerId(ctx context.Context, in *Ge
 func (c *heimdallServiceClient) CreateOrUpdateJob(ctx context.Context, in *CreateOrUpdateJobRequest, opts ...grpc.CallOption) (*CreateOrUpdateJobResponse, error) {
 	out := new(CreateOrUpdateJobResponse)
 	err := c.cc.Invoke(ctx, HeimdallService_CreateOrUpdateJob_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *heimdallServiceClient) CreateApplicationIntention(ctx context.Context, in *CreateApplicationIntentionRequest, opts ...grpc.CallOption) (*CreateApplicationIntentionResponse, error) {
+	out := new(CreateApplicationIntentionResponse)
+	err := c.cc.Invoke(ctx, HeimdallService_CreateApplicationIntention_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +182,8 @@ type HeimdallServiceServer interface {
 	GetJobsBySchedulerId(context.Context, *GetJobsBySchedulerIdRequest) (*GetJobsBySchedulerIdResponse, error)
 	// Creates or updates a job.
 	CreateOrUpdateJob(context.Context, *CreateOrUpdateJobRequest) (*CreateOrUpdateJobResponse, error)
+	// Records an application request to stop recovery and cancel a scheduler job.
+	CreateApplicationIntention(context.Context, *CreateApplicationIntentionRequest) (*CreateApplicationIntentionResponse, error)
 	// Returns the workflows.
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
 	// Returns the workflow with the given ID.
@@ -200,6 +214,9 @@ func (UnimplementedHeimdallServiceServer) GetJobsBySchedulerId(context.Context, 
 }
 func (UnimplementedHeimdallServiceServer) CreateOrUpdateJob(context.Context, *CreateOrUpdateJobRequest) (*CreateOrUpdateJobResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateOrUpdateJob not implemented")
+}
+func (UnimplementedHeimdallServiceServer) CreateApplicationIntention(context.Context, *CreateApplicationIntentionRequest) (*CreateApplicationIntentionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateApplicationIntention not implemented")
 }
 func (UnimplementedHeimdallServiceServer) GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflows not implemented")
@@ -300,6 +317,24 @@ func _HeimdallService_CreateOrUpdateJob_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HeimdallServiceServer).CreateOrUpdateJob(ctx, req.(*CreateOrUpdateJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HeimdallService_CreateApplicationIntention_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateApplicationIntentionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HeimdallServiceServer).CreateApplicationIntention(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HeimdallService_CreateApplicationIntention_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HeimdallServiceServer).CreateApplicationIntention(ctx, req.(*CreateApplicationIntentionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -434,6 +469,10 @@ var HeimdallService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateOrUpdateJob",
 			Handler:    _HeimdallService_CreateOrUpdateJob_Handler,
+		},
+		{
+			MethodName: "CreateApplicationIntention",
+			Handler:    _HeimdallService_CreateApplicationIntention_Handler,
 		},
 		{
 			MethodName: "GetWorkflows",

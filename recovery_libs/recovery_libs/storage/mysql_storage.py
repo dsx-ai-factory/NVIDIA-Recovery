@@ -35,6 +35,7 @@ from recovery_libs.storage.base import (
 from recovery_libs.storage.dataclass import (
     AdviceReconciliationStatusRecord,
     AdviceRecord,
+    ApplicationIntentionRecord,
     DagDependency,
     DagDependencyActionStatus,
     DataClassBase,
@@ -1348,6 +1349,115 @@ class MySQLStorage(BaseStorage):
             raise RecoveryStorageInputValidationError(
                 "Recovery milestone idempotency key is already associated with a different action occurrence."
             )
+
+    # ============================================================================
+    # Application Intention CRUD Operations
+    # ============================================================================
+
+    def create_or_get_application_intention(
+        self,
+        intention: ApplicationIntentionRecord,
+    ) -> tuple[ApplicationIntentionRecord, bool]:
+        """Persist the first application intention for a scheduler job.
+
+        The first committed row is the durable, absorbing decision for the job.
+        Concurrent duplicate requests return that row rather than changing its
+        original reason or timestamp.
+
+        Returns:
+            The stored intention and whether this call created it.
+        """
+        try:
+            return self._create_or_get_application_intention_once(intention)
+        except Exception as error:
+            logger.exception(
+                "Failed to persist application intention",
+                extra={"job_id": intention.job_id, "error": str(error)},
+            )
+            raise RecoveryStorageException(f"Failed to persist application intention: {error}") from error
+
+    @retry_on_conflict(describe=lambda intention: f"application intention for job {intention.job_id}")
+    def _create_or_get_application_intention_once(
+        self,
+        intention: ApplicationIntentionRecord,
+    ) -> tuple[ApplicationIntentionRecord, bool]:
+        """Run one conflict-retryable create-or-get transaction."""
+        with self.connection.write_session() as session:
+            if not self.connection.write_pool_enabled:
+                session.connection(execution_options={"isolation_level": "READ COMMITTED"})
+            try:
+                existing = session.scalars(
+                    select(ApplicationIntentionRecord)
+                    .where(ApplicationIntentionRecord.job_id == intention.job_id)
+                    .with_for_update()
+                ).first()
+                if existing is not None:
+                    session.expunge(existing)
+                    return existing, False
+
+                session.add(intention)
+                session.commit()
+                session.refresh(intention)
+                session.expunge(intention)
+                return intention, True
+            except Exception:
+                session.rollback()
+                raise
+
+    def read_application_intention(self, job_id: str) -> ApplicationIntentionRecord | None:
+        """Return the durable application intention for a scheduler job, if any."""
+        try:
+            with self.connection.session() as session:
+                return session.scalars(
+                    select(ApplicationIntentionRecord).where(ApplicationIntentionRecord.job_id == job_id)
+                ).first()
+        except Exception as error:
+            logger.exception(
+                "Failed to read application intention",
+                extra={"job_id": job_id, "error": str(error)},
+            )
+            raise RecoveryStorageException(f"Failed to read application intention: {error}") from error
+
+    def claim_application_intention_audit_attempt(
+        self,
+        job_id: str,
+        attempt_index: int,
+    ) -> tuple[ApplicationIntentionRecord | None, bool]:
+        """Associate a request audit event with the first latest known attempt.
+
+        The row lock makes concurrent background reconciliation and scheduler
+        updates agree on one attempt. Returning ``claimed=False`` suppresses
+        duplicate request events on later polls and repeated API calls.
+        """
+        try:
+            with self.connection.write_session() as session:
+                if not self.connection.write_pool_enabled:
+                    session.connection(execution_options={"isolation_level": "READ COMMITTED"})
+                try:
+                    intention = session.scalars(
+                        select(ApplicationIntentionRecord)
+                        .where(ApplicationIntentionRecord.job_id == job_id)
+                        .with_for_update()
+                    ).first()
+                    if intention is None or intention.audit_attempt_index is not None:
+                        if intention is not None:
+                            session.expunge(intention)
+                        return intention, False
+
+                    intention.audit_attempt_index = attempt_index
+                    session.commit()
+                    session.refresh(intention)
+                    session.expunge(intention)
+                    return intention, True
+                except Exception:
+                    session.rollback()
+                    raise
+        except Exception as error:
+            logger.exception(
+                "Failed to claim application intention audit attempt",
+                extra={"job_id": job_id, "attempt_index": attempt_index, "error": str(error)},
+            )
+            raise RecoveryStorageException(f"Failed to claim application intention audit attempt: {error}") from error
 
     # ============================================================================
     # Advice CRUD Operations
