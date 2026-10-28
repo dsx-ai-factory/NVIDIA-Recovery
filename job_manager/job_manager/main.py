@@ -93,7 +93,7 @@ from job_manager.job_scheduler_metadata import (
     project_job_scheduler_fields,
 )
 from job_manager.logger import logger
-from job_manager.service import JobManager, resolve_effective_final_state
+from job_manager.service import DEFAULT_MESSAGE_DELIVERY_RETRY_DELAY, JobManager, resolve_effective_final_state
 from job_manager.storage_utils import (
     maybe_persist_requeue_terminal_advice,
     sanitize_log_file_paths_for_retry,
@@ -1801,16 +1801,23 @@ def validate_service_config(config: dict[str, Any]) -> None:
             )
 
     event_bus_config = service_config["event_bus"]
-    anomaly_retry_delay = event_bus_config.get("anomaly_queue_delivery_retry_delay_secs", 0)
-    if anomaly_retry_delay > 0 and (
-        not event_bus_config.get("anomaly_dead_letter_routing_key")
-        or not event_bus_config.get("anomaly_dead_letter_redelivery_routing_key")
-    ):
+    advice_management_enabled = service_config.get("advice_management_enabled", False)
+    anomaly_retry_delay = event_bus_config.get(
+        "anomaly_queue_delivery_retry_delay_secs",
+        DEFAULT_MESSAGE_DELIVERY_RETRY_DELAY if advice_management_enabled else 0,
+    )
+    dead_letter_routing_key = event_bus_config.get("anomaly_dead_letter_routing_key")
+    redelivery_routing_key = event_bus_config.get("anomaly_dead_letter_redelivery_routing_key")
+    if anomaly_retry_delay > 0 and (not dead_letter_routing_key or not redelivery_routing_key):
         raise RuntimeError(
             "'anomaly_dead_letter_routing_key' and 'anomaly_dead_letter_redelivery_routing_key' must be specified "
             "when 'anomaly_queue_delivery_retry_delay_secs' is greater than 0."
         )
-    if service_config.get("advice_management_enabled", False) and anomaly_retry_delay <= 0:
+    if anomaly_retry_delay > 0 and dead_letter_routing_key == redelivery_routing_key:
+        raise RuntimeError(
+            "'anomaly_dead_letter_routing_key' and 'anomaly_dead_letter_redelivery_routing_key' must be different."
+        )
+    if advice_management_enabled and anomaly_retry_delay <= 0:
         raise RuntimeError(
             "'anomaly_queue_delivery_retry_delay_secs' must be greater than 0 when Advice management is enabled "
             "so transiently blocked attribution results can be retried safely."
