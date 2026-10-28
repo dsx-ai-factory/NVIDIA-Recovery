@@ -810,6 +810,14 @@ class JobManager:
             queue_name=service_config["event_bus"]["anomaly_attribution_queue"],
             routing_keys=[service_config["event_bus"]["anomaly_attribution_routing_key"]],
             callback_func=self.get_anomaly_isolator_message_callback(),
+            delay_secs=service_config["event_bus"].get(
+                "anomaly_queue_delivery_retry_delay_secs",
+                DEFAULT_MESSAGE_DELIVERY_RETRY_DELAY,
+            ),
+            dead_letter_routing_key=service_config["event_bus"].get("anomaly_dead_letter_routing_key"),
+            dead_letter_redelivery_routing_key=service_config["event_bus"].get(
+                "anomaly_dead_letter_redelivery_routing_key"
+            ),
         )
 
         self.event_bus_consumers[WATCHER] = RabbitMQConsumer(
@@ -1147,17 +1155,6 @@ class JobManager:
                     span.set_attribute("job_anomaly.type", res.anomaly_type)
                     span.set_attribute("job_anomaly.uuid", res.anomaly_uuid)
 
-                    # Store node attributions
-                    for job_execution_error, node_events in res.node_attributions.items():
-                        self.attribution_storage.store_attribution(job_execution_error, node_events)  # type: ignore[arg-type]
-                    # Store global attributions
-                    for job_execution_error, global_events in res.global_attributions.items():
-                        self.attribution_storage.store_attribution(job_execution_error, global_events)  # type: ignore[arg-type]
-
-                    logger.info(
-                        f"Successfully persisted the anomaly attribution for job {res.job_id} result in the database."
-                    )
-
                     # The application may have requested cancellation after
                     # this attempt was observed but before attribution
                     # completed. Re-check the durable job-level intent for the
@@ -1176,6 +1173,24 @@ class JobManager:
                         if attributed_record is not None
                         else ApplicationIntentionReconciliation.NOT_REQUESTED
                     )
+                    if application_intention_result is ApplicationIntentionReconciliation.RETRY_REQUIRED:
+                        self._redeliver_anomaly_attribution_result(channel, method, properties, body, res)
+                        span.set_status(
+                            Status(StatusCode.ERROR, "Application intention reconciliation requires retry.")
+                        )
+                        return
+
+                    # Reconcile the cancellation guard before these writes so
+                    # delayed redelivery cannot duplicate attribution data.
+                    for job_execution_error, node_events in res.node_attributions.items():
+                        self.attribution_storage.store_attribution(job_execution_error, node_events)  # type: ignore[arg-type]
+                    for job_execution_error, global_events in res.global_attributions.items():
+                        self.attribution_storage.store_attribution(job_execution_error, global_events)  # type: ignore[arg-type]
+
+                    logger.info(
+                        f"Successfully persisted the anomaly attribution for job {res.job_id} result in the database."
+                    )
+
                     if self._is_advice_management_enabled() and not application_intention_result.blocks_recovery:
                         maybe_persist_job_released_terminal_advice_from_attribution(
                             self.storage,
@@ -1199,6 +1214,38 @@ class JobManager:
                     span.set_status(Status(StatusCode.ERROR, "Failed to persist anomaly attribution result."))
 
         return process_anomaly_isolator_message
+
+    def _redeliver_anomaly_attribution_result(
+        self,
+        channel: pika.channel,
+        method: pika.spec.Basic.Deliver,
+        properties: pika.spec.BasicProperties,
+        body: bytes,
+        result: AnomalyAttributionResult,
+    ) -> None:
+        """Delay a transiently blocked attribution result using the existing retry route."""
+        routing_key = self.config["service"]["event_bus"].get("anomaly_dead_letter_routing_key")
+        if not routing_key:
+            logger.error(
+                "Anomaly attribution for job %s cannot be retried because the dead-letter route is not configured",
+                result.job_id,
+            )
+            return
+
+        headers = properties.headers or {}
+        delivery_times = int(headers.get("message_delivery_times", 0))
+        # This exact attribution result is the only input that can produce its
+        # recovery Advice. Keep it delayed while storage is unavailable rather
+        # than applying the Watcher event cap and silently losing recovery.
+        retry_properties = copy(properties)
+        retry_properties.headers = {**headers, "message_delivery_times": delivery_times + 1}
+        rabbitmq.publish_message(
+            channel=channel,
+            exchange_name=method.exchange,
+            routing_key=routing_key,
+            message_body=body,  # type: ignore[arg-type]
+            properties=retry_properties,
+        )
 
     def get_job_update_message_callback(
         self,

@@ -130,6 +130,22 @@ class TestJobManager(unittest.TestCase):
             "attribution_request_exchange",
         )
 
+    def test_attribution_consumer_uses_existing_delayed_retry_route(self):
+        """Attribution retries use the same bounded delayed route as anomaly delivery."""
+        event_bus = self._config["service"]["event_bus"]
+        event_bus["anomaly_queue_delivery_retry_delay_secs"] = 17
+
+        with patch("job_manager.service.RabbitMQConsumer") as consumer:
+            self._job_manager.initialize_event_bus_consumers()
+
+        attribution_config = consumer.call_args_list[2].kwargs["consumer_config"]
+        self.assertEqual(attribution_config.delay_secs, 17)
+        self.assertEqual(attribution_config.dead_letter_routing_key, event_bus["anomaly_dead_letter_routing_key"])
+        self.assertEqual(
+            attribution_config.dead_letter_redelivery_routing_key,
+            event_bus["anomaly_dead_letter_redelivery_routing_key"],
+        )
+
     def _configure_pending_application_cancellation(self, job_id: str, attempt_index: int) -> None:
         """Make the storage mock expose a durable request accepted before observation."""
         self._config["service"]["advice_management_enabled"] = True
@@ -1991,22 +2007,72 @@ class TestJobManager(unittest.TestCase):
             created_at=datetime.now(UTC),
         )
         self._job_manager.storage.read_advice_by_job.return_value = None
+        method = MagicMock(exchange="aie_eventbus_exchange")
+        properties = pika.spec.BasicProperties()
 
         with (
             patch("job_manager.service.create_terminal_advice_for_job", return_value=None),
             patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as restart,
+            patch("job_manager.service.rabbitmq.publish_message") as redeliver,
         ):
             callback = self._job_manager.get_anomaly_isolator_message_callback()
             callback(
                 MagicMock(),
-                MagicMock(),
-                pika.spec.BasicProperties(),
+                method,
+                properties,
                 attribution_result.to_json().encode(),
             )
 
         restart.assert_not_called()
+        self._job_manager.attribution_storage.store_attribution.assert_not_called()
+        redeliver.assert_called_once()
+        self.assertEqual(redeliver.call_args.kwargs["routing_key"], "test_dead_letter")
+        self.assertEqual(redeliver.call_args.kwargs["properties"].headers["message_delivery_times"], 1)
 
-    def test_failed_application_intention_lookup_blocks_late_restart_attribution(self):
+    def test_transient_application_intention_lookup_redelivers_then_persists_restart(self):
+        attribution_result = create_example_anoamly_attribution_result()
+        attempt = create_example_slurm_job_record(
+            job_id=attribution_result.job_id,
+            attempt_index=attribution_result.job_attempt_index,
+            state="FAILED",
+        )
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_job_record.return_value = attempt
+        self._job_manager.storage.read_application_intention.side_effect = [
+            RecoveryStorageException("temporary application intention lookup failure"),
+            None,
+        ]
+        method = MagicMock(exchange="aie_eventbus_exchange")
+        properties = pika.spec.BasicProperties()
+
+        with (
+            patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as restart,
+            patch("job_manager.service.rabbitmq.publish_message") as redeliver,
+        ):
+            callback = self._job_manager.get_anomaly_isolator_message_callback()
+            callback(
+                MagicMock(),
+                method,
+                properties,
+                attribution_result.to_json().encode(),
+            )
+            retry_properties = redeliver.call_args.kwargs["properties"]
+            callback(
+                MagicMock(),
+                method,
+                retry_properties,
+                attribution_result.to_json().encode(),
+            )
+
+        redeliver.assert_called_once()
+        self.assertEqual(redeliver.call_args.kwargs["exchange_name"], "aie_eventbus_exchange")
+        self.assertEqual(redeliver.call_args.kwargs["routing_key"], "test_dead_letter")
+        self.assertEqual(retry_properties.headers["message_delivery_times"], 1)
+        self._job_manager.attribution_storage.store_attribution.assert_called_once()
+        restart.assert_called_once()
+
+    def test_application_intention_retry_remains_pending_beyond_watcher_limit(self):
+        """An exact attribution result is retained until reconciliation can complete."""
         attribution_result = create_example_anoamly_attribution_result()
         attempt = create_example_slurm_job_record(
             job_id=attribution_result.job_id,
@@ -2016,18 +2082,27 @@ class TestJobManager(unittest.TestCase):
         self._config["service"]["advice_management_enabled"] = True
         self._job_manager.storage.read_job_record.return_value = attempt
         self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
-            "temporary application intention lookup failure"
+            "persistent application intention lookup failure"
         )
 
-        with patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as restart:
+        with (
+            patch("job_manager.service.rabbitmq.publish_message") as redeliver,
+            patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as restart,
+        ):
             callback = self._job_manager.get_anomaly_isolator_message_callback()
             callback(
                 MagicMock(),
-                MagicMock(),
-                pika.spec.BasicProperties(),
+                MagicMock(exchange="aie_eventbus_exchange"),
+                pika.spec.BasicProperties(headers={"message_delivery_times": MESSAGE_MAX_DELIVERY_TIMES}),
                 attribution_result.to_json().encode(),
             )
 
+        redeliver.assert_called_once()
+        self.assertEqual(
+            redeliver.call_args.kwargs["properties"].headers["message_delivery_times"],
+            MESSAGE_MAX_DELIVERY_TIMES + 1,
+        )
+        self._job_manager.attribution_storage.store_attribution.assert_not_called()
         restart.assert_not_called()
 
     def test_find_stale_jobs_not_executed(self):
