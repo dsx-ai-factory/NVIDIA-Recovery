@@ -1800,13 +1800,20 @@ def validate_service_config(config: dict[str, Any]) -> None:
                 "one or more are missing."
             )
 
-    if service_config.get("anomaly_queue_delivery_retry_delay_secs", 0) > 0 and (
-        not service_config.get("anomaly_dead_letter_routing_key")
-        or not service_config.get("anomaly_dead_letter_redelivery_routing_key")
+    event_bus_config = service_config["event_bus"]
+    anomaly_retry_delay = event_bus_config.get("anomaly_queue_delivery_retry_delay_secs", 0)
+    if anomaly_retry_delay > 0 and (
+        not event_bus_config.get("anomaly_dead_letter_routing_key")
+        or not event_bus_config.get("anomaly_dead_letter_redelivery_routing_key")
     ):
         raise RuntimeError(
             "'anomaly_dead_letter_routing_key' and 'anomaly_dead_letter_redelivery_routing_key' must be specified "
             "when 'anomaly_queue_delivery_retry_delay_secs' is greater than 0."
+        )
+    if service_config.get("advice_management_enabled", False) and anomaly_retry_delay <= 0:
+        raise RuntimeError(
+            "'anomaly_queue_delivery_retry_delay_secs' must be greater than 0 when Advice management is enabled "
+            "so transiently blocked attribution results can be retried safely."
         )
 
     if (
