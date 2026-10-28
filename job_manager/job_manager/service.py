@@ -662,13 +662,25 @@ class JobManager:
             )
         )
 
-    def _maybe_emit_attribution_request(self, record: SlurmJobExecutionRecord) -> None:
-        """Emit AttributionRequest to ADI for an anomalous attempt (once, gated).
+    def _maybe_emit_attribution_request(
+        self,
+        record: SlurmJobExecutionRecord,
+    ) -> ApplicationIntentionReconciliation:
+        """Reconcile application intent, then emit attribution once when recovery remains eligible.
 
         Safe to call from any anomaly-record or terminal-transition path after the
-        record is persisted; the emitter gates on anomaly eligibility and de-dups via an
-        atomic claim, so redundant calls are no-ops.
+        record is persisted. The fail-closed intention check prevents an attribution
+        request from starting a restart sequence while cancellation state is unavailable.
+        The emitter then gates on anomaly eligibility and de-dups via an atomic claim, so
+        redundant calls are no-ops.
         """
+        application_intention_result = self.reconcile_application_intention(
+            record,
+            fail_closed_on_lookup_error=True,
+        )
+        if application_intention_result.blocks_recovery:
+            return application_intention_result
+
         event_bus = self.config["service"].get("event_bus", {})
         emit_attribution_request_if_needed(
             record,
@@ -679,6 +691,7 @@ class JobManager:
             straggler_enabled=self.config["service"].get("adi_straggler_emit_enabled", False),
             recovery_context_provider=lambda: self._recovery_context_for_attribution(record),
         )
+        return application_intention_result
 
     def _recovery_context_for_attribution(self, record: SlurmJobExecutionRecord) -> Context | None:
         anomalies = record.anomalies or []
@@ -1884,7 +1897,16 @@ class JobManager:
         if watcher_event is not None:
             self.persist_anomaly_advice(latest_job_record, watcher_event)
 
-        self._maybe_emit_attribution_request(latest_job_record)
+        application_intention_result = self._maybe_emit_attribution_request(latest_job_record)
+        if application_intention_result is ApplicationIntentionReconciliation.RETRY_REQUIRED:
+            # The Watcher consumer auto-acknowledges deliveries. Surface a
+            # storage failure so its existing delayed-redelivery path retains
+            # the anomaly until the cancellation guard can be evaluated.
+            raise RecoveryStorageException(
+                f"Application intention reconciliation requires retry for job {latest_job_record.job_id}"
+            )
+        if application_intention_result.blocks_recovery:
+            return
 
         if self._is_advice_management_enabled():
             maybe_persist_requeue_terminal_advice(

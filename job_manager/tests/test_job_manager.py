@@ -1457,6 +1457,7 @@ class TestJobManager(unittest.TestCase):
             uuid=str(uuid.uuid4()),
         )
         job_record.anomalies = [job_anomaly]
+        self._job_manager.storage.read_application_intention.return_value = None
 
         with (
             patch("job_manager.service.maybe_persist_requeue_terminal_advice") as terminal_advice_mock,
@@ -1466,6 +1467,44 @@ class TestJobManager(unittest.TestCase):
                 job_anomaly,
             )
             terminal_advice_mock.assert_called_once()
+
+    def test_attribution_emission_reconciles_application_cancellation_first(self):
+        """A pending application cancellation prevents a restart sequence from starting."""
+        record = create_example_slurm_job_record(state="FAILED")
+        self._configure_pending_application_cancellation(record.job_id, record.job_attempt_index)
+        persisted_advice = create_example_advice_record(
+            job_id=record.job_id,
+            attempt_index=record.job_attempt_index,
+            advice_state=AdviceState.TERMINATED.value,
+        )
+
+        with (
+            patch("job_manager.service.create_terminal_advice_for_job", return_value=persisted_advice),
+            patch("job_manager.service.emit_attribution_request_if_needed") as emit_attribution,
+        ):
+            result = self._job_manager._maybe_emit_attribution_request(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.TERMINATED)
+        emit_attribution.assert_not_called()
+
+    def test_persist_anomaly_retries_when_application_intention_lookup_fails(self):
+        """Watcher redelivery remains available until the cancellation guard can be evaluated."""
+        record = create_example_slurm_job_record(state="FAILED")
+        anomaly = JobAnomaly(anomaly_type=EventType.CRASH, timestamp=datetime.now(UTC), uuid=str(uuid.uuid4()))
+        record.anomalies = [anomaly]
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+            "temporary application intention lookup failure"
+        )
+
+        with (
+            patch("job_manager.service.maybe_persist_requeue_terminal_advice") as terminal_advice,
+            self.assertRaisesRegex(RecoveryStorageException, "reconciliation requires retry"),
+        ):
+            self._job_manager.persist_job_anomaly(record, anomaly)
+
+        terminal_advice.assert_not_called()
+        self._job_manager.adi_attribution_request_publisher.publish_message.assert_not_called()
 
     def test_failed_anomaly_persistence_skips_advice_and_attribution(self):
         """No downstream recovery work starts before anomaly storage succeeds."""
