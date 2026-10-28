@@ -1288,7 +1288,6 @@ class JobManager:
                     sanitize_log_file_paths_for_retry(record, self.storage)
                     self.storage.create_job_record(job_record=record)
                     self.reconcile_anomaly_advice(record)
-                    self._maybe_emit_attribution_request(record)
 
                     if self._is_dag_support_enabled():
                         # Register DAG dependencies if the job has them
@@ -1301,6 +1300,14 @@ class JobManager:
                         # Evaluate DAG dependencies if the job completed (new attempt already in final COMPLETED state)
                         if record.state == SlurmJobFinalStates.COMPLETED.value:
                             self._evaluate_dag_dependencies_for_completed_job(record)
+
+                    # A request can be accepted before this consumer first
+                    # observes the job. Register DAG edges before creating
+                    # terminal Advice, then suppress any competing attribution
+                    # request for the cancelled attempt.
+                    application_intention_result = self.reconcile_application_intention(record)
+                    if not application_intention_result.blocks_recovery:
+                        self._maybe_emit_attribution_request(record)
                 else:
                     known_record = self.storage.read_job_record(record.job_id, record.job_attempt_index)
                     if known_record is None:
@@ -1321,6 +1328,7 @@ class JobManager:
 
                             self.refresh_dag_dependency_observability_for_observed_job(record)
 
+                        self.reconcile_application_intention(record)
                         return
                     effective_final_state = resolve_effective_final_state(record)
                     known_effective_final_state = resolve_effective_final_state(known_record)
@@ -1444,7 +1452,9 @@ class JobManager:
                     if not record.anomalies:
                         record.anomalies = known_record.anomalies
                     self.reconcile_anomaly_advice(record)
-                    self._maybe_emit_attribution_request(record)
+                    application_intention_result = self.reconcile_application_intention(record)
+                    if not application_intention_result.blocks_recovery:
+                        self._maybe_emit_attribution_request(record)
             except EventBusError as e:
                 logger.exception(f"Event bus error. Raw message: {body.decode()}", extra={"error": str(e)})
             except RecoveryStorageException as e:

@@ -130,6 +130,18 @@ class TestJobManager(unittest.TestCase):
             "attribution_request_exchange",
         )
 
+    def _configure_pending_application_cancellation(self, job_id: str, attempt_index: int) -> None:
+        """Make the storage mock expose a durable request accepted before observation."""
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id=job_id,
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="application finished",
+            audit_attempt_index=attempt_index,
+            created_at=datetime.now(UTC),
+        )
+        self._job_manager.storage.read_advice_by_job.return_value = None
+
     def test_create_application_intention_accepts_request_before_job_registration(self):
         created_at = datetime.now(UTC)
         stored = ApplicationIntentionRecord(
@@ -780,6 +792,58 @@ class TestJobManager(unittest.TestCase):
             job_update_counter_mock.inc.assert_called_once()
             mock_sanitize_log_file_paths.assert_called_once()
 
+    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
+    def test_rabbitmq_registration_reconciles_preexisting_application_cancellation(
+        self,
+        mock_sanitize_log_file_paths,
+    ):
+        """A request accepted before registration terminates the first RabbitMQ-observed attempt."""
+        now = datetime.now(UTC)
+        record = create_example_slurm_job_record(
+            submit_time=now - timedelta(minutes=10),
+            state="RUNNING",
+            last_updated_at=now,
+            attempt_index=0,
+        )
+        record.aps_spec.dag_dependencies = [DagDependencyStep(target=JobReferenceByName(name="parent"))]
+        self._config["service"]["dag_support"]["enabled"] = True
+        self._configure_pending_application_cancellation(record.job_id, record.job_attempt_index)
+        self._job_manager.storage.get_job_latest_attempt_index.return_value = -1
+        persisted_advice = create_example_advice_record(
+            job_id=record.job_id,
+            attempt_index=record.job_attempt_index,
+            advice_state=AdviceState.TERMINATED.value,
+        )
+        reconciliation_order: list[str] = []
+
+        with (
+            patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"),
+            patch.object(self._job_manager, "reconcile_anomaly_advice"),
+            patch.object(
+                self._job_manager,
+                "_register_dag_dependencies",
+                side_effect=lambda *_args, **_kwargs: reconciliation_order.append("dag_registered"),
+            ),
+            patch.object(self._job_manager, "refresh_dag_dependency_observability_for_observed_job"),
+            patch.object(self._job_manager, "_maybe_emit_attribution_request") as emit_attribution,
+            patch(
+                "job_manager.service.create_terminal_advice_for_job",
+                side_effect=lambda *_args, **_kwargs: (
+                    reconciliation_order.append("termination_persisted") or persisted_advice
+                ),
+            ) as persist_terminal,
+        ):
+            self._job_manager.get_job_update_message_callback()(
+                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
+            )
+
+        self.assertEqual(reconciliation_order, ["dag_registered", "termination_persisted"])
+        persist_terminal.assert_called_once()
+        self.assertEqual(persist_terminal.call_args.kwargs["job_id"], record.job_id)
+        self.assertEqual(persist_terminal.call_args.kwargs["job_attempt_index"], record.job_attempt_index)
+        emit_attribution.assert_not_called()
+        mock_sanitize_log_file_paths.assert_called_once()
+
     @patch("job_manager.service.populate_sticky_exclusion_node_list", MagicMock(return_value=None))
     def test_process_job_updates_record_update(self):
         now = datetime.now(UTC)
@@ -830,6 +894,47 @@ class TestJobManager(unittest.TestCase):
             self.assertEqual(call_args["last_state_transition_time"], record.last_updated_at)
             self.assertEqual(call_args["state_reason"], "None")
 
+    @patch("job_manager.service.populate_sticky_exclusion_node_list", MagicMock(return_value=None))
+    def test_rabbitmq_update_reconciles_preexisting_application_cancellation(self):
+        """An existing attempt update retries a durable request and suppresses attribution."""
+        now = datetime.now(UTC)
+        record = create_example_slurm_job_record(
+            submit_time=now - timedelta(minutes=10),
+            state="RUNNING",
+            last_updated_at=now,
+            attempt_index=0,
+        )
+        known_record = create_example_slurm_job_record(
+            submit_time=record.submit_time,
+            state="PENDING",
+            last_updated_at=now - timedelta(minutes=1),
+            attempt_index=0,
+        )
+        known_record.sticky_exclusion_node_list = []
+        self._configure_pending_application_cancellation(record.job_id, record.job_attempt_index)
+        self._job_manager.storage.get_job_latest_attempt_index.return_value = 0
+        self._job_manager.storage.read_job_record.return_value = known_record
+        persisted_advice = create_example_advice_record(
+            job_id=record.job_id,
+            attempt_index=record.job_attempt_index,
+            advice_state=AdviceState.TERMINATED.value,
+        )
+
+        with (
+            patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"),
+            patch.object(self._job_manager, "reconcile_anomaly_advice"),
+            patch.object(self._job_manager, "_maybe_emit_attribution_request") as emit_attribution,
+            patch(
+                "job_manager.service.create_terminal_advice_for_job", return_value=persisted_advice
+            ) as persist_terminal,
+        ):
+            self._job_manager.get_job_update_message_callback()(
+                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
+            )
+
+        persist_terminal.assert_called_once()
+        emit_attribution.assert_not_called()
+
     @patch("job_manager.service.sanitize_log_file_paths_for_retry")
     def test_process_job_updates_record_not_found_creates_new(self, mock_sanitize_log_file_paths):
         """When update path finds no existing record (gap in attempt indices), it should create a new record."""
@@ -852,6 +957,41 @@ class TestJobManager(unittest.TestCase):
             self._job_manager.storage.update_job_record.assert_not_called()
             mock_sanitize_log_file_paths.assert_called_once()
             job_update_counter_mock.inc.assert_called_once()
+
+    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
+    def test_rabbitmq_missing_attempt_reconciles_preexisting_application_cancellation(
+        self,
+        mock_sanitize_log_file_paths,
+    ):
+        """The recovery branch for a missing attempt also applies the durable request."""
+        now = datetime.now(UTC)
+        record = create_example_slurm_job_record(
+            submit_time=now - timedelta(minutes=10),
+            state="REQUEUED",
+            last_updated_at=now,
+            attempt_index=1,
+        )
+        self._configure_pending_application_cancellation(record.job_id, record.job_attempt_index)
+        self._job_manager.storage.get_job_latest_attempt_index.return_value = 2
+        self._job_manager.storage.read_job_record.return_value = None
+        persisted_advice = create_example_advice_record(
+            job_id=record.job_id,
+            attempt_index=record.job_attempt_index,
+            advice_state=AdviceState.TERMINATED.value,
+        )
+
+        with (
+            patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"),
+            patch(
+                "job_manager.service.create_terminal_advice_for_job", return_value=persisted_advice
+            ) as persist_terminal,
+        ):
+            self._job_manager.get_job_update_message_callback()(
+                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
+            )
+
+        persist_terminal.assert_called_once()
+        mock_sanitize_log_file_paths.assert_called_once()
 
     @patch("job_manager.service.sanitize_log_file_paths_for_retry")
     def test_process_job_updates_with_final_state(self, mock_sanitize_log_file_paths):
