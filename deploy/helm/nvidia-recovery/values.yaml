@@ -393,32 +393,25 @@ opentelemetry-collector:
     - name: regcred
 
   command:
-    extraArgs: ["--config", "/etc/otelcol/heimdall-otelcol-config.yaml"]
+    extraArgs: ["--config", "/etc/otelcol/nvidia-recovery-otelcol-config.yaml"]
 
   extraVolumeMounts:
-    - name: heimdall-otelcol-config
+    - name: nvidia-recovery-otelcol-config
       mountPath: /etc/otelcol
 
   extraVolumes:
-    - name: heimdall-otelcol-config
+    - name: nvidia-recovery-otelcol-config
       configMap:
-        name: heimdall-otelcol-config
+        name: nvidia-recovery-otelcol-config
         items:
-          - key: heimdall-otelcol-config.yaml
-            path: heimdall-otelcol-config.yaml
+          - key: nvidia-recovery-otelcol-config.yaml
+            path: nvidia-recovery-otelcol-config.yaml
         defaultMode: 420
 
-  extraEnvs:
-    - name: RABBITMQ_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: heimdall-rabbitmq
-          key: rabbitmq-password
-    - name: BASIC_AUTH_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: heimdall-otelc-token
-          key: OTELC_TOKEN
+  # Add Secret-backed environment variables here when enabling authenticated
+  # receivers/exporters or the optional RabbitMQ log exporter. No deployment-
+  # specific Secret name is built into the public chart.
+  extraEnvs: []
 
   # this disables all ports except for OTLP gRPC (4317) and HTTP (4318)
   # TODO - we may need to enable the metrics port (8888) as it is disabled by default
@@ -433,12 +426,30 @@ opentelemetry-collector:
       enabled: false
 
   config:
+    exporters:
+      # Optional trace relay. Applications still receive their exporter
+      # contract through global.otelcollector; point that endpoint at this
+      # collector Service when using the relay.
+      traces:
+        enabled: false
+        endpoint: ""
+        auth:
+          enabled: false
+          header: Authorization
+          environmentVariable: OTEL_EXPORTER_OTLP_TRACES_AUTHORIZATION
+        tls:
+          insecure: false
     receivers:
       filelog:
         enabled: false
       otlp:
         enabled: false
+        grpc:
+          endpoint: "${env:MY_POD_IP}:4317"
+        http:
+          endpoint: "${env:MY_POD_IP}:4318"
         auth: false
+        auth_token_environment_variable: OTEL_RECEIVER_BEARER_TOKEN
         environment: null
     event_bus:
       host: heimdall-rabbitmq
