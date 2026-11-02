@@ -4,6 +4,10 @@ Status: accepted
 
 Date: 2026-11-02
 
+> **Implementation note (2026-11-02):** The [development profile](../development/kubernetes.md)
+> implements the foundation with [staged JobSet scenarios](../../tests/e2e_kubernetes/test_foundation.py);
+> Recovery components and broader workload qualification remain subsequent work.
+
 ## Context
 
 Direct Kubernetes workload recovery needs a repeatable environment in which

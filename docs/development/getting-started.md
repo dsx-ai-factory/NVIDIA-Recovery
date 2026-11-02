@@ -4,6 +4,8 @@ This guide is for contributors changing NVIDIA Recovery. It takes you from a
 source checkout to a focused build and a check appropriate to your change.
 To run a local Slurm/Slinky deployment first, follow the
 [local tutorial](../getting-started.md).
+For the CPU-only direct Kubernetes foundation, use the
+[Kubernetes development profile](kubernetes.md).
 
 NVIDIA Recovery is experimental. The shipped scheduler integration is Slurm,
 including Slurm on Kubernetes through Slinky. Start with the
