@@ -6,7 +6,7 @@ and isolated staged smoke scenarios. It does not deploy Recovery controllers or
 prove recovery correctness. The existing [Slurm/Slinky tutorial](../getting-started.md)
 continues to use the root Tiltfile.
 
-Install Docker, Kind (0.31.0 or later), kubectl, Tilt, and uv. The profile pins
+Install Make, Docker, Kind (0.31.0 or later), kubectl, Tilt, and uv. The profile pins
 Kubernetes to `kindest/node:v1.35.0` and JobSet to `v0.12.0`; network access is
 needed for their public images and release manifests. JobSet is installed with
 the upstream [server-side apply procedure](https://jobset.sigs.k8s.io/docs/installation/).
@@ -15,21 +15,24 @@ From the repository root:
 
 ```bash
 # Start Kind and keep Tilt running for interactive development.
-bash deploy/tilt/kubernetes/dev.sh up
+make dev-k8s
 
 # In another terminal, run the foundation scenarios.
-bash deploy/tilt/kubernetes/dev.sh test
+make dev-k8s-test
 
 # Exercise concurrent ownership/isolation, then repeat against the same cluster.
-bash deploy/tilt/kubernetes/dev.sh test -n 2
-bash deploy/tilt/kubernetes/dev.sh test -n 2
+make dev-k8s-test K8S_TEST_ARGS="-n 2"
+make dev-k8s-test K8S_TEST_ARGS="-n 2"
 
 # Stop Tilt with Ctrl-C, then delete this profile's cluster.
-bash deploy/tilt/kubernetes/dev.sh down
+make dev-k8s-down
 ```
 
-For automation, `bash deploy/tilt/kubernetes/dev.sh up ci --timeout 10m`
-converges the environment and exits; use the same `test` and `down` commands.
+For automation, `make dev-k8s-ci`
+converges the environment and exits; use `make dev-k8s-test` and
+`make dev-k8s-down` afterward.
+Override its default 10-minute convergence timeout with `K8S_DEV_CI_TIMEOUT`.
+Pass pytest options through `K8S_TEST_ARGS`.
 Cluster creation and controller readiness are outside pytest. A failed run
 leaves the cluster available for diagnosis until explicit teardown.
 
@@ -51,7 +54,8 @@ KUBECONFIG="$PWD/deploy/tilt/tmp/nvr-kubernetes-dev/kubeconfig" kubectl get pods
 ```
 
 To exercise failure reporting, set `KUBERNETES_SMOKE_IMAGE` to a nonexistent
-image tag and select one case with `test -k '[0]'`. The scenario fails after
+image tag and select one case with
+`make dev-k8s-test K8S_TEST_ARGS="-k '[0]'"`. The scenario fails after
 its 180-second readiness deadline, records the image-pull Events and Pod state,
 and still cleans up its owned workload. Unavailable container logs are recorded
 as diagnostic errors, rather than hiding the original scenario failure.
