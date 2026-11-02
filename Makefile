@@ -178,6 +178,24 @@ dev-validate:
 dev-down:
 	deploy/tilt/cluster.sh down
 
+# Direct Kubernetes foundation; independent of the Slurm/Slinky targets above.
+K8S_DEV_CI_TIMEOUT ?= 10m
+K8S_TEST_ARGS ?=
+
+.PHONY: dev-k8s dev-k8s-test dev-k8s-ci dev-k8s-down
+
+dev-k8s:
+	bash deploy/tilt/kubernetes/dev.sh up
+
+dev-k8s-test:
+	bash deploy/tilt/kubernetes/dev.sh test $(K8S_TEST_ARGS)
+
+dev-k8s-ci:
+	bash deploy/tilt/kubernetes/dev.sh up ci --timeout "$(K8S_DEV_CI_TIMEOUT)"
+
+dev-k8s-down:
+	bash deploy/tilt/kubernetes/dev.sh down
+
 # Tear down the Kind cluster, kubeconfig, and owned registry. Honors
 # CLUSTER_NAME from the environment (default heimdall-e2e), matching the harness.
 e2e-down:
