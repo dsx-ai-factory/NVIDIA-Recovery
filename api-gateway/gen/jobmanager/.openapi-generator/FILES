@@ -12,6 +12,7 @@ model_advice_reconciliation_status.go
 model_advice_state.go
 model_anomaly_detection_config.go
 model_application_intention.go
+model_application_intention_authorization_status.go
 model_application_intention_desired_state.go
 model_application_intention_input.go
 model_aps_slurm_job_spec_input.go

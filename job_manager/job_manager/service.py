@@ -53,6 +53,7 @@ from recovery_libs.schema.job_manager.models import (
     Advice,
     AdviceState,
     ApplicationIntention,
+    ApplicationIntentionAuthorizationStatus,
     ApplicationIntentionDesiredState,
     ApplicationIntentionInput,
     JobAnomaly,
@@ -374,7 +375,8 @@ class JobManager:
         """Persist an application cancellation request without waiting for action.
 
         The intention is job-scoped and may arrive before Job Manager has seen an
-        attempt. Storage therefore accepts it independently of the job table.
+        attempt. Storage authorizes known owners immediately and keeps unknown
+        jobs pending, with separate idempotency for each verified requester.
         Advice creation is deliberately excluded from this request path so the
         application receives an acknowledgement as soon as the intention is
         durable.
@@ -383,6 +385,7 @@ class JobManager:
             ApplicationIntentionRecord(
                 job_id=request.job_id,
                 desired_state=request.desired_state.value,
+                requested_by=request.requested_by,
                 reason=request.reason,
                 created_at=datetime.now(UTC),
             )
@@ -393,10 +396,31 @@ class JobManager:
             desired_state=ApplicationIntentionDesiredState(stored.desired_state),
             reason=stored.reason,
             created_at=stored.created_at,
+            authorization_status=ApplicationIntentionAuthorizationStatus(stored.authorization_status),
+            reason_code=stored.reason_code,
+        )
+
+    def get_application_intention(self, job_id: str, requested_by: str) -> ApplicationIntention | None:
+        """Return only this verified requester's durable authorization outcome."""
+        stored = self.storage.read_application_intention(job_id, requested_by)
+        if stored is None:
+            return None
+        return ApplicationIntention(
+            id=stored.id,
+            job_id=stored.job_id,
+            desired_state=ApplicationIntentionDesiredState(stored.desired_state),
+            reason=stored.reason,
+            created_at=stored.created_at,
+            authorization_status=ApplicationIntentionAuthorizationStatus(stored.authorization_status),
+            reason_code=stored.reason_code,
         )
 
     def audit_application_intention_for_attempt(self, record: SlurmJobExecutionRecord) -> None:
-        """Emit the job-level request event once, tagged to the latest known attempt."""
+        """Claim one resolved request's audit event on the latest known attempt.
+
+        Pending requests cannot claim an event before ownership is known.
+        Authorized and rejected requests each retain their own audit claim.
+        """
         try:
             intention, claimed = self.storage.claim_application_intention_audit_attempt(
                 record.job_id,
@@ -427,7 +451,6 @@ class JobManager:
         try:
             latest_attempt = self.storage.read_job_record(job_id=job_id)
             if latest_attempt is not None:
-                self.audit_application_intention_for_attempt(latest_attempt)
                 self.reconcile_application_intention(latest_attempt)
         except Exception as error:
             logger.exception(
@@ -457,11 +480,9 @@ class JobManager:
         restart Advice before cancellation intent can be checked would violate
         the application's terminal request.
         """
-        if not self._is_advice_management_enabled():
-            return ApplicationIntentionReconciliation.NOT_REQUESTED
-
+        advice_enabled = self._is_advice_management_enabled()
         try:
-            intention = self.storage.read_application_intention(record.job_id)
+            intention = self.storage.reconcile_application_intention_authorization(record.job_id, record.user)
         except RecoveryStorageException as error:
             logger.exception(
                 "Failed to read application intention for job %s; continuing without application reconciliation",
@@ -470,14 +491,17 @@ class JobManager:
             )
             return (
                 ApplicationIntentionReconciliation.RETRY_REQUIRED
-                if fail_closed_on_lookup_error
+                if fail_closed_on_lookup_error and advice_enabled
                 else ApplicationIntentionReconciliation.NOT_REQUESTED
             )
 
-        if intention is None:
+        self.audit_application_intention_for_attempt(record)
+        if not advice_enabled or intention is None:
             return ApplicationIntentionReconciliation.NOT_REQUESTED
-        if intention.audit_attempt_index is None:
-            self.audit_application_intention_for_attempt(record)
+        # Defense in depth: only the scheduler owner's authorized request can
+        # create terminal Advice or suppress a late recovery result.
+        if intention.authorization_status != "AUTHORIZED" or intention.requested_by != record.user:
+            return ApplicationIntentionReconciliation.NOT_REQUESTED
         if intention.desired_state != ApplicationIntentionDesiredState.CANCELLED.value:
             logger.error(
                 "Ignoring unsupported application intention state %s for job %s",

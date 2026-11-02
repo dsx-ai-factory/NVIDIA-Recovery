@@ -75,13 +75,39 @@ func (c *JobManagerClient) CreateApplicationIntention(ctx context.Context, input
 	ctx, span := tracer.Start(ctx, "jobmanager.CreateApplicationIntention")
 	defer span.End()
 
-	response, _, err := c.jobManager.DefaultAPI.PostApplicationIntention(ctx).
+	response, httpResponse, err := c.jobManager.DefaultAPI.PostApplicationIntention(ctx).
 		ApplicationIntentionInput(input).
 		Execute()
 	if err != nil {
-		return nil, err
+		return nil, mapApplicationIntentionError(httpResponse, err)
 	}
 	return response, nil
+}
+
+// GetApplicationIntention retrieves an ownership decision scoped to a verified caller.
+func (c *JobManagerClient) GetApplicationIntention(ctx context.Context, jobID, requester string) (*ApplicationIntention, error) {
+	response, httpResponse, err := c.jobManager.DefaultAPI.GetApplicationIntention(ctx, jobID).
+		RequestedBy(requester).Execute()
+	if err != nil {
+		return nil, mapApplicationIntentionError(httpResponse, err)
+	}
+	return response, nil
+}
+
+func mapApplicationIntentionError(response *http.Response, err error) error {
+	if response != nil {
+		switch response.StatusCode {
+		case http.StatusForbidden:
+			return status.Error(codes.PermissionDenied, "requester does not own the job")
+		case http.StatusConflict:
+			return status.Error(codes.FailedPrecondition, "scheduler job owner is unavailable")
+		case http.StatusNotFound:
+			return status.Error(codes.NotFound, "application intention not found")
+		case http.StatusBadRequest, http.StatusUnprocessableEntity:
+			return status.Error(codes.InvalidArgument, "invalid application intention")
+		}
+	}
+	return err
 }
 
 func (c *JobManagerClient) GetJob(ctx context.Context, jobRunId JobRunId) (*SlurmJobExecutionStatus, error) {

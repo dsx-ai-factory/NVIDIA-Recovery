@@ -27,6 +27,8 @@ from recovery_libs.schema.job_manager.models import (
     SortOrderEnum,
 )
 from recovery_libs.storage.base import (
+    ApplicationIntentionOwnerUnavailable,
+    ApplicationIntentionPermissionDenied,
     BaseStorage,
     RecoveryStorageException,
     RecoveryStorageInputValidationError,
@@ -1358,9 +1360,10 @@ class MySQLStorage(BaseStorage):
         self,
         intention: ApplicationIntentionRecord,
     ) -> tuple[ApplicationIntentionRecord, bool]:
-        """Persist the first application intention for a scheduler job.
+        """Persist the first intention per verified requester and scheduler job.
 
-        The first committed row is the durable, absorbing decision for the job.
+        Ownership of known jobs is checked inside this transaction. Unknown
+        jobs stay pending until scheduler ingestion supplies their owner.
         Concurrent duplicate requests return that row rather than changing its
         original reason or timestamp.
 
@@ -1369,6 +1372,8 @@ class MySQLStorage(BaseStorage):
         """
         try:
             return self._create_or_get_application_intention_once(intention)
+        except (ApplicationIntentionPermissionDenied, ApplicationIntentionOwnerUnavailable):
+            raise
         except Exception as error:
             logger.exception(
                 "Failed to persist application intention",
@@ -1386,12 +1391,31 @@ class MySQLStorage(BaseStorage):
             if not self.connection.write_pool_enabled:
                 session.connection(execution_options={"isolation_level": "READ COMMITTED"})
             try:
+                latest = session.scalars(
+                    select(SlurmJobExecutionRecord)
+                    .where(SlurmJobExecutionRecord.job_id == intention.job_id)
+                    .order_by(SlurmJobExecutionRecord.job_attempt_index.desc())
+                    .limit(1)
+                ).first()
+                if not intention.requested_by:
+                    raise ApplicationIntentionPermissionDenied("Verified requester identity is required")
+                if latest is not None:
+                    if not latest.user or latest.user == "unknown":
+                        raise ApplicationIntentionOwnerUnavailable("Scheduler job owner is unavailable")
+                    if latest.user != intention.requested_by:
+                        raise ApplicationIntentionPermissionDenied("Requester does not own the job")
+                    intention.authorization_status = "AUTHORIZED"
                 existing = session.scalars(
                     select(ApplicationIntentionRecord)
                     .where(ApplicationIntentionRecord.job_id == intention.job_id)
+                    .where(ApplicationIntentionRecord.requested_by == intention.requested_by)
                     .with_for_update()
                 ).first()
                 if existing is not None:
+                    if existing.authorization_status == "PENDING" and latest is not None:
+                        existing.authorization_status = "AUTHORIZED"
+                        session.commit()
+                        session.refresh(existing)
                     session.expunge(existing)
                     return existing, False
 
@@ -1404,12 +1428,15 @@ class MySQLStorage(BaseStorage):
                 session.rollback()
                 raise
 
-    def read_application_intention(self, job_id: str) -> ApplicationIntentionRecord | None:
-        """Return the durable application intention for a scheduler job, if any."""
+    def read_application_intention(self, job_id: str, requested_by: str) -> ApplicationIntentionRecord | None:
+        """Read only the verified caller's request, including a pending or rejected decision."""
         try:
             with self.connection.session() as session:
                 return session.scalars(
-                    select(ApplicationIntentionRecord).where(ApplicationIntentionRecord.job_id == job_id)
+                    select(ApplicationIntentionRecord).where(
+                        ApplicationIntentionRecord.job_id == job_id,
+                        ApplicationIntentionRecord.requested_by == requested_by,
+                    )
                 ).first()
         except Exception as error:
             logger.exception(
@@ -1417,6 +1444,54 @@ class MySQLStorage(BaseStorage):
                 extra={"job_id": job_id, "error": str(error)},
             )
             raise RecoveryStorageException(f"Failed to read application intention: {error}") from error
+
+    def reconcile_application_intention_authorization(
+        self, job_id: str, owner: str | None
+    ) -> ApplicationIntentionRecord | None:
+        """Resolve pending requests against scheduler ownership before any Advice is created.
+
+        A request from another principal occupies a separate row, so it cannot
+        displace the owner's request. Legacy requests without verified identity
+        are rejected. Authorization never substitutes for comparing ownership
+        again on a successor attempt (scheduler IDs can eventually be reused).
+        """
+        if not owner or owner == "unknown":
+            return None
+        try:
+            return self._reconcile_application_intention_authorization_once(job_id, owner)
+        except Exception as error:
+            raise RecoveryStorageException("Failed to authorize application intentions") from error
+
+    @retry_on_conflict(describe=lambda job_id, owner: f"application intention authorization for {job_id}")
+    def _reconcile_application_intention_authorization_once(
+        self, job_id: str, owner: str
+    ) -> ApplicationIntentionRecord | None:
+        """Resolve one job's decisions under row locks, retrying transaction conflicts."""
+        with self.connection.write_session() as session:
+            if not self.connection.write_pool_enabled:
+                session.connection(execution_options={"isolation_level": "READ COMMITTED"})
+            try:
+                requests = session.scalars(
+                    select(ApplicationIntentionRecord)
+                    .where(ApplicationIntentionRecord.job_id == job_id)
+                    .with_for_update()
+                ).all()
+                authorized = None
+                for intention in requests:
+                    if intention.authorization_status == "PENDING":
+                        matches = intention.requested_by is not None and intention.requested_by == owner
+                        intention.authorization_status = "AUTHORIZED" if matches else "REJECTED"
+                        intention.reason_code = None if matches else "REQUESTER_NOT_JOB_OWNER"
+                    if intention.authorization_status == "AUTHORIZED" and intention.requested_by == owner:
+                        authorized = intention
+                session.commit()
+                if authorized is not None:
+                    session.refresh(authorized)
+                    session.expunge(authorized)
+                return authorized
+            except Exception:
+                session.rollback()
+                raise
 
     def claim_application_intention_audit_attempt(
         self,
@@ -1437,6 +1512,8 @@ class MySQLStorage(BaseStorage):
                     intention = session.scalars(
                         select(ApplicationIntentionRecord)
                         .where(ApplicationIntentionRecord.job_id == job_id)
+                        .where(ApplicationIntentionRecord.authorization_status != "PENDING")
+                        .where(ApplicationIntentionRecord.audit_attempt_index.is_(None))
                         .with_for_update()
                     ).first()
                     if intention is None or intention.audit_attempt_index is not None:

@@ -29,6 +29,32 @@ throughput measurements expected by the detectors. Ask which detectors and
 recovery policies your operator has enabled; straggler-triggered recovery is
 disabled by default.
 
+## Request application cancellation
+
+An application that cannot usefully continue can request termination using its
+Slurm job ID. Obtain a user-specific JWT/OIDC token and Gateway URL from your
+operator. The token's configured identity claim must match the Slurm username
+that owns the job. Knowing a job ID or supplying a username is insufficient;
+shared service-account credentials do not prove individual ownership.
+
+Send `POST /v1/application-intentions` with `jobId`,
+`desiredState: APPLICATION_INTENTION_DESIRED_STATE_CANCELLED`, and an optional
+`reason`. A registered job owned by another user returns HTTP 403 immediately.
+A successful response acknowledges durable receipt and includes
+`authorizationStatus`; it does not wait for Slurm to cancel the job.
+
+If the job has not registered yet, the status is `PENDING`. Use the same token
+with `GET /v1/application-intentions/{job_id}` to check the result. Once SAC
+reports the owner, Job Manager marks the request `AUTHORIZED` or `REJECTED`.
+Rejected requests report `reasonCode: REQUESTER_NOT_JOB_OWNER` and leave the
+job's recovery policy in effect. A request with no known owner stays pending.
+
+An authorized intention applies to the current attempt and future retries
+sharing the job ID. It is permanent for this version; request it only when the
+job should stop. In observe mode, the intention is recorded but SAC's action
+safeguards still prevent scheduler mutation. See the
+[API example](../public-api/api-gateway.md) for request syntax.
+
 ## Before submitting
 
 You need a working Slurm batch script and permission to submit to the selected

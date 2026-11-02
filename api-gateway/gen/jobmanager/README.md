@@ -83,6 +83,7 @@ Class | Method | HTTP request | Description
 *DefaultAPI* | [**GetAdvice**](docs/DefaultAPI.md#getadvice) | **Get** /advice | Get Advice
 *DefaultAPI* | [**GetAdviceById**](docs/DefaultAPI.md#getadvicebyid) | **Get** /advice/{heimdall_id} | Get Advice By Id
 *DefaultAPI* | [**GetAdviceByJob**](docs/DefaultAPI.md#getadvicebyjob) | **Get** /advice/by-job/{job_id}/{attempt_index} | Get Advice By Job
+*DefaultAPI* | [**GetApplicationIntention**](docs/DefaultAPI.md#getapplicationintention) | **Get** /application-intentions/{job_id} | Get Application Intention
 *DefaultAPI* | [**GetDagDependencies**](docs/DefaultAPI.md#getdagdependencies) | **Get** /dag_dependencies | Get Dag Dependencies
 *DefaultAPI* | [**GetErrorAttributions**](docs/DefaultAPI.md#geterrorattributions) | **Get** /error_attributions | Get Error Attributions
 *DefaultAPI* | [**GetGuardrailRules**](docs/DefaultAPI.md#getguardrailrules) | **Get** /guardrail_rules | Get Guardrail Rules
@@ -116,6 +117,7 @@ Class | Method | HTTP request | Description
  - [AdviceState](docs/AdviceState.md)
  - [AnomalyDetectionConfig](docs/AnomalyDetectionConfig.md)
  - [ApplicationIntention](docs/ApplicationIntention.md)
+ - [ApplicationIntentionAuthorizationStatus](docs/ApplicationIntentionAuthorizationStatus.md)
  - [ApplicationIntentionDesiredState](docs/ApplicationIntentionDesiredState.md)
  - [ApplicationIntentionInput](docs/ApplicationIntentionInput.md)
  - [ApsSlurmJobSpecInput](docs/ApsSlurmJobSpecInput.md)

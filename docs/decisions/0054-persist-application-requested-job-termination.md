@@ -4,6 +4,8 @@ Status: accepted
 
 Date: 2026-10-27
 
+> **Implementation note (2026-11-02):** [ADR 0055](0055-authorize-application-termination-by-job-owner.md) partially supersedes job-ID-only idempotency and unconditional actionability with requester-scoped pending ownership authorization.
+
 ## Context
 
 An application can determine that its own failure is unrecoverable before

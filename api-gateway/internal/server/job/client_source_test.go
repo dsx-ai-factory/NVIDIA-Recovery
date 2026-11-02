@@ -17,6 +17,7 @@ import (
 	v1 "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	jobmanagerBindings "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/jobmanager"
 	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/jobmanager"
+	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/server/auth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -71,17 +72,17 @@ func TestCreateApplicationIntention(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if body["job_id"] != "42" || body["desired_state"] != "CANCELLED" {
+		if body["job_id"] != "42" || body["desired_state"] != "CANCELLED" || body["requested_by"] != "alice" {
 			t.Fatalf("unexpected request body: %#v", body)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"id":7,"job_id":"42","desired_state":"CANCELLED","reason":"training converged","created_at":%q}`, createdAt.Format(time.RFC3339Nano))
+		_, _ = fmt.Fprintf(w, `{"id":7,"job_id":"42","desired_state":"CANCELLED","authorization_status":"AUTHORIZED","reason":"training converged","created_at":%q}`, createdAt.Format(time.RFC3339Nano))
 	}))
 	defer backend.Close()
 	reason := "training converged"
 
 	response, err := NewJobClientSource(backend.URL).CreateApplicationIntention(
-		context.Background(),
+		auth.ContextWithIdentity(context.Background(), &auth.Identity{Mechanism: auth.AuthMechanismJWT, UserID: "alice"}),
 		&v1.CreateApplicationIntentionRequest{
 			JobId:        "42",
 			DesiredState: v1.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED,
@@ -98,6 +99,52 @@ func TestCreateApplicationIntention(t *testing.T) {
 	}
 	if !got.GetCreatedAt().AsTime().Equal(createdAt) {
 		t.Fatalf("created_at = %v, want %v", got.GetCreatedAt().AsTime(), createdAt)
+	}
+}
+
+func TestApplicationIntentionBackendErrorsRetainAuthorizationSemantics(t *testing.T) {
+	for _, test := range []struct {
+		httpStatus int
+		code       codes.Code
+	}{
+		{http.StatusForbidden, codes.PermissionDenied},
+		{http.StatusConflict, codes.FailedPrecondition},
+		{http.StatusNotFound, codes.NotFound},
+	} {
+		t.Run(fmt.Sprint(test.httpStatus), func(t *testing.T) {
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(test.httpStatus)
+				_, _ = w.Write([]byte(`{"detail":"private owner information"}`))
+			}))
+			defer backend.Close()
+			ctx := auth.ContextWithIdentity(context.Background(), &auth.Identity{Mechanism: auth.AuthMechanismJWT, UserID: "alice"})
+			_, err := NewJobClientSource(backend.URL).CreateApplicationIntention(ctx, &v1.CreateApplicationIntentionRequest{
+				JobId: "42", DesiredState: v1.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED,
+			})
+			if status.Code(err) != test.code {
+				t.Fatalf("error = %v, want %v", err, test.code)
+			}
+		})
+	}
+}
+
+func TestGetApplicationIntentionScopesReadToCallerAndExposesRejection(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/application-intentions/42" || r.URL.Query().Get("requested_by") != "alice" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":7,"job_id":"42","desired_state":"CANCELLED","authorization_status":"REJECTED","reason_code":"REQUESTER_NOT_JOB_OWNER","created_at":"2026-11-02T12:00:00Z"}`))
+	}))
+	defer backend.Close()
+	ctx := auth.ContextWithIdentity(context.Background(), &auth.Identity{Mechanism: auth.AuthMechanismJWT, UserID: "alice"})
+	result, err := NewJobClientSource(backend.URL).GetApplicationIntention(ctx, &v1.GetApplicationIntentionRequest{JobId: "42"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ApplicationIntention.GetAuthorizationStatus() != "REJECTED" || result.ApplicationIntention.GetReasonCode() != "REQUESTER_NOT_JOB_OWNER" {
+		t.Fatalf("unexpected decision: %v", result.ApplicationIntention)
 	}
 }
 

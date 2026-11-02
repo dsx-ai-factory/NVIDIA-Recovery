@@ -30,6 +30,14 @@ class RecoveryStorageInputValidationError(Exception):
     """
 
 
+class ApplicationIntentionPermissionDenied(Exception):
+    """The verified requester does not own the scheduler job."""
+
+
+class ApplicationIntentionOwnerUnavailable(Exception):
+    """A registered job has no authoritative scheduler owner yet."""
+
+
 class UpdateJobResult(NamedTuple):
     """Result of a successful partial Job update.
 
