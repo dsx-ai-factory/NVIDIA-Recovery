@@ -69,21 +69,11 @@ class ApplicationIntentionDesiredState(str, Enum):
     CANCELLED = "CANCELLED"
 
 
-class ApplicationIntentionAuthorizationStatus(str, Enum):
-    """Ownership decision; authorization does not mean Slurm has cancelled the job."""
-
-    PENDING = "PENDING"
-    AUTHORIZED = "AUTHORIZED"
-    REJECTED = "REJECTED"
-
-
 class ApplicationIntentionInput(BaseModel):
     """Application request to stop a scheduler job and prevent later retries."""
 
     job_id: str = Field(min_length=1, max_length=64)
     desired_state: ApplicationIntentionDesiredState
-    requested_by: str = Field(min_length=1, max_length=256, pattern=r"^\S+$")
-    """Verified owner identity supplied by the trusted Gateway, never by the public body."""
     reason: str | None = Field(default=None, max_length=1024)
 
 
@@ -95,8 +85,6 @@ class ApplicationIntention(BaseModel):
     desired_state: ApplicationIntentionDesiredState
     reason: str | None = None
     created_at: datetime
-    authorization_status: ApplicationIntentionAuthorizationStatus
-    reason_code: str | None = None
 
 
 class JobAnomaly(BaseModel):

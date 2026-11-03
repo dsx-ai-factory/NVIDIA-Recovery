@@ -121,13 +121,6 @@ def _summarize_audit_event(event: AuditEventBase) -> AuditEventHumanSummary:
                 granularity=AuditEventHumanSummaryGranularityClass.COARSE,
             )
 
-        case "application_termination_rejected":
-            return AuditEventHumanSummary(
-                title="Application termination rejected",
-                description="The requester does not own the job; cancellation was not authorized",
-                granularity=AuditEventHumanSummaryGranularityClass.COARSE,
-            )
-
         case "job_attempt_observed":
             job_id = event.payload.get("job_id")
             attempt_index = event.payload.get("attempt_index")

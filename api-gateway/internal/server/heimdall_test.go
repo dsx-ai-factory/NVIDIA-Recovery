@@ -10,7 +10,6 @@ import (
 	"time"
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
-	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/server/auth"
 	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/server/job"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -69,8 +68,7 @@ func TestCreateApplicationIntentionValidatesAndForwardsCancellation(t *testing.T
 	server := NewHeimdallServer(source)
 	reason := "training converged"
 
-	ctx := auth.ContextWithIdentity(context.Background(), &auth.Identity{Mechanism: auth.AuthMechanismJWT, UserID: "alice"})
-	response, err := server.CreateApplicationIntention(ctx, &pb.CreateApplicationIntentionRequest{
+	response, err := server.CreateApplicationIntention(context.Background(), &pb.CreateApplicationIntentionRequest{
 		JobId:        "42",
 		DesiredState: pb.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED,
 		Reason:       &reason,
@@ -98,25 +96,6 @@ func TestCreateApplicationIntentionRejectsUnspecifiedState(t *testing.T) {
 	}
 	if source.intentionCalls != 0 {
 		t.Fatalf("source calls = %d, want 0", source.intentionCalls)
-	}
-}
-
-func TestApplicationIntentionOperationsDenyAnonymousAndServiceAccounts(t *testing.T) {
-	for _, identity := range []*auth.Identity{nil, {Mechanism: auth.AuthMechanismKubernetes, UserID: "alice"}} {
-		source := &recordingJobSource{JobSource: job.NewNotImplementedJobSource()}
-		server := NewHeimdallServer(source)
-		ctx := auth.ContextWithIdentity(context.Background(), identity)
-		_, writeErr := server.CreateApplicationIntention(ctx, &pb.CreateApplicationIntentionRequest{
-			JobId: "42", DesiredState: pb.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED,
-		})
-		_, readErr := server.GetApplicationIntention(ctx, &pb.GetApplicationIntentionRequest{JobId: "42"})
-		want := codes.PermissionDenied
-		if identity == nil {
-			want = codes.Unauthenticated
-		}
-		if status.Code(writeErr) != want || status.Code(readErr) != want || source.intentionCalls != 0 {
-			t.Fatalf("identity %#v: write=%v read=%v calls=%d", identity, writeErr, readErr, source.intentionCalls)
-		}
 	}
 }
 

@@ -25,11 +25,6 @@ func NewJobsSyntheticSource() JobSource {
 	return &JobsSyntheticSource{}
 }
 
-// GetApplicationIntention is unavailable for synthetic jobs.
-func (s *JobsSyntheticSource) GetApplicationIntention(ctx context.Context, req *pb.GetApplicationIntentionRequest) (*pb.GetApplicationIntentionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "application intentions are not available from the synthetic source")
-}
-
 func (s *JobsSyntheticSource) CreateApplicationIntention(ctx context.Context, req *pb.CreateApplicationIntentionRequest) (*pb.CreateApplicationIntentionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "application intentions are not available from the synthetic source")
 }

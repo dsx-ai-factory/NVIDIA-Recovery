@@ -62,7 +62,6 @@ onward. Earlier decisions are not included.
 | [0052](0052-run-e2e-tests-as-isolated-staged-scenarios.md) | accepted | Run each E2E test as a staged scenario that launches its own jobs through a scheduler-neutral launcher and verifies evidence over HTTP, isolated from other tests; narrows ADR 0005's service-proxy transport allowance. |
 | [0053](0053-fanout-audit-and-recovery-trace.md) | superseded | Fan out overlapping recovery activity to trace spans and audit events without making recovery-sequence data the audit source of truth; superseded by ADR 0048. |
 | [0054](0054-persist-application-requested-job-termination.md) | accepted | Persist application-requested cancellation by scheduler job ID and translate it into sticky exact-attempt terminal Advice. |
-| [0055](0055-authorize-application-termination-by-job-owner.md) | accepted | Authorize application cancellation against the scheduler owner, retaining requester-scoped pending intentions before registration; partially supersedes ADR 0054. |
 
 ADR numbers 0018, 0019, 0023, and 0024 are retired; their external-service
 decisions were removed with maintainer approval. Do not reuse these numbers.

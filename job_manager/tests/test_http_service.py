@@ -38,11 +38,7 @@ from recovery_libs.schema.job_manager.models import (
     SystemRequeueConfig,
 )
 from recovery_libs.schema.watcher.model import Event
-from recovery_libs.storage.base import (
-    ApplicationIntentionOwnerUnavailable,
-    ApplicationIntentionPermissionDenied,
-    RecoveryStorageException,
-)
+from recovery_libs.storage.base import RecoveryStorageException
 from recovery_libs.storage.dataclass import (
     AdviceReconciliationStatusRecord,
     AdviceRecord,
@@ -104,7 +100,6 @@ class TestHttpService(unittest.TestCase):
             desired_state=ApplicationIntentionDesiredState.CANCELLED,
             reason="training converged",
             created_at=created_at,
-            authorization_status="PENDING",
         )
         with patch("job_manager.main.job_manager") as job_manager_mock:
             job_manager_mock.create_application_intention.return_value = accepted
@@ -112,7 +107,6 @@ class TestHttpService(unittest.TestCase):
                 "/application-intentions",
                 json={
                     "job_id": "job-42",
-                    "requested_by": "test_user",
                     "desired_state": "CANCELLED",
                     "reason": "training converged",
                 },
@@ -133,52 +127,6 @@ class TestHttpService(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
-
-    def test_post_application_intention_requires_verified_internal_requester(self):
-        with patch("job_manager.main.job_manager") as manager:
-            response = self._client.post("/application-intentions", json={"job_id": "42", "desired_state": "CANCELLED"})
-        self.assertEqual(response.status_code, 422)
-        manager.create_application_intention.assert_not_called()
-
-    def test_post_application_intention_returns_known_ownership_error_before_background_work(self):
-        for error, code in [
-            (ApplicationIntentionPermissionDenied(), 403),
-            (ApplicationIntentionOwnerUnavailable(), 409),
-        ]:
-            with self.subTest(status=code), patch("job_manager.main.job_manager") as manager:
-                manager.create_application_intention.side_effect = error
-                response = self._client.post(
-                    "/application-intentions",
-                    json={
-                        "job_id": "42",
-                        "desired_state": "CANCELLED",
-                        "requested_by": "alice",
-                    },
-                )
-                self.assertEqual(response.status_code, code)
-                manager.reconcile_latest_application_intention.assert_not_called()
-
-    def test_get_application_intention_returns_callers_durable_rejection(self):
-        with patch("job_manager.main.job_manager") as manager:
-            manager.get_application_intention.return_value = ApplicationIntention(
-                id=7,
-                job_id="42",
-                desired_state="CANCELLED",
-                created_at=datetime.now(UTC),
-                authorization_status="REJECTED",
-                reason_code="REQUESTER_NOT_JOB_OWNER",
-            )
-            response = self._client.get("/application-intentions/42", params={"requested_by": "alice"})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["authorization_status"], "REJECTED")
-        self.assertEqual(response.json()["reason_code"], "REQUESTER_NOT_JOB_OWNER")
-        manager.get_application_intention.assert_called_once_with("42", "alice")
-
-    def test_get_application_intention_missing_request_is_not_found(self):
-        with patch("job_manager.main.job_manager") as manager:
-            manager.get_application_intention.return_value = None
-            response = self._client.get("/application-intentions/42", params={"requested_by": "bob"})
-        self.assertEqual(response.status_code, 404)
 
     def test_post_jobs_applies_existing_application_intention_before_attribution(self):
         now = datetime.now(UTC)
@@ -232,7 +180,7 @@ class TestHttpService(unittest.TestCase):
             self._use_real_job_upsert_boundary(manager)
             manager._is_advice_management_enabled.return_value = True
             manager.storage.upsert_job_record.return_value = (persisted_record, False, persisted_record)
-            manager.storage.reconcile_application_intention_authorization.side_effect = RecoveryStorageException(
+            manager.storage.read_application_intention.side_effect = RecoveryStorageException(
                 "application_intentions does not exist"
             )
             manager.reconcile_application_intention.side_effect = JobManager.reconcile_application_intention.__get__(
@@ -242,9 +190,7 @@ class TestHttpService(unittest.TestCase):
             response = self._client.post("/jobs", json=payload)
 
         self.assertEqual(response.status_code, 200)
-        manager.storage.reconcile_application_intention_authorization.assert_called_once_with(
-            "job-rolling-migration", "test_user"
-        )
+        manager.storage.read_application_intention.assert_called_once_with("job-rolling-migration")
 
     def test_get_status_endpoint_not_ready(self):
         with patch("job_manager.main.job_manager") as job_manager_mock:

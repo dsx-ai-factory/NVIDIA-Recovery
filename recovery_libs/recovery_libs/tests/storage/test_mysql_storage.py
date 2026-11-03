@@ -91,10 +91,8 @@ def test_bootstrap_without_schema_upgrade(connection, mysql_storage):
 
 
 def test_create_application_intention_persists_first_request(mysql_storage, session):
-    session.scalars.return_value.first.side_effect = [None, None]
+    session.scalars.return_value.first.return_value = None
     intention = ApplicationIntentionRecord(
-        requested_by="test_user",
-        authorization_status="AUTHORIZED",
         job_id="job-42",
         desired_state="CANCELLED",
         reason="training converged",
@@ -114,18 +112,14 @@ def test_create_application_intention_persists_first_request(mysql_storage, sess
 
 def test_create_application_intention_returns_existing_absorbing_request(mysql_storage, session):
     existing = ApplicationIntentionRecord(
-        requested_by="test_user",
-        authorization_status="AUTHORIZED",
         job_id="job-42",
         desired_state="CANCELLED",
         reason="first reason",
         created_at=datetime.now(UTC),
     )
     existing.id = 1
-    session.scalars.return_value.first.side_effect = [None, existing]
+    session.scalars.return_value.first.return_value = existing
     duplicate = ApplicationIntentionRecord(
-        requested_by="test_user",
-        authorization_status="AUTHORIZED",
         job_id="job-42",
         desired_state="CANCELLED",
         reason="later reason",
@@ -143,8 +137,6 @@ def test_create_application_intention_returns_existing_absorbing_request(mysql_s
 
 def test_claim_application_intention_audit_attempt_uses_latest_known_attempt(mysql_storage, session):
     existing = ApplicationIntentionRecord(
-        requested_by="test_user",
-        authorization_status="AUTHORIZED",
         job_id="job-42",
         desired_state="CANCELLED",
         reason="training converged",
@@ -165,8 +157,6 @@ def test_claim_application_intention_audit_attempt_uses_latest_known_attempt(mys
 
 def test_claim_application_intention_audit_attempt_is_idempotent(mysql_storage, session):
     existing = ApplicationIntentionRecord(
-        requested_by="test_user",
-        authorization_status="AUTHORIZED",
         job_id="job-42",
         desired_state="CANCELLED",
         reason="training converged",

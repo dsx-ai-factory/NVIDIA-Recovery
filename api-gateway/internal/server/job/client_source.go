@@ -12,7 +12,6 @@ import (
 	v1 "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	jobmanagerBindings "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/jobmanager"
 	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/jobmanager"
-	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/server/auth"
 	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/util"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -36,14 +35,9 @@ func NewJobClientSource(jobManagerEndpoint string) *JobClientSource {
 // CreateApplicationIntention persists a job-level cancellation request in Job Manager.
 func (j *JobClientSource) CreateApplicationIntention(ctx context.Context, req *v1.CreateApplicationIntentionRequest) (*v1.CreateApplicationIntentionResponse, error) {
 	logger := util.GetZapLoggerFromContext(ctx)
-	requester, err := auth.ApplicationRequester(ctx)
-	if err != nil {
-		return nil, err
-	}
 	input := jobmanagerBindings.NewApplicationIntentionInput(
 		req.JobId,
 		jobmanagerBindings.APPLICATIONINTENTIONDESIREDSTATE_CANCELLED,
-		requester,
 	)
 	if req.Reason != nil {
 		input.SetReason(*req.Reason)
@@ -55,37 +49,16 @@ func (j *JobClientSource) CreateApplicationIntention(ctx context.Context, req *v
 		return nil, err
 	}
 
-	return &v1.CreateApplicationIntentionResponse{ApplicationIntention: applicationIntentionToProto(stored)}, nil
-}
-
-// GetApplicationIntention reads only the verified caller's request from Job Manager.
-func (j *JobClientSource) GetApplicationIntention(ctx context.Context, req *v1.GetApplicationIntentionRequest) (*v1.GetApplicationIntentionResponse, error) {
-	requester, err := auth.ApplicationRequester(ctx)
-	if err != nil {
-		return nil, err
-	}
-	stored, err := j.jobManager.GetApplicationIntention(ctx, req.JobId, requester)
-	if err != nil {
-		return nil, err
-	}
-	return &v1.GetApplicationIntentionResponse{ApplicationIntention: applicationIntentionToProto(stored)}, nil
-}
-
-func applicationIntentionToProto(stored *jobmanager.ApplicationIntention) *v1.ApplicationIntention {
 	intention := &v1.ApplicationIntention{
-		Id:                  int64(stored.Id),
-		JobId:               stored.JobId,
-		DesiredState:        v1.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED,
-		CreatedAt:           timestamppb.New(stored.CreatedAt),
-		AuthorizationStatus: string(stored.AuthorizationStatus),
+		Id:           int64(stored.Id),
+		JobId:        stored.JobId,
+		DesiredState: v1.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED,
+		CreatedAt:    timestamppb.New(stored.CreatedAt),
 	}
 	if reason, ok := stored.GetReasonOk(); ok && reason != nil {
 		intention.Reason = reason
 	}
-	if reasonCode, ok := stored.GetReasonCodeOk(); ok && reasonCode != nil {
-		intention.ReasonCode = reasonCode
-	}
-	return intention
+	return &v1.CreateApplicationIntentionResponse{ApplicationIntention: intention}, nil
 }
 
 // GetJob implements JobSource.

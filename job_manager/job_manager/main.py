@@ -58,8 +58,6 @@ from recovery_libs.schema.job_manager.models import (
 )
 from recovery_libs.schema.workflow_identity import CanonicalWorkflowID
 from recovery_libs.storage.base import (
-    ApplicationIntentionOwnerUnavailable,
-    ApplicationIntentionPermissionDenied,
     RecoveryStorageException,
     RecoveryStorageInputValidationError,
 )
@@ -414,16 +412,6 @@ def post_application_intention(
             accepted.job_id,
         )
         return accepted
-    except ApplicationIntentionPermissionDenied as error:
-        logger.warning(
-            "Denied application termination request",
-            extra={"job_id": intention.job_id, "requested_by": intention.requested_by},
-        )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requester does not own the job") from error
-    except ApplicationIntentionOwnerUnavailable as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Scheduler job owner is unavailable"
-        ) from error
     except RecoveryStorageException as error:
         logger.exception(
             "Failed to persist application intention for job %s",
@@ -431,31 +419,6 @@ def post_application_intention(
             extra={"error": str(error)},
         )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(error)) from error
-
-
-@app.get(
-    "/application-intentions/{job_id}",
-    operation_id="get_application_intention",
-    response_model=ApplicationIntention,
-)
-def get_application_intention(
-    job_id: str,
-    requested_by: str = Query(..., min_length=1, max_length=256, pattern=r"^\S+$"),
-) -> ApplicationIntention:
-    """Read an outcome scoped to the verified identity supplied by the Gateway.
-
-    This internal endpoint shares the trusted-producer boundary of Job Manager
-    job ingestion. Public clients never control the requested_by parameter.
-    """
-    try:
-        result = job_manager.get_application_intention(job_id, requested_by)  # type: ignore[union-attr]
-        if result is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application intention not found")
-        return result
-    except RecoveryStorageException as error:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Intention storage unavailable"
-        ) from error
 
 
 @app.post("/jobs", operation_id="post_jobs")

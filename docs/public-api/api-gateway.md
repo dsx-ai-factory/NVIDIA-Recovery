@@ -56,7 +56,6 @@ All RPCs are unary. HTTP uses protobuf JSON field names (for example,
 | `GetJobsBySchedulerId` | `GET /v1/jobs/by-scheduler-id/{scheduler_job_id}` | Paginated scheduler-ID lookup; IDs may have multiple attempts |
 | `CreateOrUpdateJob` | `POST /v1/jobs` | Publish workload state and scheduler metadata |
 | `CreateApplicationIntention` | `POST /v1/application-intentions` | Durably request cancellation by scheduler job ID |
-| `GetApplicationIntention` | `GET /v1/application-intentions/{job_id}` | Read the authenticated caller's ownership decision |
 | `GetWorkflows` | `GET /v1/workflows` | List workflows |
 | `GetWorkflow` | `GET /v1/workflows:lookup` or `GET /v1/workflows/{workflow_id}` | Workflow lookup; prefer the query route for IDs containing reserved characters |
 | `ListAdvice` | `GET /v1/advice` | Desired state and exclusions, optionally only active advice |
@@ -73,34 +72,20 @@ unspecified for a partial update. A nullable backend state is returned as
 
 Application cancellation accepts `jobId`, the required `CANCELLED` desired
 state, and an optional reason of at most 1,024 characters. The request may
-arrive before the job is registered. Gateway derives the requester from a
-verified JWT/OIDC claim configured to match the Slurm username exactly; clients
-do not send a username. A known owner mismatch returns HTTP 403 immediately.
-A registered job whose owner is unavailable is rejected with
-`FailedPrecondition` / HTTP 400 rather than guessing ownership.
-
-HTTP 200 means the intention is durably received. `authorizationStatus` is
-`AUTHORIZED` for a verified owner or `PENDING` until an unregistered job's owner
-is known. It does not wait for terminal Advice, DAG propagation, SAC polling,
-or Slurm cancellation. Requests are idempotent per scheduler job ID and
-verified requester, retaining the first reason and timestamp. Only authorized
-requests produce terminal Advice. SAC remains responsible for cancellation.
-There is no release or revocation operation.
-
-Read the same caller's request to learn whether it became `AUTHORIZED` or
-`REJECTED`. A rejection includes `reasonCode: REQUESTER_NOT_JOB_OWNER`; it
-neither cancels the job nor blocks recovery. Other callers receive 404 unless
-they have their own request. Anonymous/insecure Gateway listeners and
-Kubernetes service-account identities cannot use these operations.
+arrive before the job is registered. HTTP 200 means the intention is durably
+accepted; it does not wait for terminal Advice, DAG propagation, SAC polling,
+or Slurm cancellation. It is idempotent by scheduler job ID and permanent in
+this version: the first accepted reason and timestamp are retained, and there
+is no release or revocation operation. Job Manager turns the request into
+exact-attempt Terminated Advice in the background; SAC remains responsible for
+the scheduler cancellation. Authentication is mandatory outside explicit
+insecure evaluation mode.
 
 ```bash
 curl --fail-with-body "$RECOVERY_HTTP_URL/v1/application-intentions" \
   --header "Authorization: Bearer $RECOVERY_ACCESS_TOKEN" \
   --header "Content-Type: application/json" \
   --data '{"jobId":"12345","desiredState":"APPLICATION_INTENTION_DESIRED_STATE_CANCELLED","reason":"application cannot continue safely"}'
-
-curl --fail-with-body "$RECOVERY_HTTP_URL/v1/application-intentions/12345" \
-  --header "Authorization: Bearer $RECOVERY_ACCESS_TOKEN"
 ```
 
 Use response `nextPageToken` values for pagination without changing filters

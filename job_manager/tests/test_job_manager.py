@@ -149,24 +149,18 @@ class TestJobManager(unittest.TestCase):
     def _configure_pending_application_cancellation(self, job_id: str, attempt_index: int) -> None:
         """Make the storage mock expose a durable request accepted before observation."""
         self._config["service"]["advice_management_enabled"] = True
-        self._job_manager.storage.reconcile_application_intention_authorization.return_value = (
-            ApplicationIntentionRecord(
-                requested_by="test_user",
-                authorization_status="AUTHORIZED",
-                job_id=job_id,
-                desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
-                reason="application finished",
-                audit_attempt_index=attempt_index,
-                created_at=datetime.now(UTC),
-            )
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id=job_id,
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="application finished",
+            audit_attempt_index=attempt_index,
+            created_at=datetime.now(UTC),
         )
         self._job_manager.storage.read_advice_by_job.return_value = None
 
     def test_create_application_intention_accepts_request_before_job_registration(self):
         created_at = datetime.now(UTC)
         stored = ApplicationIntentionRecord(
-            requested_by="test_user",
-            authorization_status="PENDING",
             job_id="job-42",
             desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
             reason="training converged",
@@ -179,7 +173,6 @@ class TestJobManager(unittest.TestCase):
 
         result = self._job_manager.create_application_intention(
             ApplicationIntentionInput(
-                requested_by="test_user",
                 job_id="job-42",
                 desired_state=ApplicationIntentionDesiredState.CANCELLED,
                 reason="training converged",
@@ -195,8 +188,6 @@ class TestJobManager(unittest.TestCase):
     def test_claimed_application_intention_audit_uses_latest_attempt(self):
         created_at = datetime.now(UTC)
         stored = ApplicationIntentionRecord(
-            requested_by="test_user",
-            authorization_status="AUTHORIZED",
             job_id="job-42",
             desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
             reason="training converged",
@@ -223,8 +214,6 @@ class TestJobManager(unittest.TestCase):
 
     def test_already_claimed_application_intention_does_not_repeat_request_audit(self):
         stored = ApplicationIntentionRecord(
-            requested_by="test_user",
-            authorization_status="AUTHORIZED",
             job_id="job-42",
             desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
             reason="training converged",
@@ -243,8 +232,6 @@ class TestJobManager(unittest.TestCase):
 
     def test_request_audit_failure_does_not_reject_durable_application_intention(self):
         stored = ApplicationIntentionRecord(
-            requested_by="test_user",
-            authorization_status="AUTHORIZED",
             job_id="job-42",
             desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
             reason=None,
@@ -274,7 +261,7 @@ class TestJobManager(unittest.TestCase):
             self._job_manager.reconcile_latest_application_intention("job-42")
 
         self._job_manager.storage.read_job_record.assert_called_once_with(job_id="job-42")
-        audit_request.assert_not_called()
+        audit_request.assert_called_once_with(record)
         reconcile.assert_called_once_with(record)
 
     def test_reconcile_latest_application_intention_tolerates_background_failure(self):
@@ -288,15 +275,11 @@ class TestJobManager(unittest.TestCase):
     def test_reconcile_application_intention_terminates_observed_attempt(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
         self._config["service"]["advice_management_enabled"] = True
-        self._job_manager.storage.reconcile_application_intention_authorization.return_value = (
-            ApplicationIntentionRecord(
-                requested_by="test_user",
-                authorization_status="AUTHORIZED",
-                job_id="job-42",
-                desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
-                reason="training converged",
-                created_at=datetime.now(UTC),
-            )
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="training converged",
+            created_at=datetime.now(UTC),
         )
         self._job_manager.storage.read_advice_by_job.return_value = None
 
@@ -315,62 +298,13 @@ class TestJobManager(unittest.TestCase):
     def test_reconcile_application_intention_is_noop_without_request(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="RUNNING")
         self._config["service"]["advice_management_enabled"] = True
-        self._job_manager.storage.reconcile_application_intention_authorization.return_value = None
+        self._job_manager.storage.read_application_intention.return_value = None
 
         with patch("job_manager.service.create_terminal_advice_for_job") as persist_terminal:
             result = self._job_manager.reconcile_application_intention(record)
 
         self.assertEqual(result, ApplicationIntentionReconciliation.NOT_REQUESTED)
         persist_terminal.assert_not_called()
-
-    def test_unverified_intention_never_creates_advice_or_blocks_recovery(self):
-        """A pending, rejected, legacy, or different-owner request cannot stop a job."""
-        self._config["service"]["advice_management_enabled"] = True
-        record = create_example_slurm_job_record(job_id="job-42", state="FAILED")
-        for authorization_status, requester in [
-            ("PENDING", "test_user"),
-            ("REJECTED", "test_user"),
-            ("AUTHORIZED", "someone_else"),
-            ("AUTHORIZED", None),
-        ]:
-            with self.subTest(status=authorization_status, requester=requester):
-                self._job_manager.storage.reconcile_application_intention_authorization.return_value = (
-                    ApplicationIntentionRecord(
-                        job_id="job-42",
-                        desired_state="CANCELLED",
-                        requested_by=requester,
-                        authorization_status=authorization_status,
-                        created_at=datetime.now(UTC),
-                    )
-                )
-                with patch("job_manager.service.create_terminal_advice_for_job") as persist:
-                    result = self._job_manager.reconcile_application_intention(record)
-                self.assertEqual(result, ApplicationIntentionReconciliation.NOT_REQUESTED)
-                self.assertFalse(result.blocks_recovery)
-                persist.assert_not_called()
-
-    def test_rejected_intention_audit_records_requester_and_reason(self):
-        """The denied requester is observable without reporting a cancellation action."""
-        stored = ApplicationIntentionRecord(
-            job_id="job-42",
-            desired_state="CANCELLED",
-            requested_by="bob",
-            authorization_status="REJECTED",
-            reason_code="REQUESTER_NOT_JOB_OWNER",
-            audit_attempt_index=3,
-            created_at=datetime.now(UTC),
-        )
-        stored.id = 7
-        self._job_manager.storage.claim_application_intention_audit_attempt.return_value = (stored, True)
-        self._job_manager.audit_buffer = MagicMock()
-        self._job_manager.audit_application_intention_for_attempt(
-            create_example_slurm_job_record(job_id="job-42", attempt_index=3)
-        )
-        event = self._job_manager.audit_buffer.add.call_args.args[0]
-        self.assertEqual(event.event_type, "application_termination_rejected")
-        self.assertEqual(event.payload.requested_by, "bob")
-        self.assertEqual(event.payload.reason_code, "REQUESTER_NOT_JOB_OWNER")
-        self.assertEqual(event.payload.attempt_index, 3)
 
     def test_reconcile_application_intention_respects_advice_management_disabled(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="RUNNING")
@@ -379,21 +313,15 @@ class TestJobManager(unittest.TestCase):
         result = self._job_manager.reconcile_application_intention(record)
 
         self.assertEqual(result, ApplicationIntentionReconciliation.NOT_REQUESTED)
-        self._job_manager.storage.reconcile_application_intention_authorization.assert_called_once_with(
-            "job-42", "test_user"
-        )
+        self._job_manager.storage.read_application_intention.assert_not_called()
 
     def test_reconcile_application_intention_does_not_rewrite_terminated_advice(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
         self._config["service"]["advice_management_enabled"] = True
-        self._job_manager.storage.reconcile_application_intention_authorization.return_value = (
-            ApplicationIntentionRecord(
-                requested_by="test_user",
-                authorization_status="AUTHORIZED",
-                job_id="job-42",
-                desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
-                created_at=datetime.now(UTC),
-            )
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            created_at=datetime.now(UTC),
         )
         self._job_manager.storage.read_advice_by_job.return_value = create_example_advice_record(
             job_id="job-42",
@@ -410,14 +338,10 @@ class TestJobManager(unittest.TestCase):
     def test_reconcile_application_intention_reports_failed_advice_write_for_retry(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
         self._config["service"]["advice_management_enabled"] = True
-        self._job_manager.storage.reconcile_application_intention_authorization.return_value = (
-            ApplicationIntentionRecord(
-                requested_by="test_user",
-                authorization_status="AUTHORIZED",
-                job_id="job-42",
-                desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
-                created_at=datetime.now(UTC),
-            )
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            created_at=datetime.now(UTC),
         )
         self._job_manager.storage.read_advice_by_job.return_value = None
 
@@ -430,7 +354,7 @@ class TestJobManager(unittest.TestCase):
     def test_reconcile_application_intention_tolerates_missing_table(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="RUNNING")
         self._config["service"]["advice_management_enabled"] = True
-        self._job_manager.storage.reconcile_application_intention_authorization.side_effect = RecoveryStorageException(
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
             "application_intentions does not exist"
         )
 
@@ -441,7 +365,7 @@ class TestJobManager(unittest.TestCase):
     def test_reconcile_application_intention_blocks_late_recovery_when_lookup_fails(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="FAILED")
         self._config["service"]["advice_management_enabled"] = True
-        self._job_manager.storage.reconcile_application_intention_authorization.side_effect = RecoveryStorageException(
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
             "temporary application intention lookup failure"
         )
 
@@ -456,14 +380,10 @@ class TestJobManager(unittest.TestCase):
     def test_reconcile_application_intention_ignores_unsupported_stored_state(self):
         record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="FAILED")
         self._config["service"]["advice_management_enabled"] = True
-        self._job_manager.storage.reconcile_application_intention_authorization.return_value = (
-            ApplicationIntentionRecord(
-                requested_by="test_user",
-                authorization_status="AUTHORIZED",
-                job_id="job-42",
-                desired_state="UNSUPPORTED",
-                created_at=datetime.now(UTC),
-            )
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state="UNSUPPORTED",
+            created_at=datetime.now(UTC),
         )
 
         result = self._job_manager.reconcile_application_intention(record)
@@ -1537,7 +1457,7 @@ class TestJobManager(unittest.TestCase):
             uuid=str(uuid.uuid4()),
         )
         job_record.anomalies = [job_anomaly]
-        self._job_manager.storage.reconcile_application_intention_authorization.return_value = None
+        self._job_manager.storage.read_application_intention.return_value = None
 
         with (
             patch("job_manager.service.maybe_persist_requeue_terminal_advice") as terminal_advice_mock,
@@ -1573,7 +1493,7 @@ class TestJobManager(unittest.TestCase):
         anomaly = JobAnomaly(anomaly_type=EventType.CRASH, timestamp=datetime.now(UTC), uuid=str(uuid.uuid4()))
         record.anomalies = [anomaly]
         self._config["service"]["advice_management_enabled"] = True
-        self._job_manager.storage.reconcile_application_intention_authorization.side_effect = RecoveryStorageException(
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
             "temporary application intention lookup failure"
         )
 
@@ -2081,8 +2001,6 @@ class TestJobManager(unittest.TestCase):
             state="FAILED",
         )
         intention = ApplicationIntentionRecord(
-            requested_by="test_user",
-            authorization_status="AUTHORIZED",
             job_id=attribution_result.job_id,
             desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
             reason="application cannot continue",
@@ -2090,7 +2008,7 @@ class TestJobManager(unittest.TestCase):
         )
         self._config["service"]["advice_management_enabled"] = True
         self._job_manager.storage.read_job_record.return_value = attempt
-        self._job_manager.storage.reconcile_application_intention_authorization.return_value = intention
+        self._job_manager.storage.read_application_intention.return_value = intention
         self._job_manager.storage.read_advice_by_job.return_value = None
 
         with (
@@ -2122,14 +2040,10 @@ class TestJobManager(unittest.TestCase):
         )
         self._config["service"]["advice_management_enabled"] = True
         self._job_manager.storage.read_job_record.return_value = attempt
-        self._job_manager.storage.reconcile_application_intention_authorization.return_value = (
-            ApplicationIntentionRecord(
-                requested_by="test_user",
-                authorization_status="AUTHORIZED",
-                job_id=attribution_result.job_id,
-                desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
-                created_at=datetime.now(UTC),
-            )
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id=attribution_result.job_id,
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            created_at=datetime.now(UTC),
         )
         self._job_manager.storage.read_advice_by_job.return_value = None
         method = MagicMock(exchange="aie_eventbus_exchange")
@@ -2163,7 +2077,7 @@ class TestJobManager(unittest.TestCase):
         )
         self._config["service"]["advice_management_enabled"] = True
         self._job_manager.storage.read_job_record.return_value = attempt
-        self._job_manager.storage.reconcile_application_intention_authorization.side_effect = [
+        self._job_manager.storage.read_application_intention.side_effect = [
             RecoveryStorageException("temporary application intention lookup failure"),
             None,
         ]
@@ -2206,7 +2120,7 @@ class TestJobManager(unittest.TestCase):
         )
         self._config["service"]["advice_management_enabled"] = True
         self._job_manager.storage.read_job_record.return_value = attempt
-        self._job_manager.storage.reconcile_application_intention_authorization.side_effect = RecoveryStorageException(
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
             "persistent application intention lookup failure"
         )
 

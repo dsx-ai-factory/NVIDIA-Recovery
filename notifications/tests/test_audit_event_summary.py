@@ -108,14 +108,6 @@ def _audit_event(event_type: str, payload: dict) -> AuditEventBase:
             id="application termination requested",
         ),
         pytest.param(
-            "application_termination_rejected",
-            {"job_id": "12345", "attempt_index": 3, "requested_by": "alice", "reason_code": "REQUESTER_NOT_JOB_OWNER"},
-            "Application termination rejected",
-            "The requester does not own the job; cancellation was not authorized",
-            AuditEventHumanSummaryGranularityClass.COARSE,
-            id="application termination rejected",
-        ),
-        pytest.param(
             "job_attempt_observed",
             {
                 "job_id": "12345",

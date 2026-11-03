@@ -27,7 +27,7 @@ from sqlalchemy.exc import SQLAlchemyError
 BASELINE_REVISION = "000000000001"
 DAG_OBSERVABILITY_REVISION = "000000000002"
 ADVICE_LIFECYCLE_REVISION = "000000000004"
-HEAD_REVISION = "000000000007"
+HEAD_REVISION = "000000000006"
 ALEMBIC_DIRECTORY = Path(storage_dataclass.__file__).parent / "alembic"
 APPLICATION_TABLES = {
     "advice",
@@ -150,42 +150,6 @@ def test_dag_dependency_observability_migrates_from_baseline(migration_connectio
     connection.commit()
     downgraded_columns = {column["name"] for column in inspect(connection).get_columns("dag_dependency")}
     assert observability_columns.isdisjoint(downgraded_columns)
-
-
-def test_application_intention_authorization_migrates_legacy_requests_as_pending(
-    migration_connection: Connection,
-) -> None:
-    """An upgrade must not invent an owner or automatically authorize an older request."""
-    connection = migration_connection
-    config = _alembic_config(connection)
-    command.upgrade(config, "000000000006")
-    connection.execute(
-        text(
-            "INSERT INTO application_intentions (job_id, desired_state, reason, created_at) "
-            "VALUES ('legacy-request', 'CANCELLED', 'original reason', '2026-10-27 12:00:00')"
-        )
-    )
-    connection.commit()
-    _upgrade(connection)
-    row = connection.execute(
-        text(
-            "SELECT requested_by, authorization_status, reason FROM application_intentions WHERE job_id='legacy-request'"
-        )
-    ).one()
-    assert row == (None, "PENDING", "original reason")
-    connection.execute(
-        text(
-            "INSERT INTO application_intentions (job_id, desired_state, requested_by, authorization_status, created_at) "
-            "VALUES ('legacy-request', 'CANCELLED', 'alice', 'AUTHORIZED', '2026-11-02 12:00:00')"
-        )
-    )
-    connection.commit()
-    assert (
-        connection.execute(
-            text("SELECT COUNT(*) FROM application_intentions WHERE job_id='legacy-request'")
-        ).scalar_one()
-        == 2
-    )
 
 
 def test_retire_on_demand_tracking_preserves_job_data(migration_connection: Connection) -> None:

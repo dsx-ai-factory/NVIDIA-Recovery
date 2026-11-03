@@ -180,8 +180,7 @@ to producer time for historical events.
 
 | Event type | Payload fields |
 | --- | --- |
-| `application_termination_requested` | `application_intention_id`, `job_id`, `attempt_index`, `desired_state`, optional `reason`, `requested_at`, `requested_by`, `authorization_status`, optional `reason_code` |
-| `application_termination_rejected` | Same request fields, with `authorization_status=REJECTED` and `reason_code=REQUESTER_NOT_JOB_OWNER` |
+| `application_termination_requested` | `application_intention_id`, `job_id`, `attempt_index`, `desired_state`, optional `reason`, `requested_at` |
 | `advice_created` | `advice_id`, `job_id`, `attempt_index`, `advice`, `creation_reasons`, `correlation_uuid` |
 | `advice_updated` | `advice_id`, `job_id`, `attempt_index`, `old_advice`, `new_advice`, `change_reasons`, `correlation_uuid` |
 | `advice_unpublished` | `advice_id`, `job_id`, `attempt_index`, `reason`, `correlation_uuid` |
@@ -196,10 +195,8 @@ a new Issue or caller-supplied reason. Checkpoint-only Issue changes do not
 emit `advice_updated`; an update with other changes still carries complete old
 and new snapshots, including any checkpoint Issues.
 
-`application_termination_requested` records an ownership-authorized application
-request, independently of later Advice creation or scheduler cancellation. Under
-[ADR 0055](0055-authorize-application-termination-by-job-owner.md), rejected
-pending requests emit `application_termination_rejected` and do not cancel jobs. The
+`application_termination_requested` records the first durable application
+request, independently of later Advice creation or scheduler cancellation. The
 event is tagged to the latest attempt known when the request is reconciled. If
 the request predates scheduler registration, Job Manager defers the event until
 the first attempt is observed. Exact-attempt Advice events record which

@@ -22,7 +22,6 @@ var _ MappedNullable = &ApplicationIntentionInput{}
 type ApplicationIntentionInput struct {
 	JobId                string                           `json:"job_id"`
 	DesiredState         ApplicationIntentionDesiredState `json:"desired_state"`
-	RequestedBy          string                           `json:"requested_by" validate:"regexp=^\\\\S+$"`
 	Reason               NullableString                   `json:"reason,omitempty"`
 	AdditionalProperties map[string]interface{}
 }
@@ -33,11 +32,10 @@ type _ApplicationIntentionInput ApplicationIntentionInput
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewApplicationIntentionInput(jobId string, desiredState ApplicationIntentionDesiredState, requestedBy string) *ApplicationIntentionInput {
+func NewApplicationIntentionInput(jobId string, desiredState ApplicationIntentionDesiredState) *ApplicationIntentionInput {
 	this := ApplicationIntentionInput{}
 	this.JobId = jobId
 	this.DesiredState = desiredState
-	this.RequestedBy = requestedBy
 	return &this
 }
 
@@ -97,30 +95,6 @@ func (o *ApplicationIntentionInput) SetDesiredState(v ApplicationIntentionDesire
 	o.DesiredState = v
 }
 
-// GetRequestedBy returns the RequestedBy field value
-func (o *ApplicationIntentionInput) GetRequestedBy() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.RequestedBy
-}
-
-// GetRequestedByOk returns a tuple with the RequestedBy field value
-// and a boolean to check if the value has been set.
-func (o *ApplicationIntentionInput) GetRequestedByOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.RequestedBy, true
-}
-
-// SetRequestedBy sets field value
-func (o *ApplicationIntentionInput) SetRequestedBy(v string) {
-	o.RequestedBy = v
-}
-
 // GetReason returns the Reason field value if set, zero value otherwise (both if not set or set to explicit null).
 func (o *ApplicationIntentionInput) GetReason() string {
 	if o == nil || IsNil(o.Reason.Get()) {
@@ -176,7 +150,6 @@ func (o ApplicationIntentionInput) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["job_id"] = o.JobId
 	toSerialize["desired_state"] = o.DesiredState
-	toSerialize["requested_by"] = o.RequestedBy
 	if o.Reason.IsSet() {
 		toSerialize["reason"] = o.Reason.Get()
 	}
@@ -195,7 +168,6 @@ func (o *ApplicationIntentionInput) UnmarshalJSON(data []byte) (err error) {
 	requiredProperties := []string{
 		"job_id",
 		"desired_state",
-		"requested_by",
 	}
 
 	allProperties := make(map[string]interface{})
@@ -227,7 +199,6 @@ func (o *ApplicationIntentionInput) UnmarshalJSON(data []byte) (err error) {
 	if err = json.Unmarshal(data, &additionalProperties); err == nil {
 		delete(additionalProperties, "job_id")
 		delete(additionalProperties, "desired_state")
-		delete(additionalProperties, "requested_by")
 		delete(additionalProperties, "reason")
 		o.AdditionalProperties = additionalProperties
 	}

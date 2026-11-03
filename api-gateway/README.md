@@ -94,17 +94,6 @@ JWT bearer tokens must include an `exp` claim. The gateway loads the configured
 JWKS when JWT authentication starts; restart the gateway after signing-key
 rotation so the verifier uses the new key set.
 
-Application cancellation requires a verified JWT/OIDC identity whose subject
-claim exactly matches the Slurm username reported by SAC. Configure
-`HEIMDALL_JWT_SUBJECT_CLAIM` or `HEIMDALL_OIDC_SUBJECT_CLAIM` accordingly, for
-example `preferred_username` only when the issuer guarantees that mapping.
-Opaque subjects and shared service tokens do not prove individual job ownership.
-Kubernetes service-account authentication and anonymous/insecure listeners cannot
-submit or read application intentions. The Gateway derives the requester from
-the verified token; the public payload has no username field. Job Manager and
-its scheduler-ingestion endpoints must remain restricted to trusted producers.
-See [application cancellation](../docs/users/running-jobs.md#request-application-cancellation).
-
 ## Audit ingestion
 
 Audit ingestion follows the Job Manager facade: `AuditService.CreateAuditEvents`

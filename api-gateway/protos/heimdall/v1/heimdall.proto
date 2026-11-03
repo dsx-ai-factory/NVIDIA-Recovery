@@ -665,31 +665,14 @@ message ApplicationIntention {
   ApplicationIntentionDesiredState desired_state = 3;
   optional string reason = 4;
   google.protobuf.Timestamp created_at = 5;
-  // PENDING, AUTHORIZED, or REJECTED. AUTHORIZED does not imply scheduler completion.
-  string authorization_status = 6;
-  // Structured rejection reason, such as REQUESTER_NOT_JOB_OWNER.
-  optional string reason_code = 7;
 }
 
 message CreateApplicationIntentionResponse {
   ApplicationIntention application_intention = 1;
 }
 
-// Reads only the authenticated caller's request for the scheduler job.
-message GetApplicationIntentionRequest {
-  string job_id = 1 [(google.api.field_behavior) = REQUIRED];
-}
-
-message GetApplicationIntentionResponse {
-  ApplicationIntention application_intention = 1;
-}
-
 // Public API for the NVIDIA Recovery service.
 service HeimdallService {
-  // Inspect the caller's pending or resolved cancellation authorization.
-  rpc GetApplicationIntention(GetApplicationIntentionRequest) returns (GetApplicationIntentionResponse) {
-    option (google.api.http) = {get: "/v1/application-intentions/{job_id}"};
-  }
   // Returns a paginated list of jobs.
   rpc GetJobs(GetJobsRequest) returns (GetJobsResponse) {
     option (google.api.http) = {get: "/v1/jobs"};

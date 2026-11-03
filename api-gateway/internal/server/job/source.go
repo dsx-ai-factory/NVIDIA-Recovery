@@ -12,7 +12,6 @@ import (
 )
 
 type JobSource interface {
-	GetApplicationIntention(ctx context.Context, req *pb.GetApplicationIntentionRequest) (*pb.GetApplicationIntentionResponse, error)
 	CreateApplicationIntention(ctx context.Context, req *pb.CreateApplicationIntentionRequest) (*pb.CreateApplicationIntentionResponse, error)
 	CreateOrUpdateJob(ctx context.Context, req *pb.CreateOrUpdateJobRequest) (*pb.CreateOrUpdateJobResponse, error)
 	GetJob(ctx context.Context, req *pb.GetJobRequest) (*pb.GetJobResponse, error)
@@ -27,11 +26,6 @@ type JobSource interface {
 }
 
 type NotImplementedJobSource struct{}
-
-// GetApplicationIntention reports that this source does not support intention reads.
-func (s *NotImplementedJobSource) GetApplicationIntention(ctx context.Context, req *pb.GetApplicationIntentionRequest) (*pb.GetApplicationIntentionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetApplicationIntention not implemented")
-}
 
 func NewNotImplementedJobSource() JobSource {
 	return &NotImplementedJobSource{}

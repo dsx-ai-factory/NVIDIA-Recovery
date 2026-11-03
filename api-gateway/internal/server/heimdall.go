@@ -9,7 +9,6 @@ import (
 	"unicode/utf8"
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
-	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/server/auth"
 	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/server/job"
 	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/util"
 	"go.uber.org/zap"
@@ -161,21 +160,7 @@ func (s *heimdallServer) CreateApplicationIntention(ctx context.Context, req *pb
 		}
 	}
 
-	if _, err := auth.ApplicationRequester(ctx); err != nil {
-		return nil, err
-	}
 	return s.jobSource.CreateApplicationIntention(ctx, req)
-}
-
-// GetApplicationIntention reads the authorization outcome for the current caller.
-func (s *heimdallServer) GetApplicationIntention(ctx context.Context, req *pb.GetApplicationIntentionRequest) (*pb.GetApplicationIntentionResponse, error) {
-	if _, err := auth.ApplicationRequester(ctx); err != nil {
-		return nil, err
-	}
-	if err := validateRequiredBoundedString("job id", req.JobId, 64); err != nil {
-		return nil, err
-	}
-	return s.jobSource.GetApplicationIntention(ctx, req)
 }
 
 func (s *heimdallServer) GetJobsBySchedulerId(ctx context.Context, req *pb.GetJobsBySchedulerIdRequest) (*pb.GetJobsBySchedulerIdResponse, error) {
