@@ -6,6 +6,7 @@ from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_
 from recovery_libs.storage.dataclass import ApplicationIntentionRecord
 
 from job_manager.audit.events import (
+    ApplicationTerminationRejectedEvent,
     ApplicationTerminationRequestedEvent,
     ApplicationTerminationRequestedPayload,
     current_unix_microseconds,
@@ -27,8 +28,13 @@ def audit_application_termination_requested(
         if intention.audit_attempt_index is None:
             raise ValueError("application intention audit attempt has not been claimed")
         attempt_index = intention.audit_attempt_index
+        event_type = (
+            ApplicationTerminationRejectedEvent
+            if intention.authorization_status == "REJECTED"
+            else ApplicationTerminationRequestedEvent
+        )
         audit_buffer.add(
-            ApplicationTerminationRequestedEvent(
+            event_type(
                 heimdall_job_id=str(generate_heimdall_job_id(intention.job_id, attempt_index)),
                 event_level=AuditEventLevel.RECOVERY,
                 payload=ApplicationTerminationRequestedPayload(
@@ -38,6 +44,9 @@ def audit_application_termination_requested(
                     desired_state=intention.desired_state,
                     reason=intention.reason,
                     requested_at=intention.created_at,
+                    requested_by=intention.requested_by,
+                    authorization_status=intention.authorization_status,
+                    reason_code=intention.reason_code,
                 ),
                 event_produced_at=current_unix_microseconds(),
             )

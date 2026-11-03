@@ -22,6 +22,7 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
+	HeimdallService_GetApplicationIntention_FullMethodName          = "/heimdall.v1.HeimdallService/GetApplicationIntention"
 	HeimdallService_GetJobs_FullMethodName                          = "/heimdall.v1.HeimdallService/GetJobs"
 	HeimdallService_GetJob_FullMethodName                           = "/heimdall.v1.HeimdallService/GetJob"
 	HeimdallService_GetJobsBySchedulerId_FullMethodName             = "/heimdall.v1.HeimdallService/GetJobsBySchedulerId"
@@ -39,6 +40,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HeimdallServiceClient interface {
+	// Inspect the caller's pending or resolved cancellation authorization.
+	GetApplicationIntention(ctx context.Context, in *GetApplicationIntentionRequest, opts ...grpc.CallOption) (*GetApplicationIntentionResponse, error)
 	// Returns a paginated list of jobs.
 	GetJobs(ctx context.Context, in *GetJobsRequest, opts ...grpc.CallOption) (*GetJobsResponse, error)
 	// Returns a specific job by its NVIDIA Recovery UUID.
@@ -69,6 +72,15 @@ type heimdallServiceClient struct {
 
 func NewHeimdallServiceClient(cc grpc.ClientConnInterface) HeimdallServiceClient {
 	return &heimdallServiceClient{cc}
+}
+
+func (c *heimdallServiceClient) GetApplicationIntention(ctx context.Context, in *GetApplicationIntentionRequest, opts ...grpc.CallOption) (*GetApplicationIntentionResponse, error) {
+	out := new(GetApplicationIntentionResponse)
+	err := c.cc.Invoke(ctx, HeimdallService_GetApplicationIntention_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *heimdallServiceClient) GetJobs(ctx context.Context, in *GetJobsRequest, opts ...grpc.CallOption) (*GetJobsResponse, error) {
@@ -174,6 +186,8 @@ func (c *heimdallServiceClient) RecordRecoveryMilestone(ctx context.Context, in 
 // All implementations must embed UnimplementedHeimdallServiceServer
 // for forward compatibility
 type HeimdallServiceServer interface {
+	// Inspect the caller's pending or resolved cancellation authorization.
+	GetApplicationIntention(context.Context, *GetApplicationIntentionRequest) (*GetApplicationIntentionResponse, error)
 	// Returns a paginated list of jobs.
 	GetJobs(context.Context, *GetJobsRequest) (*GetJobsResponse, error)
 	// Returns a specific job by its NVIDIA Recovery UUID.
@@ -203,6 +217,9 @@ type HeimdallServiceServer interface {
 type UnimplementedHeimdallServiceServer struct {
 }
 
+func (UnimplementedHeimdallServiceServer) GetApplicationIntention(context.Context, *GetApplicationIntentionRequest) (*GetApplicationIntentionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetApplicationIntention not implemented")
+}
 func (UnimplementedHeimdallServiceServer) GetJobs(context.Context, *GetJobsRequest) (*GetJobsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetJobs not implemented")
 }
@@ -247,6 +264,24 @@ type UnsafeHeimdallServiceServer interface {
 
 func RegisterHeimdallServiceServer(s grpc.ServiceRegistrar, srv HeimdallServiceServer) {
 	s.RegisterService(&HeimdallService_ServiceDesc, srv)
+}
+
+func _HeimdallService_GetApplicationIntention_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetApplicationIntentionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HeimdallServiceServer).GetApplicationIntention(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HeimdallService_GetApplicationIntention_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HeimdallServiceServer).GetApplicationIntention(ctx, req.(*GetApplicationIntentionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _HeimdallService_GetJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -454,6 +489,10 @@ var HeimdallService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "heimdall.v1.HeimdallService",
 	HandlerType: (*HeimdallServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetApplicationIntention",
+			Handler:    _HeimdallService_GetApplicationIntention_Handler,
+		},
 		{
 			MethodName: "GetJobs",
 			Handler:    _HeimdallService_GetJobs_Handler,

@@ -13,6 +13,26 @@ consumes:
 produces:
   - application/json
 paths:
+  /v1/application-intentions/{jobId}:
+    get:
+      summary: Inspect the caller's pending or resolved cancellation authorization.
+      operationId: HeimdallService_GetApplicationIntention
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetApplicationIntentionResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          type: string
+      tags:
+        - HeimdallService
   /v1/jobs:
     get:
       summary: List jobs
@@ -920,6 +940,12 @@ definitions:
       createdAt:
         type: string
         format: date-time
+      authorizationStatus:
+        type: string
+        description: PENDING, AUTHORIZED, or REJECTED. AUTHORIZED does not imply scheduler completion.
+      reasonCode:
+        type: string
+        description: Structured rejection reason, such as REQUESTER_NOT_JOB_OWNER.
     description: Durable application request accepted by Job Manager.
   v1ApplicationIntentionDesiredState:
     type: string
@@ -1108,6 +1134,11 @@ definitions:
     description: CreateOrUpdateJobResponse is the response for creating or updating a job.
   v1DeleteApiKeyResponse:
     type: object
+  v1GetApplicationIntentionResponse:
+    type: object
+    properties:
+      applicationIntention:
+        $ref: '#/definitions/v1ApplicationIntention'
   v1GetAuditEventsResponse:
     type: object
     properties:

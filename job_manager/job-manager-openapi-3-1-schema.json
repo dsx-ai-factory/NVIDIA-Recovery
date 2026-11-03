@@ -398,6 +398,58 @@
                 }
             }
         },
+        "/application-intentions/{job_id}": {
+            "get": {
+                "summary": "Get Application Intention",
+                "description": "Read an outcome scoped to the verified identity supplied by the Gateway.\n\nThis internal endpoint shares the trusted-producer boundary of Job Manager\njob ingestion. Public clients never control the requested_by parameter.",
+                "operationId": "get_application_intention",
+                "parameters": [
+                    {
+                        "name": "job_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Job Id"
+                        }
+                    },
+                    {
+                        "name": "requested_by",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256,
+                            "pattern": "^\\S+$",
+                            "title": "Requested By"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApplicationIntention"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/jobs": {
             "post": {
                 "summary": "Post Jobs",
@@ -2242,6 +2294,20 @@
                         "type": "string",
                         "format": "date-time",
                         "title": "Created At"
+                    },
+                    "authorization_status": {
+                        "$ref": "#/components/schemas/ApplicationIntentionAuthorizationStatus"
+                    },
+                    "reason_code": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Reason Code"
                     }
                 },
                 "type": "object",
@@ -2249,10 +2315,21 @@
                     "id",
                     "job_id",
                     "desired_state",
-                    "created_at"
+                    "created_at",
+                    "authorization_status"
                 ],
                 "title": "ApplicationIntention",
                 "description": "Durably accepted application intention for a scheduler job."
+            },
+            "ApplicationIntentionAuthorizationStatus": {
+                "type": "string",
+                "enum": [
+                    "PENDING",
+                    "AUTHORIZED",
+                    "REJECTED"
+                ],
+                "title": "ApplicationIntentionAuthorizationStatus",
+                "description": "Ownership decision; authorization does not mean Slurm has cancelled the job."
             },
             "ApplicationIntentionDesiredState": {
                 "type": "string",
@@ -2273,6 +2350,13 @@
                     "desired_state": {
                         "$ref": "#/components/schemas/ApplicationIntentionDesiredState"
                     },
+                    "requested_by": {
+                        "type": "string",
+                        "maxLength": 256,
+                        "minLength": 1,
+                        "pattern": "^\\S+$",
+                        "title": "Requested By"
+                    },
                     "reason": {
                         "anyOf": [
                             {
@@ -2289,7 +2373,8 @@
                 "type": "object",
                 "required": [
                     "job_id",
-                    "desired_state"
+                    "desired_state",
+                    "requested_by"
                 ],
                 "title": "ApplicationIntentionInput",
                 "description": "Application request to stop a scheduler job and prevent later retries."

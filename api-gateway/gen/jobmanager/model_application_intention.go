@@ -21,11 +21,13 @@ var _ MappedNullable = &ApplicationIntention{}
 
 // ApplicationIntention Durably accepted application intention for a scheduler job.
 type ApplicationIntention struct {
-	Id                   int64                            `json:"id"`
-	JobId                string                           `json:"job_id"`
-	DesiredState         ApplicationIntentionDesiredState `json:"desired_state"`
-	Reason               NullableString                   `json:"reason,omitempty"`
-	CreatedAt            time.Time                        `json:"created_at"`
+	Id                   int64                                   `json:"id"`
+	JobId                string                                  `json:"job_id"`
+	DesiredState         ApplicationIntentionDesiredState        `json:"desired_state"`
+	Reason               NullableString                          `json:"reason,omitempty"`
+	CreatedAt            time.Time                               `json:"created_at"`
+	AuthorizationStatus  ApplicationIntentionAuthorizationStatus `json:"authorization_status"`
+	ReasonCode           NullableString                          `json:"reason_code,omitempty"`
 	AdditionalProperties map[string]interface{}
 }
 
@@ -35,12 +37,13 @@ type _ApplicationIntention ApplicationIntention
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewApplicationIntention(id int64, jobId string, desiredState ApplicationIntentionDesiredState, createdAt time.Time) *ApplicationIntention {
+func NewApplicationIntention(id int64, jobId string, desiredState ApplicationIntentionDesiredState, createdAt time.Time, authorizationStatus ApplicationIntentionAuthorizationStatus) *ApplicationIntention {
 	this := ApplicationIntention{}
 	this.Id = id
 	this.JobId = jobId
 	this.DesiredState = desiredState
 	this.CreatedAt = createdAt
+	this.AuthorizationStatus = authorizationStatus
 	return &this
 }
 
@@ -191,6 +194,73 @@ func (o *ApplicationIntention) SetCreatedAt(v time.Time) {
 	o.CreatedAt = v
 }
 
+// GetAuthorizationStatus returns the AuthorizationStatus field value
+func (o *ApplicationIntention) GetAuthorizationStatus() ApplicationIntentionAuthorizationStatus {
+	if o == nil {
+		var ret ApplicationIntentionAuthorizationStatus
+		return ret
+	}
+
+	return o.AuthorizationStatus
+}
+
+// GetAuthorizationStatusOk returns a tuple with the AuthorizationStatus field value
+// and a boolean to check if the value has been set.
+func (o *ApplicationIntention) GetAuthorizationStatusOk() (*ApplicationIntentionAuthorizationStatus, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.AuthorizationStatus, true
+}
+
+// SetAuthorizationStatus sets field value
+func (o *ApplicationIntention) SetAuthorizationStatus(v ApplicationIntentionAuthorizationStatus) {
+	o.AuthorizationStatus = v
+}
+
+// GetReasonCode returns the ReasonCode field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *ApplicationIntention) GetReasonCode() string {
+	if o == nil || IsNil(o.ReasonCode.Get()) {
+		var ret string
+		return ret
+	}
+	return *o.ReasonCode.Get()
+}
+
+// GetReasonCodeOk returns a tuple with the ReasonCode field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *ApplicationIntention) GetReasonCodeOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.ReasonCode.Get(), o.ReasonCode.IsSet()
+}
+
+// HasReasonCode returns a boolean if a field has been set.
+func (o *ApplicationIntention) HasReasonCode() bool {
+	if o != nil && o.ReasonCode.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetReasonCode gets a reference to the given NullableString and assigns it to the ReasonCode field.
+func (o *ApplicationIntention) SetReasonCode(v string) {
+	o.ReasonCode.Set(&v)
+}
+
+// SetReasonCodeNil sets the value for ReasonCode to be an explicit nil
+func (o *ApplicationIntention) SetReasonCodeNil() {
+	o.ReasonCode.Set(nil)
+}
+
+// UnsetReasonCode ensures that no value is present for ReasonCode, not even an explicit nil
+func (o *ApplicationIntention) UnsetReasonCode() {
+	o.ReasonCode.Unset()
+}
+
 func (o ApplicationIntention) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -208,6 +278,10 @@ func (o ApplicationIntention) ToMap() (map[string]interface{}, error) {
 		toSerialize["reason"] = o.Reason.Get()
 	}
 	toSerialize["created_at"] = o.CreatedAt
+	toSerialize["authorization_status"] = o.AuthorizationStatus
+	if o.ReasonCode.IsSet() {
+		toSerialize["reason_code"] = o.ReasonCode.Get()
+	}
 
 	for key, value := range o.AdditionalProperties {
 		toSerialize[key] = value
@@ -225,6 +299,7 @@ func (o *ApplicationIntention) UnmarshalJSON(data []byte) (err error) {
 		"job_id",
 		"desired_state",
 		"created_at",
+		"authorization_status",
 	}
 
 	allProperties := make(map[string]interface{})
@@ -259,6 +334,8 @@ func (o *ApplicationIntention) UnmarshalJSON(data []byte) (err error) {
 		delete(additionalProperties, "desired_state")
 		delete(additionalProperties, "reason")
 		delete(additionalProperties, "created_at")
+		delete(additionalProperties, "authorization_status")
+		delete(additionalProperties, "reason_code")
 		o.AdditionalProperties = additionalProperties
 	}
 

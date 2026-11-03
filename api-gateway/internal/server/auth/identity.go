@@ -26,7 +26,8 @@ type IdentityClaimConfig struct {
 }
 
 // Identity represents the authenticated caller. It is kept in request context
-// for in-process authorization decisions only; it is not forwarded as headers.
+// and is not forwarded as headers. Individual operations may project verified
+// identity into a trusted internal contract, such as an application requester.
 type Identity struct {
 	Mechanism AuthMechanism
 	UserID    string

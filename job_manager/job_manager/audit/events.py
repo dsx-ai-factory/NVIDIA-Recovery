@@ -26,6 +26,9 @@ class ApplicationTerminationRequestedPayload(BaseModel):
     desired_state: str
     reason: str | None
     requested_at: datetime
+    requested_by: str | None = None
+    authorization_status: str = "AUTHORIZED"
+    reason_code: str | None = None
 
 
 class ApplicationTerminationRequestedEvent(
@@ -34,6 +37,16 @@ class ApplicationTerminationRequestedEvent(
 ):
     event_producer: Literal["job-manager"] = "job-manager"
     event_type: Literal["application_termination_requested"] = "application_termination_requested"
+
+
+class ApplicationTerminationRejectedEvent(
+    ProducerEvent[ApplicationTerminationRequestedPayload],
+    frozen=True,
+):
+    """A pending request was denied when its scheduler owner became known."""
+
+    event_producer: Literal["job-manager"] = "job-manager"
+    event_type: Literal["application_termination_rejected"] = "application_termination_rejected"
 
 
 class JobAttemptFirstSeenPayload(BaseModel):

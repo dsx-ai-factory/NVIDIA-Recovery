@@ -792,6 +792,139 @@ func (a *DefaultAPIService) GetAdviceByJobExecute(r ApiGetAdviceByJobRequest) (*
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
+type ApiGetApplicationIntentionRequest struct {
+	ctx         context.Context
+	ApiService  *DefaultAPIService
+	jobId       string
+	requestedBy *string
+}
+
+func (r ApiGetApplicationIntentionRequest) RequestedBy(requestedBy string) ApiGetApplicationIntentionRequest {
+	r.requestedBy = &requestedBy
+	return r
+}
+
+func (r ApiGetApplicationIntentionRequest) Execute() (*ApplicationIntention, *http.Response, error) {
+	return r.ApiService.GetApplicationIntentionExecute(r)
+}
+
+/*
+GetApplicationIntention Get Application Intention
+
+Read an outcome scoped to the verified identity supplied by the Gateway.
+
+This internal endpoint shares the trusted-producer boundary of Job Manager
+job ingestion. Public clients never control the requested_by parameter.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param jobId
+	@return ApiGetApplicationIntentionRequest
+*/
+func (a *DefaultAPIService) GetApplicationIntention(ctx context.Context, jobId string) ApiGetApplicationIntentionRequest {
+	return ApiGetApplicationIntentionRequest{
+		ApiService: a,
+		ctx:        ctx,
+		jobId:      jobId,
+	}
+}
+
+// Execute executes the request
+//
+//	@return ApplicationIntention
+func (a *DefaultAPIService) GetApplicationIntentionExecute(r ApiGetApplicationIntentionRequest) (*ApplicationIntention, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *ApplicationIntention
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.GetApplicationIntention")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/application-intentions/{job_id}"
+	localVarPath = strings.Replace(localVarPath, "{"+"job_id"+"}", url.PathEscape(parameterValueToString(r.jobId, "jobId")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.requestedBy == nil {
+		return localVarReturnValue, nil, reportError("requestedBy is required and must be specified")
+	}
+	if strlen(*r.requestedBy) < 1 {
+		return localVarReturnValue, nil, reportError("requestedBy must have at least 1 elements")
+	}
+	if strlen(*r.requestedBy) > 256 {
+		return localVarReturnValue, nil, reportError("requestedBy must have less than 256 elements")
+	}
+
+	parameterAddToHeaderOrQuery(localVarQueryParams, "requested_by", r.requestedBy, "form", "")
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 422 {
+			var v HTTPValidationError
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
 type ApiGetDagDependenciesRequest struct {
 	ctx                         context.Context
 	ApiService                  *DefaultAPIService
