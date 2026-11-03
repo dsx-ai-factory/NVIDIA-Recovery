@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "next build",
-    "dev": "next dev -p 3003",
+    "dev": "next dev",
     "generate": "kubb generate",
     "lint": "biome check",
     "lint:fix": "biome check --write",

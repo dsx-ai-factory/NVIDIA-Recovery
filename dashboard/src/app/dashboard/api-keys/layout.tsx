@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { PageLayout } from "~/app/dashboard/components/PageLayout";
 import { AuthGateway } from "~/components/AuthGateway";
 import { getBearerToken } from "~/lib/apiGatewaySession";
-import { getApiGatewayUrl } from "~/lib/baseUrls";
+import { getApiGatewayLoginUrl } from "~/lib/baseUrls";
 import { getAuthConfiguration } from "~/utils/auth";
 import { isApiKeysEnabled } from "~/utils/config";
 
@@ -33,7 +33,7 @@ export default async function ApiKeysLayout({
     </PageLayout>
   ) : (
     <AuthGateway
-      apiGatewayUrl={getApiGatewayUrl()}
+      apiGatewayUrl={getApiGatewayLoginUrl()}
       message="Login to API Gateway to access API Keys"
     />
   );
