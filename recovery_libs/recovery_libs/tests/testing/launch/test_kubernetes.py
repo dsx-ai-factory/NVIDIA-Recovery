@@ -50,6 +50,7 @@ def child(uid, owner, phase="Running"):
 
 
 def test_running_requires_all_expected_owned_pods():
+    """Foreign or pending Pods cannot satisfy readiness for the submitted workload."""
     client = Client()
     launcher = KubernetesJobSetLauncher(client)
     job = launcher.submit(spec())
@@ -67,6 +68,7 @@ def test_running_requires_all_expected_owned_pods():
 
 
 def test_same_names_are_isolated_and_cleanup_only_deletes_owned_uid():
+    """Concurrent launchers can reuse logical names without crossing cleanup boundaries."""
     client = Client()
     first, second = KubernetesJobSetLauncher(client), KubernetesJobSetLauncher(client)
     one, two = first.submit(spec()), second.submit(spec())
@@ -81,6 +83,7 @@ def test_same_names_are_isolated_and_cleanup_only_deletes_owned_uid():
 
 
 def test_replacement_is_never_observed_or_deleted_as_original():
+    """A replacement UID invalidates the original handle without authorizing deletion."""
     client = Client()
     launcher = KubernetesJobSetLauncher(client)
     job = launcher.submit(spec())
@@ -93,6 +96,7 @@ def test_replacement_is_never_observed_or_deleted_as_original():
 
 
 def test_server_uid_precondition_protects_racing_replacement():
+    """Deletion must reject a replacement created after the ownership check."""
     client = Client()
     launcher = KubernetesJobSetLauncher(client)
     job = launcher.submit(spec())
@@ -109,6 +113,7 @@ def test_server_uid_precondition_protects_racing_replacement():
 
 
 def test_failed_snapshot_cleans_created_resource():
+    """A malformed create response must not leak the newly created workload."""
     client = Client()
     create = client.create
 
@@ -126,6 +131,7 @@ def test_failed_snapshot_cleans_created_resource():
 
 
 def test_create_timeout_recovers_owned_resource_for_cleanup():
+    """A lost create response still permits cleanup of the owned server-side resource."""
     client = Client()
     create = client.create
 
@@ -140,6 +146,7 @@ def test_create_timeout_recovers_owned_resource_for_cleanup():
 
 
 def test_cleanup_does_not_require_child_list_access():
+    """Workload deletion remains possible when child listing is forbidden."""
     client = Client()
     launcher = KubernetesJobSetLauncher(client)
     job = launcher.submit(spec())
@@ -153,6 +160,7 @@ def test_cleanup_does_not_require_child_list_access():
 
 
 def test_diagnostics_preserves_state_when_events_fail():
+    """Unavailable Events do not hide workload state or the diagnostic error."""
     client = Client()
     launcher = KubernetesJobSetLauncher(client)
     job = launcher.submit(spec())
