@@ -157,8 +157,60 @@ class TestHttpService(unittest.TestCase):
             response = self._client.post("/jobs", json=payload)
 
         self.assertEqual(response.status_code, 200)
-        job_manager_mock.reconcile_application_intention.assert_called_once_with(persisted_record)
+        job_manager_mock.reconcile_application_intention.assert_called_once_with(
+            persisted_record, fail_closed_on_lookup_error=True
+        )
         job_manager_mock._maybe_emit_attribution_request.assert_not_called()
+
+    def test_post_jobs_checks_cancellation_once_without_changing_attribution_eligibility(self):
+        """Each upsert reads intent once; failures block attribution, not ingestion."""
+        now = datetime.now(UTC)
+        for state, lookup_fails in (("RUNNING", False), ("FAILED", False), ("FAILED", True)):
+            with (
+                self.subTest(state=state, lookup_fails=lookup_fails),
+                patch("job_manager.main.job_manager") as manager,
+                patch("job_manager.service.emit_attribution_request_if_needed") as emit_attribution,
+            ):
+                record = create_example_slurm_job_record(
+                    job_id="job-single-intention-read", state=state, last_updated_at=now
+                )
+                record.anomalies = (
+                    [JobAnomaly(anomaly_type=EventType.CRASH, timestamp=now, uuid=str(uuid.uuid4()))]
+                    if state == "FAILED"
+                    else []
+                )
+                self._use_real_job_upsert_boundary(manager)
+                manager.config = self._config
+                manager._is_advice_management_enabled.return_value = True
+                manager._is_dag_support_enabled.return_value = False
+                manager.storage.read_job_record.return_value = record
+                manager.storage.upsert_job_record.return_value = (record, False, record)
+                manager.storage.read_application_intention.return_value = None
+                if lookup_fails:
+                    manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+                        "intention store unavailable"
+                    )
+                for method in ("reconcile_application_intention", "_maybe_emit_attribution_request"):
+                    getattr(manager, method).side_effect = getattr(JobManager, method).__get__(manager, JobManager)
+
+                response = self._client.post(
+                    "/jobs",
+                    json={
+                        "job_id": record.job_id,
+                        "job_attempt_index": record.job_attempt_index,
+                        "workflow_id": "workflow-test",
+                        "state": state,
+                        "last_updated_at": now.isoformat(),
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                manager.storage.read_application_intention.assert_called_once_with(record.job_id)
+                if state == "FAILED" and not lookup_fails:
+                    emit_attribution.assert_called_once()
+                    self.assertIs(emit_attribution.call_args.args[0], record)
+                else:
+                    emit_attribution.assert_not_called()
 
     def test_post_jobs_remains_available_when_application_intention_table_is_unavailable(self):
         now = datetime.now(UTC)
@@ -723,7 +775,10 @@ class TestHttpService(unittest.TestCase):
             self.assertEqual(generated_record.job_id, "job-state-crash")
             self.assertFalse(generated_record.aps_spec.anomaly_detection_config.log_based_crash_enabled)
             job_manager_mock.should_send_crash_anomaly.assert_called_once_with(record=generated_record, state="FAILED")
-            job_manager_mock._maybe_emit_attribution_request.assert_called_once_with(persisted_record)
+            job_manager_mock._maybe_emit_attribution_request.assert_called_once_with(
+                persisted_record,
+                application_intention_result=ApplicationIntentionReconciliation.NOT_REQUESTED,
+            )
             persist_mock.assert_called_once()
 
     def test_post_jobs_state_crash_advice_requires_committed_anomaly(self):
@@ -784,8 +839,8 @@ class TestHttpService(unittest.TestCase):
 
                 manager.storage.upsert_job_record.side_effect = persist_job
                 manager.storage.upsert_advice.side_effect = persist_advice
-                manager._maybe_emit_attribution_request.side_effect = lambda _record, _steps=committed_steps: (
-                    _steps.append("attribution")
+                manager._maybe_emit_attribution_request.side_effect = (
+                    lambda _record, _steps=committed_steps, **_kwargs: _steps.append("attribution")
                 )
 
                 response = self._client.post("/jobs", json=payload)

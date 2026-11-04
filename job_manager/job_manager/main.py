@@ -574,7 +574,11 @@ def post_jobs(
         # propagate to its descendants, and before attribution can generate a
         # competing Restarted decision. Future attempts repeat this check when
         # they are first observed.
-        application_intention_result = job_manager.reconcile_application_intention(updated_record)  # type: ignore[union-attr]
+        # A lookup failure suppresses attribution but does not reject this upsert.
+        # Reuse this fail-closed result below instead of reading the intention twice.
+        application_intention_result = job_manager.reconcile_application_intention(  # type: ignore[union-attr]
+            updated_record, fail_closed_on_lookup_error=True
+        )
 
         # Persist terminal cancellation/limit Advice at the scheduler-state
         # boundary so recovery outcomes remain visible. State-based anomaly handling
@@ -604,7 +608,9 @@ def post_jobs(
         # scheduler adapter is allowed to act on. Emit only after the anomaly is
         # durable so ADI and the controller cannot observe a partial attempt.
         if updated_record.anomalies and not application_intention_result.blocks_recovery:
-            job_manager._maybe_emit_attribution_request(updated_record)  # type: ignore[union-attr]
+            job_manager._maybe_emit_attribution_request(  # type: ignore[union-attr]
+                updated_record, application_intention_result=application_intention_result
+            )
 
         action = "created" if created else "updated"
         logger.info(

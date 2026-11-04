@@ -665,6 +665,8 @@ class JobManager:
     def _maybe_emit_attribution_request(
         self,
         record: SlurmJobExecutionRecord,
+        *,
+        application_intention_result: ApplicationIntentionReconciliation | None = None,
     ) -> ApplicationIntentionReconciliation:
         """Reconcile application intent, then emit attribution once when recovery remains eligible.
 
@@ -673,11 +675,16 @@ class JobManager:
         request from starting a restart sequence while cancellation state is unavailable.
         The emitter then gates on anomaly eligibility and de-dups via an atomic claim, so
         redundant calls are no-ops.
+
+        HTTP ingress may reuse its fail-closed result for this same persisted
+        attempt after terminal-policy writes, avoiding another storage read while
+        preserving that ordering. Never reuse a result across job updates.
         """
-        application_intention_result = self.reconcile_application_intention(
-            record,
-            fail_closed_on_lookup_error=True,
-        )
+        if application_intention_result is None:
+            application_intention_result = self.reconcile_application_intention(
+                record,
+                fail_closed_on_lookup_error=True,
+            )
         if application_intention_result.blocks_recovery:
             return application_intention_result
 

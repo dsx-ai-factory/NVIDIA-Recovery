@@ -1110,10 +1110,7 @@ class ApplicationIntentionRecord(DataClassBase):
     audit_attempt_index: Mapped[int | None] = mapped_column(Integer, default=None, kw_only=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTimeMicrosecondsType, kw_only=True)
 
-    __table_args__ = (
-        UniqueConstraint("job_id", name="uq_application_intention_job_id"),
-        Index("idx_application_intention_created_at", "created_at"),
-    )
+    __table_args__ = (UniqueConstraint("job_id", name="uq_application_intention_job_id"),)
 
 
 class RecoveryMilestoneRecord(DataClassBase):

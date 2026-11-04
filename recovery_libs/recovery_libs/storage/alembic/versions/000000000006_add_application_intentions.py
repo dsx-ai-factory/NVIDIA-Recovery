@@ -33,15 +33,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("job_id", name="uq_application_intention_job_id"),
     )
-    op.create_index(
-        "idx_application_intention_created_at",
-        "application_intentions",
-        ["created_at"],
-        unique=False,
-    )
 
 
 def downgrade() -> None:
     """Remove application intentions without modifying job or Advice history."""
-    op.drop_index("idx_application_intention_created_at", table_name="application_intentions")
     op.drop_table("application_intentions")
