@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 import os
 import re
@@ -27,6 +28,7 @@ class KubectlJobSetClient:
     """Bounded kubectl transport using an explicit context and namespace."""
 
     def __init__(self, *, context: str, namespace: str, timeout: float = 30) -> None:
+        """Bind requests to a validated namespace and explicit cluster context."""
         if not context or not re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", namespace):
             raise ValueError("an explicit context and valid namespace are required")
         self.context = context
@@ -84,7 +86,7 @@ class KubectlJobSetClient:
             },
         )
 
-    def events(self, uid: str) -> list[dict[str, Any]]:
+    def events(self, uid: str) -> builtins.list[dict[str, Any]]:
         """Read events about one exact Kubernetes object."""
         return json.loads(self.command("get", "events", "--field-selector", f"involvedObject.uid={uid}", "-o", "json"))[
             "items"
@@ -206,6 +208,7 @@ class KubernetesJobSetLauncher:
         return job
 
     def _record(self, job_id: str) -> dict[str, Any]:
+        """Reject foreign handles and changed ownership before observing a workload."""
         if job_id not in self._owned:
             raise ValueError(f"workload is not owned by this launcher: {job_id}")
         namespace, name, uid = job_id.split("/")
@@ -218,6 +221,7 @@ class KubernetesJobSetLauncher:
         return record
 
     def _children(self, record: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Follow controller UID ownership from this JobSet through Jobs to Pods."""
         uid = record["metadata"]["uid"]
         selector = f"jobset.sigs.k8s.io/jobset-name={record['metadata']['name']}"
         jobs = [job for job in self._client.list("jobs", selector=selector) if _owned_by(job, {uid})]
@@ -228,6 +232,7 @@ class KubernetesJobSetLauncher:
         return jobs, pods
 
     def _snapshot(self, record: dict[str, Any], pods: list[dict[str, Any]]) -> Job:
+        """Report running only when every expected owned Pod is running and not deleting."""
         metadata = record["metadata"]
         expected = sum(
             job.get("replicas", 1) * job["template"]["spec"].get("parallelism", 1)
@@ -321,7 +326,9 @@ class KubernetesJobSetLauncher:
     def diagnostics(self, *, job_id: str) -> dict[str, Any]:
         """Collect owned workload/Pod state, Events and bounded container logs before cleanup."""
         record = self._record(job_id)
-        events, logs, errors = [], {}, {}
+        events: builtins.list[dict[str, Any]] = []
+        logs: dict[str, str] = {}
+        errors: dict[str, str] = {}
         try:
             jobs, pods = self._children(record)
         except (RuntimeError, subprocess.TimeoutExpired) as error:
@@ -344,6 +351,7 @@ class KubernetesJobSetLauncher:
 
 
 def _owned_by(record: Mapping[str, Any], uids: set[str]) -> bool:
+    """Require a controller owner reference to one of the expected parent UIDs."""
     return any(
         owner.get("uid") in uids and owner.get("controller") is True
         for owner in record["metadata"].get("ownerReferences", [])
