@@ -255,6 +255,19 @@ log.file.path = "/var/log/slurm/myapp_12345_1"
 
 Rules define the anomaly detection workflows and their configurations.
 
+Watcher may see a job's logs before Job Manager knows about the job. When this
+happens, Watcher waits before checking Job Manager again. You can set this delay
+with `job_discovery_grace_period_secs` under the `noprogress` rule's `attributes`.
+The value must be a positive whole number of seconds and defaults to `31`. For
+example, `job_discovery_grace_period_secs: 60` makes Watcher wait at least one
+minute before checking again, on its next workflow scan.
+
+If Job Manager knows about the job by then, Watcher uses the job's no-output
+timeout. Otherwise, it uses the default timeout. Watcher checks again even if the
+job has stopped writing logs. The time spent waiting counts toward the timeout:
+for a job with a 120-second timeout, checking again after 60 seconds without
+progress leaves 60 seconds before the timer expires.
+
 ### Structure
 
 ```yaml

@@ -727,6 +727,8 @@ class RuleAttributesConfig(BaseConfig):
     metric_type: str | None = None
     enable_metric_cleanup: bool | None = None
     interval: Any | None = None
+    # No-output lookup retry delay in seconds. When omitted, the default of 31 seconds is used.
+    job_discovery_grace_period_secs: int | None = None
     last_iteration_enabled: bool | None = None
     last_iteration_regex: str | None = None
     last_iteration_operation_schema: str | None = None
@@ -763,6 +765,9 @@ class RuleAttributesConfig(BaseConfig):
 
     def __post_init__(self):
         super().__post_init__()
+        grace = self.job_discovery_grace_period_secs
+        if grace is not None and (type(grace) is not int or grace <= 0):
+            raise ValueError("job_discovery_grace_period_secs must be a positive integer")
         if self.query is not None and any(key != RuleAttributesQueryType.REGEX for key in self.query):
             raise ValueError(
                 "Move native workflow queries to datasources.log_query.providers.<backend>.queries.workflows.<name>"

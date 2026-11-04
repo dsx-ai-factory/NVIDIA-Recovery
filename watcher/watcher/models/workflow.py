@@ -101,6 +101,12 @@ class WorkflowStepNooutputConfigAttributes(BaseModel):
     cache_key: str
     query: dict[Literal["regex"], list] = Field(default_factory=dict)
     interval: dict[str, int]
+    job_discovery_grace_period_secs: int = Field(
+        default=31,
+        gt=0,
+        strict=True,
+        description="Seconds before retrying a missing job lookup and allowing the default no-output timeout.",
+    )
     last_iteration_enabled: bool = False
     last_iteration_regex: str | None = None
     last_iteration_operation_schema: str | None = None

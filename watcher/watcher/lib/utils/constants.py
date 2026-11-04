@@ -13,6 +13,10 @@ JOB_MANAGER_DATETIME_MASK = "%Y-%m-%dT%H:%M:%SZ"
 ## Workflow
 ##
 JOB_ATTRIBUTES_NOOUTPUT_PREFIX = "job_attrs_nooutput_"
+# Pending discovery stores the retry deadline and latest observed activity time.
+JOB_NOOUTPUT_PENDING_PREFIX = "job_nooutput_pending_"
+# Allow more than one 30-second discovery interval before falling back.
+JOB_NOOUTPUT_DISCOVERY_GRACE_SECS = 31
 JOB_LAST_EVENT_PREFIX = "job_last_event_"
 JOB_LEVEL_DEDUP_CACHE_PREFIX = "job_terminal_exception_"
 JOB_PHASE_VALID_TRANSITIONS = {
@@ -25,6 +29,7 @@ JOB_PHASE_ORDERED = (
 JOB_STATE_CACHE_CLEANUP_KEY_PREFIXES = (
     JOB_ATTRIBUTES_NOOUTPUT_PREFIX,
     JOB_LAST_EVENT_PREFIX,
+    JOB_NOOUTPUT_PENDING_PREFIX,
 )
 METRICS_CLEANUP_KEY = "garbage_collected_metrics"
 METRICS_CLEANUP_THRESHOLD_SECS = 600
