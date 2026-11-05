@@ -362,6 +362,10 @@
     "volumeMounts": {
       "type": "array",
       "items": { "type": "object", "additionalProperties": true }
+    },
+    "initContainers": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
     }
   }
 }

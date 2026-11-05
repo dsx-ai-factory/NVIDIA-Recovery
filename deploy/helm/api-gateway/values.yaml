@@ -170,3 +170,6 @@ tolerations: []
 volumes: []
 
 volumeMounts: []
+
+# -- Add additional init containers to the api-gateway pod(s)
+initContainers: []
