@@ -33,6 +33,25 @@
     "annotations": {
       "type": "object",
       "additionalProperties": { "type": "string" }
+    },
+    "targetPorts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rest", "grpc"],
+      "properties": {
+        "rest": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "integer", "minimum": 1, "maximum": 65535 }
+          ]
+        },
+        "grpc": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "integer", "minimum": 1, "maximum": 65535 }
+          ]
+        }
+      }
     }
   },
   "required": [
@@ -182,18 +201,20 @@
     "externalService": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "annotations"],
+      "required": ["enabled", "annotations", "targetPorts"],
       "properties": {
         "enabled": { "type": "boolean" },
-        "annotations": { "$ref": "#/definitions/annotations" }
+        "annotations": { "$ref": "#/definitions/annotations" },
+        "targetPorts": { "$ref": "#/definitions/targetPorts" }
       }
     },
     "internalService": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["annotations"],
+      "required": ["annotations", "targetPorts"],
       "properties": {
-        "annotations": { "$ref": "#/definitions/annotations" }
+        "annotations": { "$ref": "#/definitions/annotations" },
+        "targetPorts": { "$ref": "#/definitions/targetPorts" }
       }
     },
     "service_type": {

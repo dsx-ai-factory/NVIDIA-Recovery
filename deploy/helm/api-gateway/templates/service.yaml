@@ -21,10 +21,10 @@ spec:
   ports:
   - name: rest
     port: {{ .Values.ports.rest }}
-    targetPort: rest
+    targetPort: {{ default "rest" .Values.externalService.targetPorts.rest }}
   - name: grpc
     port: {{ .Values.ports.grpc }}
-    targetPort: grpc
+    targetPort: {{ default "grpc" .Values.externalService.targetPorts.grpc }}
 {{ end }}
 ---
 apiVersion: v1
@@ -45,10 +45,10 @@ spec:
   ports:
   - name: rest
     port: {{ .Values.ports.rest }}
-    targetPort: rest-internal
+    targetPort: {{ default "rest-internal" .Values.internalService.targetPorts.rest }}
   - name: grpc
     port: {{ .Values.ports.grpc }}
-    targetPort: grpc-internal
+    targetPort: {{ default "grpc-internal" .Values.internalService.targetPorts.grpc }}
   {{- if and .Values.otel.enabled .Values.metricsTelemetry.enabled }}
   - name: metrics
     port: {{ .Values.metricsTelemetry.port }}
