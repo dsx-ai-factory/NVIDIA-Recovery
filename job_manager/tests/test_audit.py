@@ -3,7 +3,7 @@
 
 import threading
 from copy import deepcopy
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import job_manager.main as main_module
 import pytest
@@ -82,7 +82,9 @@ def test_audit_advice_upsert_preserves_committed_result_on_build_error(
         result = persist_advice_record(storage, audit_buffer, updated_record)
 
     assert result is committed_result
-    storage.upsert_advice.assert_called_once_with(updated_record, issue_merge=AdviceIssueMerge.REPLACE)
+    storage.upsert_advice.assert_called_once_with(
+        updated_record, issue_merge=AdviceIssueMerge.REPLACE, scheduler_metadata_merge=ANY
+    )
     build_event.assert_called_once()
     audit_buffer.add.assert_not_called()
     log_exception.assert_called_once()
@@ -104,7 +106,9 @@ def test_audit_advice_upsert_preserves_committed_result_on_enqueue_error(
         result = persist_advice_record(storage, audit_buffer, updated_record)
 
     assert result is committed_result
-    storage.upsert_advice.assert_called_once_with(updated_record, issue_merge=AdviceIssueMerge.REPLACE)
+    storage.upsert_advice.assert_called_once_with(
+        updated_record, issue_merge=AdviceIssueMerge.REPLACE, scheduler_metadata_merge=ANY
+    )
     audit_buffer.add.assert_called_once()
     log_exception.assert_called_once()
 
@@ -145,7 +149,9 @@ def test_audit_job_upsert_preserves_committed_result_on_build_error(
         result = persist_job_record(storage, audit_buffer, updated_record)
 
     assert result is committed_result
-    storage.upsert_job_record.assert_called_once_with(updated_record, populate_heimdall_id_log_path=False)
+    storage.upsert_job_record.assert_called_once_with(
+        updated_record, populate_heimdall_id_log_path=False, scheduler_metadata_merge=ANY
+    )
     build_event.assert_called_once()
     audit_buffer.add.assert_not_called()
     log_exception.assert_called_once()
@@ -167,7 +173,9 @@ def test_audit_job_upsert_preserves_committed_result_on_enqueue_error(
         result = persist_job_record(storage, audit_buffer, updated_record)
 
     assert result is committed_result
-    storage.upsert_job_record.assert_called_once_with(updated_record, populate_heimdall_id_log_path=False)
+    storage.upsert_job_record.assert_called_once_with(
+        updated_record, populate_heimdall_id_log_path=False, scheduler_metadata_merge=ANY
+    )
     audit_buffer.add.assert_called_once()
     log_exception.assert_called_once()
 

@@ -380,6 +380,7 @@ class MySQLStorage(BaseStorage):
         job_record: SlurmJobExecutionRecord,
         *,
         populate_heimdall_id_log_path: bool = False,
+        scheduler_metadata_merge: Callable[[dict | None, dict | None], dict | None] | None = None,
     ) -> UpsertJobResult:
         """
         Create or update a job execution record.
@@ -392,6 +393,8 @@ class MySQLStorage(BaseStorage):
             populate_heimdall_id_log_path: Populate the legacy log-file field from
                 the Heimdall job ID resolved under the upsert lock when no
                 nonempty path list is already retained.
+            scheduler_metadata_merge: Optional compatibility-boundary policy that
+                merges incoming and stored metadata under the row lock.
 
         Returns:
             The stored record, whether it was created, and the transient
@@ -404,7 +407,13 @@ class MySQLStorage(BaseStorage):
         try:
             _normalize_job_upsert_timestamps(job_record)
             self._fill_heimdall_job_id(job_record)
-            return self._upsert_job_record_once(job_record, populate_heimdall_id_log_path, job_record.log_file_paths)
+            return self._upsert_job_record_once(
+                job_record,
+                populate_heimdall_id_log_path,
+                job_record.log_file_paths,
+                scheduler_metadata_merge,
+                dict(job_record.scheduler_metadata) if job_record.scheduler_metadata is not None else None,
+            )
         except RecoveryStorageInputValidationError:
             raise
         except Exception as e:
@@ -412,7 +421,7 @@ class MySQLStorage(BaseStorage):
             raise RecoveryStorageException(f"Failed to upsert job record: {e}") from e
 
     @retry_on_conflict(
-        describe=lambda job_record, populate_heimdall_id_log_path, original_log_file_paths: (
+        describe=lambda job_record, populate_heimdall_id_log_path, original_log_file_paths, scheduler_metadata_merge, original_scheduler_metadata: (
             f"job {job_record.job_id}, attempt index {job_record.job_attempt_index}"
         )
     )
@@ -421,6 +430,8 @@ class MySQLStorage(BaseStorage):
         job_record: SlurmJobExecutionRecord,
         populate_heimdall_id_log_path: bool,
         original_log_file_paths: list | None,
+        scheduler_metadata_merge: Callable[[dict | None, dict | None], dict | None] | None,
+        original_scheduler_metadata: dict | None,
     ) -> UpsertJobResult:
         """Single-attempt body of upsert_job_record(), run fresh for each conflict retry.
 
@@ -437,6 +448,9 @@ class MySQLStorage(BaseStorage):
         overwrite real log paths the winning transaction already committed.
         """
         job_record.log_file_paths = original_log_file_paths
+        job_record.scheduler_metadata = (
+            dict(original_scheduler_metadata) if original_scheduler_metadata is not None else None
+        )
         with self.connection.write_session() as session:
             if not self.connection.write_pool_enabled:
                 session.connection(execution_options={"isolation_level": "READ COMMITTED"})
@@ -451,6 +465,11 @@ class MySQLStorage(BaseStorage):
 
             now = datetime.now(UTC)
 
+            if scheduler_metadata_merge is not None:
+                job_record.scheduler_metadata = scheduler_metadata_merge(
+                    original_scheduler_metadata,
+                    existing_job.scheduler_metadata if existing_job is not None else None,
+                )
             if existing_job:
                 # Snapshot before mutating the ORM-managed instance. Making the
                 # copy transient prevents accidental persistence by callers.
@@ -945,6 +964,8 @@ class MySQLStorage(BaseStorage):
         self,
         job_id: str,
         job_attempt_index: int | None,
+        *,
+        scheduler_metadata_merge: Callable[[dict | None, dict | None], dict | None] | None = None,
         **kwargs: Any,
     ) -> UpdateJobResult:
         """Partially update a Job and return its committed transition.
@@ -952,7 +973,8 @@ class MySQLStorage(BaseStorage):
         The target row remains locked from the pre-update snapshot through the
         write and commit. When the attempt index is omitted, the latest attempt
         is selected under that same lock so a concurrent writer cannot make the
-        returned snapshots describe a different transition.
+        returned snapshots describe a different transition. When metadata is supplied,
+        scheduler_metadata_merge applies the caller's identity policy under that lock.
         """
         try:
             # Remove None and empty collections from the kwargs to avoid overriding existing values with empty values.
@@ -984,6 +1006,11 @@ class MySQLStorage(BaseStorage):
                     session.commit()
                     logger.debug(f"No job record matched update for job {job_id}, attempt index {job_attempt_index}.")
                     return UpdateJobResult(updated_record=None, old_record=None)
+
+                if scheduler_metadata_merge is not None and "scheduler_metadata" in update_values:
+                    metadata = scheduler_metadata_merge(kwargs["scheduler_metadata"], known_record.scheduler_metadata)
+                    if metadata is not None:
+                        update_values["scheduler_metadata"] = metadata
 
                 # Resolve the latest attempt and capture its exact pre-update state
                 # while holding the same row lock used by the write below.
@@ -1026,6 +1053,8 @@ class MySQLStorage(BaseStorage):
                     updated_record=known_record,
                     old_record=old_record,
                 )
+        except RecoveryStorageInputValidationError:
+            raise
         except Exception as e:
             logger.exception("Failed to update job record", extra={"error": str(e)})
             raise RecoveryStorageException(f"Failed to update job record: {e}") from e
@@ -1540,6 +1569,7 @@ class MySQLStorage(BaseStorage):
         advice: AdviceRecord,
         *,
         issue_merge: AdviceIssueMerge = AdviceIssueMerge.REPLACE,
+        scheduler_metadata_merge: Callable[[dict | None, dict | None], dict | None] | None = None,
     ) -> UpsertAdviceResult:
         """
         Create or update an advice record.
@@ -1552,6 +1582,9 @@ class MySQLStorage(BaseStorage):
             advice: The AdviceRecord to upsert.
             issue_merge: How incoming Issues combine with the stored Issues. The
                 stored row is locked while they are combined. See AdviceIssueMerge.
+            scheduler_metadata_merge: Optional compatibility-boundary policy that
+                merges incoming and stored metadata under the row lock, before
+                comparing recovery context or desired state.
 
         Returns:
             The stored record, whether it was created, and the transient
@@ -1570,7 +1603,12 @@ class MySQLStorage(BaseStorage):
             )
 
         try:
-            return self._upsert_advice_once(advice, issue_merge)
+            return self._upsert_advice_once(
+                advice,
+                issue_merge,
+                scheduler_metadata_merge,
+                dict(advice.scheduler_metadata) if advice.scheduler_metadata is not None else None,
+            )
         except RecoveryStorageInputValidationError:
             raise
         except Exception as e:
@@ -1578,9 +1616,17 @@ class MySQLStorage(BaseStorage):
             raise RecoveryStorageException(f"Failed to upsert advice record: {e}") from e
 
     @retry_on_conflict(
-        describe=lambda advice, issue_merge: f"advice for job {advice.job_id}, attempt index {advice.attempt_index}"
+        describe=lambda advice, issue_merge, scheduler_metadata_merge, original_scheduler_metadata: (
+            f"advice for job {advice.job_id}, attempt index {advice.attempt_index}"
+        )
     )
-    def _upsert_advice_once(self, advice: AdviceRecord, issue_merge: AdviceIssueMerge) -> UpsertAdviceResult:
+    def _upsert_advice_once(
+        self,
+        advice: AdviceRecord,
+        issue_merge: AdviceIssueMerge,
+        scheduler_metadata_merge: Callable[[dict | None, dict | None], dict | None] | None,
+        original_scheduler_metadata: dict | None,
+    ) -> UpsertAdviceResult:
         """Run one attempt of upsert_advice(). A conflict retry runs it again from the start.
 
         Job Manager replicas, its job-update consumers, and its leader repair loop can
@@ -1613,6 +1659,15 @@ class MySQLStorage(BaseStorage):
                 ).first()
 
                 now = datetime.now(UTC)
+
+                advice.scheduler_metadata = (
+                    scheduler_metadata_merge(
+                        original_scheduler_metadata,
+                        existing.scheduler_metadata if existing is not None else None,
+                    )
+                    if scheduler_metadata_merge is not None
+                    else original_scheduler_metadata
+                )
 
                 if existing is not None and issue_merge == AdviceIssueMerge.APPEND_ONLY:
                     # Evidence-only writers must not overwrite a decision that another writer

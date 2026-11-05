@@ -5,7 +5,7 @@
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from job_manager.advice_mapping import http_to_storage_advice, storage_to_http_advice
@@ -1539,7 +1539,7 @@ def test_create_advice_issue_reads_db_when_inmemory_missing():
         audit_buffer=NoOpAuditBuffer(),
     )
 
-    storage.read_job_record.assert_called_once_with(
+    storage.read_job_record.assert_any_call(
         job_id="job-1",
         job_attempt_index=2,
     )
@@ -1834,7 +1834,7 @@ def test_persist_dag_release_advice_targets_exact_attempt():
 
     advice = persist_dag_release_advice(storage, job_record, audit_buffer=MagicMock())
 
-    storage.read_advice_by_job.assert_called_once_with(job_id="job-1", attempt_index=0)
+    storage.read_advice_by_job.assert_any_call(job_id="job-1", attempt_index=0)
     record = storage.upsert_advice.call_args.args[0]
     assert record.job_id == "job-1"
     assert record.attempt_index == 0
@@ -1991,7 +1991,7 @@ def test_job_released_advice_targets_failed_attempt():
         status=status,
     )
 
-    storage.read_advice_by_job.assert_called_once_with(job_id="job-1", attempt_index=1)
+    storage.read_advice_by_job.assert_any_call(job_id="job-1", attempt_index=1)
     advice_record = storage.upsert_advice.call_args[0][0]
     assert advice_record.attempt_index == 1
 
@@ -2111,7 +2111,9 @@ def test_advice_persists_when_correlation_job_read_fails(state):
     storage.upsert_advice.return_value = UpsertAdviceResult(advice, True, None)
     result = persist_advice_record(storage, NoOpAuditBuffer(), advice)
     assert result[0] is advice
-    storage.upsert_advice.assert_called_once_with(advice, issue_merge=AdviceIssueMerge.REPLACE)
+    storage.upsert_advice.assert_called_once_with(
+        advice, issue_merge=AdviceIssueMerge.REPLACE, scheduler_metadata_merge=ANY
+    )
 
 
 def test_dag_advice_starts_at_dependency_decision_with_its_scheduler_scope():

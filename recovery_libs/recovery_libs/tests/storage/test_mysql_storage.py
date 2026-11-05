@@ -4,6 +4,7 @@
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -30,6 +31,7 @@ from recovery_libs.storage.mysql_storage import (
     UPSERT_CONFLICT_MAX_RETRIES,
     MySQLStorage,
 )
+from recovery_libs.storage.scheduler_metadata import SchedulerMetadataConflictError, preserve_scheduler_metadata
 from sqlalchemy import Integer, cast, desc, func, inspect, select, tuple_, update
 from sqlalchemy.dialects import mysql
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -2327,3 +2329,148 @@ def test_read_dag_dependencies_requires_identifier_type(mysql_storage):
 
     with pytest.raises(RecoveryStorageInputValidationError):
         mysql_storage.read_dag_dependencies(dependency_job_identifier="parent_job")
+
+
+@pytest.mark.parametrize("record_kind", ["job", "advice"])
+def test_upserts_preserve_selected_identity_and_replace_other_metadata(mysql_storage, session, record_kind):
+    """A partial observation must not erase established routing identity."""
+    identity = {"scheduler": "slurm", "slurm_array_job_id": "4200", "slurm_array_task_id": "0"}
+    if record_kind == "job":
+        existing = create_example_slurm_job_record(
+            job_id="4200_0", attempt_index=0, submit_time=datetime.now(UTC), last_updated_at=datetime.now(UTC)
+        )
+        incoming = create_example_slurm_job_record(
+            job_id="4200_0", attempt_index=0, submit_time=datetime.now(UTC), last_updated_at=datetime.now(UTC)
+        )
+        upsert = mysql_storage.upsert_job_record
+    else:
+        existing = AdviceRecord(
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            heimdall_id=generate_heimdall_job_id("4200_0", 0),
+            job_id="4200_0",
+            attempt_index=0,
+            advice_state=None,
+            visible=True,
+            node_inclusions=["node-a"],
+            generation=3,
+        )
+        incoming = AdviceRecord(
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            heimdall_id=existing.heimdall_id,
+            job_id="4200_0",
+            attempt_index=0,
+            advice_state=None,
+            visible=True,
+            node_inclusions=["node-a"],
+        )
+        upsert = mysql_storage.upsert_advice
+    existing.scheduler_metadata = identity | {"old_diagnostic": "old"}
+    incoming.scheduler_metadata = {"diagnostic": "new"}
+    session.scalars.return_value.first.return_value = existing
+
+    stored, created, previous = upsert(
+        incoming, scheduler_metadata_merge=partial(preserve_scheduler_metadata, immutable_keys=tuple(identity))
+    )
+
+    assert not created
+    assert stored.scheduler_metadata == identity | {"diagnostic": "new"}
+    assert previous.scheduler_metadata == identity | {"old_diagnostic": "old"}
+    if record_kind == "advice":
+        assert stored.generation == 3
+    session.commit.assert_called_once()
+
+
+@pytest.mark.parametrize("record_kind", ["job", "advice"])
+def test_upserts_reject_identity_conflict_without_committing(mysql_storage, session, record_kind):
+    if record_kind == "job":
+        existing = create_example_slurm_job_record(
+            job_id="4200_0", attempt_index=0, submit_time=datetime.now(UTC), last_updated_at=datetime.now(UTC)
+        )
+        incoming = create_example_slurm_job_record(
+            job_id="4200_0", attempt_index=0, submit_time=datetime.now(UTC), last_updated_at=datetime.now(UTC)
+        )
+        upsert = mysql_storage.upsert_job_record
+    else:
+        existing = AdviceRecord(
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            heimdall_id=generate_heimdall_job_id("4200_0", 0),
+            job_id="4200_0",
+            attempt_index=0,
+            advice_state="Restarted",
+            visible=True,
+        )
+        incoming = AdviceRecord(
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            heimdall_id=existing.heimdall_id,
+            job_id="4200_0",
+            attempt_index=0,
+            advice_state="Terminated",
+            visible=True,
+        )
+        upsert = mysql_storage.upsert_advice
+    existing.scheduler_metadata = {"raw_id": "4201"}
+    incoming.scheduler_metadata = {"raw_id": "4202"}
+    session.scalars.return_value.first.return_value = existing
+
+    with pytest.raises(SchedulerMetadataConflictError):
+        upsert(incoming, scheduler_metadata_merge=partial(preserve_scheduler_metadata, immutable_keys=("raw_id",)))
+
+    assert existing.scheduler_metadata == {"raw_id": "4201"}
+    session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("record_kind", ["job", "advice"])
+def test_metadata_policy_reads_winning_identity_after_insert_race(mysql_storage, session, record_kind):
+    """A losing first writer must merge the winner's newly committed identity."""
+    now = datetime.now(UTC)
+    if record_kind == "job":
+        incoming = SlurmJobExecutionRecord(
+            job_id="4200_0",
+            job_attempt_index=0,
+            workflow_id="array",
+            last_updated_at=now,
+            scheduler_metadata={"diagnostic": "latest"},
+        )
+        winner = SlurmJobExecutionRecord(
+            job_id="4200_0",
+            job_attempt_index=0,
+            workflow_id="array",
+            last_updated_at=now,
+        )
+        upsert = mysql_storage.upsert_job_record
+    else:
+        incoming = AdviceRecord(
+            heimdall_id=generate_heimdall_job_id("4200_0", 0),
+            job_id="4200_0",
+            attempt_index=0,
+            scheduler_metadata={"diagnostic": "latest"},
+            visible=True,
+            node_inclusions=["node-a"],
+            created_at=now,
+            updated_at=now,
+        )
+        winner = AdviceRecord(
+            heimdall_id=incoming.heimdall_id,
+            job_id="4200_0",
+            attempt_index=0,
+            visible=True,
+            node_inclusions=["node-a"],
+            created_at=now,
+            updated_at=now,
+        )
+        upsert = mysql_storage.upsert_advice
+    winner.scheduler_metadata = {"scheduler": "slurm", "raw_id": "4201"}
+    session.scalars.return_value.first.side_effect = [None, winner]
+    session.commit.side_effect = [IntegrityError("INSERT", {}, Exception(1062, "duplicate key")), None]
+    merge = partial(preserve_scheduler_metadata, immutable_keys=("scheduler", "raw_id"))
+
+    with patch("recovery_libs.storage.mysql_storage.time.sleep"):
+        stored, created, _ = upsert(incoming, scheduler_metadata_merge=merge)
+
+    assert not created
+    assert stored.scheduler_metadata == {"scheduler": "slurm", "raw_id": "4201", "diagnostic": "latest"}
+    session.rollback.assert_called_once()

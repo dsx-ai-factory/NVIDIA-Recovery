@@ -23,8 +23,8 @@ type SacctJob struct {
 	AllocationNodes int `json:"allocation_nodes"`
 	JobID           int `json:"job_id"`
 	Array           struct {
-		JobID  int         `json:"job_id"`
-		TaskID numberField `json:"task_id"`
+		JobID  identityNumber `json:"job_id"`
+		TaskID identityNumber `json:"task_id"`
 	} `json:"array"`
 	Name    string `json:"name"`
 	Cluster string `json:"cluster"`
@@ -135,7 +135,10 @@ func observedJobsFromSacct(data []byte) ([]cluster.JobExecutionRecord, error) {
 	grouped := map[string][]SacctJob{}
 	groupOrder := []string{}
 	for _, job := range parsed.Jobs {
-		jobID, _, _, include := jobIdentityFromSacct(job)
+		jobID, _, _, include, err := jobIdentityFromSacct(job)
+		if err != nil {
+			return nil, errors.Wrapf(err, "sacct job %d identity", job.JobID)
+		}
 		if !include {
 			continue
 		}
@@ -160,7 +163,10 @@ func observedJobsFromSacct(data []byte) ([]cluster.JobExecutionRecord, error) {
 }
 
 func observedJobFromSacct(jobData SacctJob, attemptIndex int32) (cluster.JobExecutionRecord, error) {
-	jobID, arrayJobID, arrayTaskID, include := jobIdentityFromSacct(jobData)
+	jobID, arrayJobID, arrayTaskID, include, err := jobIdentityFromSacct(jobData)
+	if err != nil {
+		return cluster.JobExecutionRecord{}, errors.Wrapf(err, "sacct job %d identity", jobData.JobID)
+	}
 	if !include {
 		return cluster.JobExecutionRecord{}, errors.New("synthetic sacct array entry should have been filtered")
 	}
@@ -245,19 +251,8 @@ func observedJobFromSacct(jobData SacctJob, attemptIndex int32) (cluster.JobExec
 	return job, nil
 }
 
-func jobIdentityFromSacct(job SacctJob) (jobID, arrayJobID, arrayTaskID string, include bool) {
-	rawJobID := strconv.Itoa(job.JobID)
-	if job.Array.JobID <= 0 {
-		return rawJobID, "", "", true
-	}
-
-	arrayJobID = strconv.Itoa(job.Array.JobID)
-	arrayTaskID = strconv.Itoa(job.Array.TaskID.Number)
-	if !job.Array.TaskID.Set {
-		return "", arrayJobID, arrayTaskID, false
-	}
-
-	return arrayJobID + "_" + arrayTaskID, arrayJobID, arrayTaskID, true
+func jobIdentityFromSacct(job SacctJob) (jobID, arrayJobID, arrayTaskID string, include bool, err error) {
+	return slurmJobIdentity(job.JobID, job.Array.JobID, job.Array.TaskID)
 }
 
 func groupSacctAttempts(rawJobs []SacctJob) [][]SacctJob {

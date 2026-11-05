@@ -222,6 +222,42 @@ func TestBuildCreateOrUpdateJobRequestIncludesArrayEndTimeAndFiltersNodes(t *tes
 	}
 }
 
+func TestBuildCreateOrUpdateJobRequestKeepsArrayTaskAttemptsDistinct(t *testing.T) {
+	tests := []struct {
+		jobID, taskID, rawID, heimdallID string
+		attempt                          int32
+	}{
+		{"4200_0", "0", "4201", "d3032274-eed6-5c01-bfa9-ae8798f5d703", 0},
+		{"4200_0", "0", "4201", "e0345de7-1491-548d-b42c-1f3bdab08307", 1},
+		{"4200_1", "1", "4200", "87bf7395-c280-5892-a7e2-00620beeaf88", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.heimdallID, func(t *testing.T) {
+			request, err := BuildCreateOrUpdateJobRequest(cluster.JobExecutionRecord{
+				JobID: tt.jobID, RawJobID: tt.rawID, ArrayJobID: "4200", ArrayTaskID: tt.taskID,
+				AttemptIndex: tt.attempt, WorkflowID: "array-workflow", State: cluster.JobStateRunning,
+			}, UpsertRequestOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			// These UUIDs are independent examples of the public UUIDv5 contract,
+			// including task zero and the task whose raw ID equals the array ID.
+			if request.GetJobId() != tt.jobID || request.GetAttemptIndex() != tt.attempt || request.GetHeimdallJobId() != tt.heimdallID {
+				t.Fatalf("request identity = (%q, %d, %q), want (%q, %d, %q)", request.GetJobId(), request.GetAttemptIndex(), request.GetHeimdallJobId(), tt.jobID, tt.attempt, tt.heimdallID)
+			}
+			metadata := request.GetSchedulerMetadata().AsMap()
+			for key, want := range map[string]string{
+				"scheduler": "slurm", "slurm_job_id": tt.jobID, "slurm_raw_job_id": tt.rawID,
+				"slurm_array_job_id": "4200", "slurm_array_task_id": tt.taskID,
+			} {
+				if metadata[key] != want {
+					t.Errorf("metadata[%q] = %v, want %q", key, metadata[key], want)
+				}
+			}
+		})
+	}
+}
+
 func TestBuildCreateOrUpdateJobRequestRejectsInvalidWorkflowID(t *testing.T) {
 	tests := map[string]string{
 		"missing":       "",

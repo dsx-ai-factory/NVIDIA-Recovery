@@ -4,6 +4,11 @@ Status: proposed
 
 Date: 2026-11-03
 
+> **Implementation note (2026-11-05):** The Task identity slice covers parsing,
+> metadata preservation, and per-record conflict validation; cross-record admission,
+> recovery, checkpoint association, and end-to-end qualification remain in the
+> [implementation plan](../architecture/job-array-support-plan.md).
+
 ## Context
 
 A Slurm job array contains independently scheduled tasks. NVIDIA Recovery must
