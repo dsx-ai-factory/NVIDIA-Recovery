@@ -137,13 +137,18 @@ class DagStorage:
         return self.advice.get((job_id, attempt_index))
 
     def upsert_advice(
-        self, advice: AdviceRecord, *, issue_merge: object = None
+        self, advice: AdviceRecord, *, issue_merge: object = None, scheduler_metadata_merge=None
     ) -> tuple[AdviceRecord, bool, AdviceRecord | None]:
         # DAG policy tests write serially and use writers that replace Advice or that
         # carry every stored Issue forward, so issue_merge does not change the outcome here.
         del issue_merge
         key = (advice.job_id, advice.attempt_index)
         existing = self.advice.get(key)
+        if scheduler_metadata_merge is not None:
+            advice.scheduler_metadata = scheduler_metadata_merge(
+                advice.scheduler_metadata,
+                existing.scheduler_metadata if existing is not None else None,
+            )
         if existing is not None:
             advice.created_at = existing.created_at
         self.advice[key] = advice
