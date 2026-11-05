@@ -17,6 +17,7 @@ from typing import Any, Protocol
 from recovery_libs.testing.http.tracing import traced
 from recovery_libs.testing.launch.clients import SlurmClient, SlurmHttpClient, SlurmKubectlClient, SlurmSshClient
 from recovery_libs.testing.launch.jobs import Job, JobNotFound, JobSpec, JobState
+from recovery_libs.testing.launch.kubernetes import KubernetesJobSetLauncher
 
 _ENVIRONMENT_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 _UNREPRESENTABLE_ENVIRONMENT = frozenset(("\x00", "\n", "\r", ","))
@@ -154,6 +155,7 @@ class SlurmLauncher:
 DEFAULT_LAUNCHER = "slurm-kubectl"
 LAUNCHERS: Mapping[str, Callable[[], Launcher]] = MappingProxyType(
     {
+        "kubernetes-jobset": KubernetesJobSetLauncher.from_environment,
         "slurm-ssh": lambda: SlurmLauncher(SlurmSshClient.from_environment()),
         "slurm-kubectl": lambda: SlurmLauncher(SlurmKubectlClient.from_environment()),
         "slurm-http": lambda: SlurmLauncher(SlurmHttpClient.from_environment()),
