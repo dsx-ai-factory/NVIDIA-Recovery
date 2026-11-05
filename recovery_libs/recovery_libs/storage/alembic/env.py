@@ -12,6 +12,7 @@ from sqlalchemy import engine_from_config, pool
 # Without them, alembic cannot detect tables and relationships fail to resolve.
 from recovery_libs.storage.dataclass import (
     AdviceRecord,
+    ApplicationIntentionRecord,
     Base,
     JobEvent,
     RecoveryMilestoneRecord,

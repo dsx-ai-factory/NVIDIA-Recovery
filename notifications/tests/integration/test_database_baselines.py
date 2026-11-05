@@ -35,6 +35,7 @@ NOTIFICATIONS_ALEMBIC_ROOT = Path(notifications_database.__file__).parent / "_mi
 STORAGE_TABLES = {
     "advice",
     "advice_reconciliation_status",
+    "application_intentions",
     "dag_dependency",
     "global_events",
     "job_events",

@@ -99,6 +99,7 @@ Class | Method | HTTP request | Description
 *DefaultAPI* | [**ManifestWellKnownManifestJsonGet**](docs/DefaultAPI.md#manifestwellknownmanifestjsonget) | **Get** /.well-known/manifest.json | Manifest
 *DefaultAPI* | [**MetricsMetricsGet**](docs/DefaultAPI.md#metricsmetricsget) | **Get** /metrics | Metrics
 *DefaultAPI* | [**PostAdvice**](docs/DefaultAPI.md#postadvice) | **Post** /advice | Post Advice
+*DefaultAPI* | [**PostApplicationIntention**](docs/DefaultAPI.md#postapplicationintention) | **Post** /application-intentions | Post Application Intention
 *DefaultAPI* | [**PostJobs**](docs/DefaultAPI.md#postjobs) | **Post** /jobs | Post Jobs
 *DefaultAPI* | [**PutAdviceReconciliationStatus**](docs/DefaultAPI.md#putadvicereconciliationstatus) | **Put** /advice/{heimdall_id}/reconciliation-status | Put Advice Reconciliation Status
 *DefaultAPI* | [**RecordRecoveryMilestone**](docs/DefaultAPI.md#recordrecoverymilestone) | **Post** /recovery/milestones | Record Recovery Milestone
@@ -114,6 +115,9 @@ Class | Method | HTTP request | Description
  - [AdviceReconciliationStatus](docs/AdviceReconciliationStatus.md)
  - [AdviceState](docs/AdviceState.md)
  - [AnomalyDetectionConfig](docs/AnomalyDetectionConfig.md)
+ - [ApplicationIntention](docs/ApplicationIntention.md)
+ - [ApplicationIntentionDesiredState](docs/ApplicationIntentionDesiredState.md)
+ - [ApplicationIntentionInput](docs/ApplicationIntentionInput.md)
  - [ApsSlurmJobSpecInput](docs/ApsSlurmJobSpecInput.md)
  - [ApsSlurmJobSpecOutput](docs/ApsSlurmJobSpecOutput.md)
  - [AutoResumeModeEnum](docs/AutoResumeModeEnum.md)

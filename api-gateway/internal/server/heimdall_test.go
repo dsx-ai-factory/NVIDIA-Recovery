@@ -24,7 +24,8 @@ type recordingWorkflowSource struct {
 
 type recordingJobSource struct {
 	job.JobSource
-	calls int
+	calls          int
+	intentionCalls int
 }
 
 type recordingAdviceSource struct {
@@ -49,6 +50,53 @@ func (s *recordingAdviceSource) UpdateAdviceReconciliationStatus(
 func (s *recordingJobSource) GetJobs(_ context.Context, _ *pb.GetJobsRequest) (*pb.GetJobsResponse, error) {
 	s.calls++
 	return &pb.GetJobsResponse{}, nil
+}
+
+func (s *recordingJobSource) CreateApplicationIntention(_ context.Context, req *pb.CreateApplicationIntentionRequest) (*pb.CreateApplicationIntentionResponse, error) {
+	s.intentionCalls++
+	return &pb.CreateApplicationIntentionResponse{
+		ApplicationIntention: &pb.ApplicationIntention{
+			JobId:        req.JobId,
+			DesiredState: req.DesiredState,
+			Reason:       req.Reason,
+		},
+	}, nil
+}
+
+func TestCreateApplicationIntentionValidatesAndForwardsCancellation(t *testing.T) {
+	source := &recordingJobSource{JobSource: job.NewNotImplementedJobSource()}
+	server := NewHeimdallServer(source)
+	reason := "training converged"
+
+	response, err := server.CreateApplicationIntention(context.Background(), &pb.CreateApplicationIntentionRequest{
+		JobId:        "42",
+		DesiredState: pb.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED,
+		Reason:       &reason,
+	})
+
+	if err != nil {
+		t.Fatalf("CreateApplicationIntention() failed: %v", err)
+	}
+	if source.intentionCalls != 1 {
+		t.Fatalf("source calls = %d, want 1", source.intentionCalls)
+	}
+	if response.GetApplicationIntention().GetJobId() != "42" {
+		t.Fatalf("job ID = %q, want 42", response.GetApplicationIntention().GetJobId())
+	}
+}
+
+func TestCreateApplicationIntentionRejectsUnspecifiedState(t *testing.T) {
+	source := &recordingJobSource{JobSource: job.NewNotImplementedJobSource()}
+	server := NewHeimdallServer(source)
+
+	_, err := server.CreateApplicationIntention(context.Background(), &pb.CreateApplicationIntentionRequest{JobId: "42"})
+
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("error code = %v, want %v", status.Code(err), codes.InvalidArgument)
+	}
+	if source.intentionCalls != 0 {
+		t.Fatalf("source calls = %d, want 0", source.intentionCalls)
+	}
 }
 
 func (s *recordingWorkflowSource) GetWorkflows(_ context.Context, req *pb.GetWorkflowsRequest) (*pb.GetWorkflowsResponse, error) {

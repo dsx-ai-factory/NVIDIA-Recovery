@@ -17,7 +17,7 @@ from job_manager.audit.events import (
 )
 from job_manager.constants import WATCHER, WORKFLOW_CONTROLLER
 from job_manager.main import app, start_http_server
-from job_manager.service import JobManager
+from job_manager.service import ApplicationIntentionReconciliation, JobManager
 from recovery_libs.audit import AuditEventLevel
 from recovery_libs.schema.aps_spec.spec import AutoResumeModeEnum
 from recovery_libs.schema.event_type import EventType
@@ -25,6 +25,8 @@ from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_
 from recovery_libs.schema.job_manager.models import (
     AdviceReconciliationDisposition,
     AdviceReconciliationReason,
+    ApplicationIntention,
+    ApplicationIntentionDesiredState,
     GetRecoverySequenceResponse,
     JobAnomaly,
     JobCheckpointInfo,
@@ -74,6 +76,7 @@ class TestHttpService(unittest.TestCase):
         job_manager_mock.upsert_job_record.side_effect = lambda *args, **kwargs: JobManager.upsert_job_record(
             job_manager_mock, *args, **kwargs
         )
+        job_manager_mock.reconcile_application_intention.return_value = ApplicationIntentionReconciliation.NOT_REQUESTED
 
     def test_start_http_server(self):
         with patch.object(uvicorn, attribute="run") as http_server_mock:
@@ -88,6 +91,158 @@ class TestHttpService(unittest.TestCase):
                 http_server_mock.call_args.kwargs["port"],
                 self._config["service"]["http"]["port"],
             )
+
+    def test_post_application_intention_accepts_job_before_registration(self):
+        created_at = datetime.now(UTC)
+        accepted = ApplicationIntention(
+            id=9,
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED,
+            reason="training converged",
+            created_at=created_at,
+        )
+        with patch("job_manager.main.job_manager") as job_manager_mock:
+            job_manager_mock.create_application_intention.return_value = accepted
+            response = self._client.post(
+                "/application-intentions",
+                json={
+                    "job_id": "job-42",
+                    "desired_state": "CANCELLED",
+                    "reason": "training converged",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["job_id"], "job-42")
+        self.assertEqual(response.json()["desired_state"], "CANCELLED")
+        request = job_manager_mock.create_application_intention.call_args.args[0]
+        self.assertEqual(request.job_id, "job-42")
+        self.assertEqual(request.reason, "training converged")
+        job_manager_mock.reconcile_latest_application_intention.assert_called_once_with("job-42")
+
+    def test_post_application_intention_rejects_unsupported_desired_state(self):
+        response = self._client.post(
+            "/application-intentions",
+            json={"job_id": "job-42", "desired_state": "RUNNING"},
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_post_jobs_applies_existing_application_intention_before_attribution(self):
+        now = datetime.now(UTC)
+        payload = {
+            "job_id": "job-42",
+            "job_attempt_index": 1,
+            "workflow_id": "workflow-test",
+            "state": "FAILED",
+            "last_updated_at": now.isoformat(),
+        }
+        persisted_record = create_example_slurm_job_record(
+            job_id="job-42",
+            attempt_index=1,
+            state="FAILED",
+            last_updated_at=now,
+        )
+        persisted_record.anomalies = [JobAnomaly(anomaly_type=EventType.CRASH, timestamp=now, uuid=str(uuid6.uuid7()))]
+
+        with patch("job_manager.main.job_manager") as job_manager_mock:
+            self._use_real_job_upsert_boundary(job_manager_mock)
+            job_manager_mock.storage.read_job_record.return_value = persisted_record
+            job_manager_mock.storage.upsert_job_record.return_value = (persisted_record, True, None)
+            job_manager_mock.reconcile_application_intention.return_value = (
+                ApplicationIntentionReconciliation.TERMINATED
+            )
+            job_manager_mock._is_dag_support_enabled.return_value = False
+
+            response = self._client.post("/jobs", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        job_manager_mock.reconcile_application_intention.assert_called_once_with(
+            persisted_record, fail_closed_on_lookup_error=True
+        )
+        job_manager_mock._maybe_emit_attribution_request.assert_not_called()
+
+    def test_post_jobs_checks_cancellation_once_without_changing_attribution_eligibility(self):
+        """Each upsert reads intent once; failures block attribution, not ingestion."""
+        now = datetime.now(UTC)
+        for state, lookup_fails in (("RUNNING", False), ("FAILED", False), ("FAILED", True)):
+            with (
+                self.subTest(state=state, lookup_fails=lookup_fails),
+                patch("job_manager.main.job_manager") as manager,
+                patch("job_manager.service.emit_attribution_request_if_needed") as emit_attribution,
+            ):
+                record = create_example_slurm_job_record(
+                    job_id="job-single-intention-read", state=state, last_updated_at=now
+                )
+                record.anomalies = (
+                    [JobAnomaly(anomaly_type=EventType.CRASH, timestamp=now, uuid=str(uuid.uuid4()))]
+                    if state == "FAILED"
+                    else []
+                )
+                self._use_real_job_upsert_boundary(manager)
+                manager.config = self._config
+                manager._is_advice_management_enabled.return_value = True
+                manager._is_dag_support_enabled.return_value = False
+                manager.storage.read_job_record.return_value = record
+                manager.storage.upsert_job_record.return_value = (record, False, record)
+                manager.storage.read_application_intention.return_value = None
+                if lookup_fails:
+                    manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+                        "intention store unavailable"
+                    )
+                for method in ("reconcile_application_intention", "_maybe_emit_attribution_request"):
+                    getattr(manager, method).side_effect = getattr(JobManager, method).__get__(manager, JobManager)
+
+                response = self._client.post(
+                    "/jobs",
+                    json={
+                        "job_id": record.job_id,
+                        "job_attempt_index": record.job_attempt_index,
+                        "workflow_id": "workflow-test",
+                        "state": state,
+                        "last_updated_at": now.isoformat(),
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                manager.storage.read_application_intention.assert_called_once_with(record.job_id)
+                if state == "FAILED" and not lookup_fails:
+                    emit_attribution.assert_called_once()
+                    self.assertIs(emit_attribution.call_args.args[0], record)
+                else:
+                    emit_attribution.assert_not_called()
+
+    def test_post_jobs_remains_available_when_application_intention_table_is_unavailable(self):
+        now = datetime.now(UTC)
+        payload = {
+            "job_id": "job-rolling-migration",
+            "job_attempt_index": 0,
+            "workflow_id": "workflow-test",
+            "state": "RUNNING",
+            "last_updated_at": now.isoformat(),
+        }
+        persisted_record = create_example_slurm_job_record(
+            job_id="job-rolling-migration",
+            attempt_index=0,
+            state="RUNNING",
+            last_updated_at=now,
+        )
+
+        with patch("job_manager.main.job_manager") as manager:
+            self._use_real_job_upsert_boundary(manager)
+            manager._is_advice_management_enabled.return_value = True
+            manager.storage.upsert_job_record.return_value = (persisted_record, False, persisted_record)
+            manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+                "application_intentions does not exist"
+            )
+            manager.reconcile_application_intention.side_effect = JobManager.reconcile_application_intention.__get__(
+                manager, JobManager
+            )
+
+            response = self._client.post("/jobs", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        manager.storage.read_application_intention.assert_called_once_with("job-rolling-migration")
 
     def test_get_status_endpoint_not_ready(self):
         with patch("job_manager.main.job_manager") as job_manager_mock:
@@ -620,7 +775,10 @@ class TestHttpService(unittest.TestCase):
             self.assertEqual(generated_record.job_id, "job-state-crash")
             self.assertFalse(generated_record.aps_spec.anomaly_detection_config.log_based_crash_enabled)
             job_manager_mock.should_send_crash_anomaly.assert_called_once_with(record=generated_record, state="FAILED")
-            job_manager_mock._maybe_emit_attribution_request.assert_called_once_with(persisted_record)
+            job_manager_mock._maybe_emit_attribution_request.assert_called_once_with(
+                persisted_record,
+                application_intention_result=ApplicationIntentionReconciliation.NOT_REQUESTED,
+            )
             persist_mock.assert_called_once()
 
     def test_post_jobs_state_crash_advice_requires_committed_anomaly(self):
@@ -681,8 +839,8 @@ class TestHttpService(unittest.TestCase):
 
                 manager.storage.upsert_job_record.side_effect = persist_job
                 manager.storage.upsert_advice.side_effect = persist_advice
-                manager._maybe_emit_attribution_request.side_effect = lambda _record, _steps=committed_steps: (
-                    _steps.append("attribution")
+                manager._maybe_emit_attribution_request.side_effect = (
+                    lambda _record, _steps=committed_steps, **_kwargs: _steps.append("attribution")
                 )
 
                 response = self._client.post("/jobs", json=payload)

@@ -76,3 +76,27 @@ Verifications:
 Use the public chart under `deploy/helm/job-manager/` or enable the Job
 Manager subchart through `deploy/helm/nvidia-recovery/`. Supply database and event-bus
 credentials with Kubernetes Secrets.
+
+### Application-cancellation retry configuration
+
+When `service.advice_management_enabled` is true, Job Manager requires a
+positive `service.event_bus.anomaly_queue_delivery_retry_delay_secs` and both
+`anomaly_dead_letter_routing_key` and
+`anomaly_dead_letter_redelivery_routing_key` under `service.event_bus`. The two
+routing keys must differ. Omitting the delay uses the consumer's 30-second
+default; an explicit zero or negative delay fails startup.
+
+Before upgrading a custom deployment, check these values in its effective
+configuration. In particular, change an explicit zero delay to a positive
+value and provide distinct retry routing keys before enabling Advice
+management. The supplied Job Manager configuration already has a positive
+delay and distinct keys. Disabling Advice management does not require a
+delayed attribution retry route; a positive configured delay still requires
+valid routing keys.
+
+This validation protects late attribution results when cancellation state
+cannot be read or terminal Advice cannot be persisted. Those results must be
+redelivered rather than lost or allowed to restart a cancelled job. A zero
+delay does not create the timer queue, so accepting it with only a warning
+would not provide a working retry path. Top-level service retry settings do
+not configure the consumers; use the `service.event_bus` settings above.

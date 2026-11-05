@@ -28,6 +28,8 @@ type ListAdviceResponse = jobmanagerBindings.ListAdviceResponse
 type GetRecoverySequenceResponse = jobmanagerBindings.GetRecoverySequenceResponse
 type RecordRecoveryMilestoneRequest = jobmanagerBindings.RecordRecoveryMilestoneRequest
 type RecordRecoveryMilestoneResponse = jobmanagerBindings.RecordRecoveryMilestoneResponse
+type ApplicationIntention = jobmanagerBindings.ApplicationIntention
+type ApplicationIntentionInput = jobmanagerBindings.ApplicationIntentionInput
 
 type GetJobsOption func(*jobmanagerBindings.ApiGetJobsRequest)
 type GetWorkflowsOption func(*jobmanagerBindings.ApiGetWorkflowsRequest)
@@ -67,6 +69,19 @@ func NewJobManagerClient(jobManagerEndpoint string) *JobManagerClient {
 	return &JobManagerClient{
 		jobManager: jobmanagerBindings.NewAPIClient(cfg),
 	}
+}
+
+func (c *JobManagerClient) CreateApplicationIntention(ctx context.Context, input ApplicationIntentionInput) (*ApplicationIntention, error) {
+	ctx, span := tracer.Start(ctx, "jobmanager.CreateApplicationIntention")
+	defer span.End()
+
+	response, _, err := c.jobManager.DefaultAPI.PostApplicationIntention(ctx).
+		ApplicationIntentionInput(input).
+		Execute()
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 func (c *JobManagerClient) GetJob(ctx context.Context, jobRunId JobRunId) (*SlurmJobExecutionStatus, error) {
