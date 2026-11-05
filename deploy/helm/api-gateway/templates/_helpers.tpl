@@ -130,3 +130,13 @@ registry yields a bare "name:tag" reference.
 {{- printf "%s:%s" .Values.image.name $tag -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Renders a Service targetPort from a list of (targetPorts map, key, default
+name). Falls back to the default name when the key is unset or empty. Port
+names render as quoted strings and port numbers as integers.
+*/}}
+{{- define "api-gateway.targetPort" -}}
+{{- $value := default (index . 2) (get (default dict (index . 0)) (index . 1)) -}}
+{{- if kindIs "string" $value -}}{{ quote $value }}{{- else -}}{{ $value }}{{- end -}}
+{{- end -}}
