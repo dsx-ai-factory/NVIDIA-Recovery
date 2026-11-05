@@ -201,7 +201,7 @@
     "externalService": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "annotations", "targetPorts"],
+      "required": ["enabled", "annotations"],
       "properties": {
         "enabled": { "type": "boolean" },
         "annotations": { "$ref": "#/definitions/annotations" },
@@ -211,7 +211,7 @@
     "internalService": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["annotations", "targetPorts"],
+      "required": ["annotations"],
       "properties": {
         "annotations": { "$ref": "#/definitions/annotations" },
         "targetPorts": { "$ref": "#/definitions/targetPorts" }
