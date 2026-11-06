@@ -11,12 +11,12 @@ import {
   type V1CreateApiKeyResponse,
   type V1DeleteApiKeyResponse,
 } from "~/gen/api-gateway";
-import { getBearerToken } from "~/lib/apiGatewaySession";
+import { getGatewayBearerToken } from "~/server/gatewayToken";
 
 export async function createApiKeyAction(
   data: V1CreateApiKeyRequest,
 ): Promise<V1CreateApiKeyResponse> {
-  const bearerToken = await getBearerToken();
+  const bearerToken = await getGatewayBearerToken();
   if (!bearerToken) {
     throw new Error("No bearer token found");
   }
@@ -37,7 +37,7 @@ export async function createApiKeyAction(
 export async function deleteApiKeyAction(
   keyId: string,
 ): Promise<V1DeleteApiKeyResponse> {
-  const bearerToken = await getBearerToken();
+  const bearerToken = await getGatewayBearerToken();
   if (!bearerToken) {
     throw new Error("No bearer token found");
   }

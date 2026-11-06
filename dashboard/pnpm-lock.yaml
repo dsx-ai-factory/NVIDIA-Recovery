@@ -70,9 +70,6 @@ importers:
       hammerjs:
         specifier: ^2.0.8
         version: 2.0.8
-      iron-session:
-        specifier: ^8.0.4
-        version: 8.0.4
       js-base64:
         specifier: ^3.7.8
         version: 3.7.8
@@ -1907,9 +1904,6 @@ packages:
   import-without-cache@0.4.1:
     resolution: {integrity: sha512-vXoV9PjKHEednCUu01e98TkImxy67e3BJXbTIOmIq4Hyzw3IAwYRcuPkfeTzJzwyyts4kjuA73x+pWJLc4f86A==}
     engines: {node: ^22.18.0 || >=24.0.0}
-
-  iron-session@8.0.4:
-    resolution: {integrity: sha512-9ivNnaKOd08osD0lJ3i6If23GFS2LsxyMU8Gf/uBUEgm8/8CC1hrrCHFDpMo3IFbpBgwoo/eairRsaD3c5itxA==}
 
   iron-webcrypto@1.2.1:
     resolution: {integrity: sha512-feOM6FaSr6rEABp/eDfVseKyTMDt+KGpeB35SkVn9Tyn0CqvVsY3EwI0v5i8nMHyJnzCIQf7nsy3p41TPkJZhg==}
@@ -4548,12 +4542,6 @@ snapshots:
   ieee754@1.2.1: {}
 
   import-without-cache@0.4.1: {}
-
-  iron-session@8.0.4:
-    dependencies:
-      cookie: 1.0.2
-      iron-webcrypto: 1.2.1
-      uncrypto: 0.1.3
 
   iron-webcrypto@1.2.1: {}
 

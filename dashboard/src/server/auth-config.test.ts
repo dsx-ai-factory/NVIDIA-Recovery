@@ -7,6 +7,8 @@ import {
   resolveAuthConfiguration,
 } from "./auth-config";
 
+const gateway = { API_GATEWAY_URL: "https://gateway.example.test" };
+
 const starfleet = {
   STARFLEET_CLIENT_SECRET: "starfleet-secret",
   STARFLEET_CLIENT_ID: "starfleet-client",
@@ -37,6 +39,18 @@ describe("resolveAuthConfiguration", () => {
         ...starfleet,
       }),
     ).toEqual({ available: false, provider: null });
+  });
+
+  it("uses the API Gateway as the login whenever it is configured", () => {
+    expect(
+      resolveAuthConfiguration({
+        NEXTAUTH_ENABLED: "true",
+        ...gateway,
+        ...starfleet,
+        ...azure,
+        ...ldap,
+      }),
+    ).toEqual({ available: true, provider: "gateway" });
   });
 
   it.each([

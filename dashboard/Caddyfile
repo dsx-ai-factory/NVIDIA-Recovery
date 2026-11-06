@@ -1,0 +1,38 @@
+# Local-only reverse proxy so a browser can reach the dev server under the registered Starfleet hostname.
+# Usage (from this directory): caddy run --config Caddyfile
+# See the Chrome launch flags that map this hostname to 127.0.0.1 (host-resolver-rules).
+#
+# The API gateway path is forwarded to the real environment so the gateway login (and its cookies)
+# happens on the same hostname as the dashboard. Caddy resolves the real DNS name; only Chrome is
+# remapped to 127.0.0.1, so this does not loop.
+#
+# The gateway login is the dashboard's main login. Run the dev server with
+#   NEXTAUTH_ENABLED=true NEXTAUTH_URL=https://aps-aws-iad-prod.sc2-paas.nvidia.com/api/auth
+# so the NextAuth session cookie and the gateway cookies share this hostname.
+# aps-aws-iad-prod.sc2-paas.nvidia.com {
+# 	tls internal
+
+# 	handle /mission-control/recovery-engine-api/* {
+# 		reverse_proxy https://aps-aws-iad-prod.sc2-paas.nvidia.com {
+# 			header_up Host {upstream_hostport}
+# 		}
+# 	}
+
+# 	handle {
+# 		reverse_proxy localhost:3000
+# 	}
+# }
+
+aps-oci-hsg-cs-001-prod.sc2-paas.nvidia.com {
+	tls internal
+
+	handle /mission-control/recovery-engine-api/* {
+		reverse_proxy https://aps-oci-hsg-cs-001-prod.sc2-paas.nvidia.com {
+			header_up Host {upstream_hostport}
+		}
+	}
+
+	handle {
+		reverse_proxy localhost:3000
+	}
+}

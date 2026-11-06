@@ -66,7 +66,7 @@ export default withAuth(
   {
     callbacks: {
       authorized({ token }) {
-        return !isAuthAvailable() || !!token;
+        return !isAuthAvailable() || (!!token && !token.error);
       },
     },
     pages: {

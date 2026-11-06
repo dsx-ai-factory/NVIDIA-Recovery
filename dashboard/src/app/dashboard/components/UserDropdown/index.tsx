@@ -217,7 +217,10 @@ function UserDropdownContent({
           {
             children: "Sign Out",
             onSelect: () => {
-              void signOut();
+              // Also ends the API Gateway session when it is the login provider.
+              void signOut({
+                callbackUrl: withBasePath("/api/auth/gateway-logout"),
+              });
             },
             danger: true,
           } as DropdownDefaultItemEntry,

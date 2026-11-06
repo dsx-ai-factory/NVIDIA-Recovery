@@ -7,6 +7,7 @@ import {
   Button,
   DatePicker,
   ModalContent,
+  ModalDialog,
   ModalFooter,
   ModalHeading,
   ModalMain,
@@ -253,143 +254,149 @@ export function CreateApiKeyModal({
 
   return (
     <ModalRoot onOpenChange={handleClose} open={isOpen}>
-      <ModalContent className="!w-[600px]">
-        <ModalHeading>Create API Key</ModalHeading>
-        <ModalMain>
-          <div className="space-y-4">
-            {modalState.state.requestError && (
-              <div className="rounded-md border border-red-200 bg-red-50 p-3">
-                <Text className="text-red-700">
-                  {modalState.state.requestError}
-                </Text>
-              </div>
-            )}
-            <div className="flex flex-col gap-1">
-              <div>Description</div>
-              <TextInput
-                value={modalState.request.description}
-                onValueChange={(value) =>
-                  dispatchModalState({
-                    type: "setDescription",
-                    payload: value,
-                  })
-                }
-                placeholder="Enter a description for your API key"
-                maxLength={64}
-                disabled={isSubmitting}
-                status={
-                  modalState.state.description.touched
-                    ? modalState.state.description.error
-                      ? "error"
-                      : "success"
-                    : undefined
-                }
-              />
-              <div
-                className={
-                  modalState.state?.description?.error
-                    ? "text-feedback-danger"
-                    : modalState.request.description
-                      ? "text-feedback-success"
+      <ModalDialog>
+        <ModalContent className="!w-[600px]">
+          <ModalHeading>Create API Key</ModalHeading>
+          <ModalMain>
+            <div className="space-y-4">
+              {modalState.state.requestError && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                  <Text className="text-red-700">
+                    {modalState.state.requestError}
+                  </Text>
+                </div>
+              )}
+              <div className="flex flex-col gap-1">
+                <div>Description</div>
+                <TextInput
+                  value={modalState.request.description}
+                  onValueChange={(value) =>
+                    dispatchModalState({
+                      type: "setDescription",
+                      payload: value,
+                    })
+                  }
+                  placeholder="Enter a description for your API key"
+                  maxLength={64}
+                  disabled={isSubmitting}
+                  status={
+                    modalState.state.description.touched
+                      ? modalState.state.description.error
+                        ? "error"
+                        : "success"
                       : undefined
-                }
-              >
-                {modalState.state?.description?.error
-                  ? modalState.state?.description?.error
-                  : `${modalState.request.description.length}/64 characters`}
+                  }
+                />
+                <div
+                  className={
+                    modalState.state?.description?.error
+                      ? "text-feedback-danger"
+                      : modalState.request.description
+                        ? "text-feedback-success"
+                        : undefined
+                  }
+                >
+                  {modalState.state?.description?.error
+                    ? modalState.state?.description?.error
+                    : `${modalState.request.description.length}/64 characters`}
+                </div>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-1">
-              <div>Expiration Date</div>
-              {/* TODO - Figure out how to enable the next year in the date picker */}
-              <DatePicker
-                value={new Date(modalState.request.expiresAt)}
-                onValueChange={(value) => handleDateChange(value)}
-                format="MM/dd/yyyy"
-                disabledMatcher={{
-                  before: minDate,
-                  after: maxDate,
-                }}
-                disabled={isSubmitting}
-                status={
-                  modalState.state.expiresAt.touched
-                    ? modalState.state?.expiresAt?.error
-                      ? "error"
-                      : "success"
-                    : undefined
-                }
-              />
-              <div
-                className={
-                  modalState.state?.expiresAt?.error
-                    ? "text-feedback-danger"
-                    : modalState.request.expiresAt
-                      ? "text-feedback-success"
+              <div className="flex flex-col gap-1">
+                <div>Expiration Date</div>
+                {/* TODO - Figure out how to enable the next year in the date picker */}
+                <DatePicker
+                  value={
+                    modalState.request.expiresAt
+                      ? new Date(modalState.request.expiresAt)
                       : undefined
-                }
-              >
-                {modalState.state?.expiresAt?.error
-                  ? modalState.state?.expiresAt?.error
-                  : modalState.request.expiresAt
-                    ? `Your API key will expire on ${formatDateForDisplay(modalState.request.expiresAt)}`
-                    : "Select an expiration date (up to 90 days in the future)"}
-              </div>
-              <div className="mt-2 flex gap-2">
-                <Button
-                  kind="secondary"
-                  size="small"
-                  onClick={() => setExpirationInDays(7)}
+                  }
+                  onValueChange={(value) => handleDateChange(value)}
+                  format="MM/dd/yyyy"
+                  disabledMatcher={{
+                    before: minDate,
+                    after: maxDate,
+                  }}
                   disabled={isSubmitting}
+                  status={
+                    modalState.state.expiresAt.touched
+                      ? modalState.state?.expiresAt?.error
+                        ? "error"
+                        : "success"
+                      : undefined
+                  }
+                />
+                <div
+                  className={
+                    modalState.state?.expiresAt?.error
+                      ? "text-feedback-danger"
+                      : modalState.request.expiresAt
+                        ? "text-feedback-success"
+                        : undefined
+                  }
                 >
-                  1 Week
-                </Button>
-                <Button
-                  kind="secondary"
-                  size="small"
-                  onClick={() => setExpirationInDays(30)}
-                  disabled={isSubmitting}
-                >
-                  1 Month
-                </Button>
-                <Button
-                  kind="secondary"
-                  size="small"
-                  onClick={() => setExpirationInDays(90)}
-                  disabled={isSubmitting}
-                >
-                  90 Days
-                </Button>
+                  {modalState.state?.expiresAt?.error
+                    ? modalState.state?.expiresAt?.error
+                    : modalState.request.expiresAt
+                      ? `Your API key will expire on ${formatDateForDisplay(modalState.request.expiresAt)}`
+                      : "Select an expiration date (up to 90 days in the future)"}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    kind="secondary"
+                    size="small"
+                    onClick={() => setExpirationInDays(7)}
+                    disabled={isSubmitting}
+                  >
+                    1 Week
+                  </Button>
+                  <Button
+                    kind="secondary"
+                    size="small"
+                    onClick={() => setExpirationInDays(30)}
+                    disabled={isSubmitting}
+                  >
+                    1 Month
+                  </Button>
+                  <Button
+                    kind="secondary"
+                    size="small"
+                    onClick={() => setExpirationInDays(90)}
+                    disabled={isSubmitting}
+                  >
+                    90 Days
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </ModalMain>
-        <ModalFooter>
-          <Button
-            kind="secondary"
-            onClick={handleClose}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            kind="primary"
-            color="brand"
-            onClick={handleSubmit}
-            disabled={
-              isSubmitting ||
-              !(
-                !!modalState.state.description.error ||
-                (modalState.state.description.touched &&
-                  !!modalState.state.expiresAt.error) ||
-                modalState.state.expiresAt.touched
-              )
-            }
-          >
-            {isSubmitting ? "Creating..." : "Create API Key"}
-          </Button>
-        </ModalFooter>
-      </ModalContent>
+          </ModalMain>
+          <ModalFooter>
+            <Button
+              kind="secondary"
+              onClick={handleClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              kind="primary"
+              color="brand"
+              onClick={handleSubmit}
+              disabled={
+                isSubmitting ||
+                !(
+                  !!modalState.state.description.error ||
+                  (modalState.state.description.touched &&
+                    !!modalState.state.expiresAt.error) ||
+                  modalState.state.expiresAt.touched
+                )
+              }
+            >
+              {isSubmitting ? "Creating..." : "Create API Key"}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalDialog>
     </ModalRoot>
   );
 }
