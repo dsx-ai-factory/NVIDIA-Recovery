@@ -56,7 +56,7 @@ export function ApiKeyPageContent({ keys }: ApiKeyPageContentProps) {
           disabled={showCreateModal}
           onClick={() => setShowCreateModal(true)}
         >
-          Create API Key 111b
+          Create API Key
         </Button>
       </div>
 
