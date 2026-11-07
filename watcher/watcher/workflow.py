@@ -31,9 +31,10 @@ from recovery_libs.tracing.traces import (
     JobAnomalySpanName,
     populate_headers_with_span_context,
 )
+from recovery_libs.utils.slurm_event_identity import normalize_slurm_event_identity
 from recovery_libs.utils.time import source_timestamp_in_attempt
 
-from watcher.lib.plugins.job_manager import get_job_attempts_sync, get_job_info
+from watcher.lib.plugins.job_manager import get_job_attempts_sync, get_job_info, get_jobs_by_scheduler_metadata_sync
 from watcher.lib.plugins.log_query import LogQueryBatcher
 from watcher.lib.plugins.rabbitmq import EventBusPublisher
 from watcher.lib.utils.anomaly import IterationThroughputMonitor
@@ -662,16 +663,39 @@ class RulesEngine:
         )
         # ephemeral cache - only lives through iteration over list of events passed on instantiation
         job_attempts_cache: dict[str, list[SlurmJobExecutionStatus] | None] = {}
+        metadata_cache: dict[str, list[SlurmJobExecutionStatus] | None] = {}
+
+        def lookup_metadata(metadata: dict[str, str]) -> list[SlurmJobExecutionStatus] | None:
+            if not job_manager_config:
+                return None
+            key = json.dumps(metadata, sort_keys=True)
+            if key not in metadata_cache:
+                metadata_cache[key] = get_jobs_by_scheduler_metadata_sync(
+                    endpoint=job_manager_config.endpoint,
+                    metadata=metadata,
+                    first_match_only="slurm_array_job_id" in metadata,
+                )
+            return metadata_cache[key]
 
         for original_event in events:
             event = original_event.model_copy(deep=True)
+            normalized = normalize_slurm_event_identity(event, lookup_metadata)
+            if not normalized:
+                logger.warning("Deferring unresolved scheduler event identity for %s to Job Manager", event.job_id)
             job_id = str(event.job_id)
+            is_array_task = normalized and "_" in job_id and job_id.split("_", 1)[0].isdigit()
+            event_jm_endpoint = job_manager_config.endpoint if is_array_task and job_manager_config else jm_endpoint
 
-            job_identity = try_get_job_identity_for_event(event)
-            if jm_endpoint and (should_check_detection or job_identity is None) and job_id not in job_attempts_cache:
-                job_attempts_cache[job_id] = get_job_attempts_sync(endpoint=jm_endpoint, job_id=job_id)
+            job_identity = try_get_job_identity_for_event(event) if normalized else None
+            if (
+                normalized
+                and event_jm_endpoint
+                and (should_check_detection or job_identity is None)
+                and job_id not in job_attempts_cache
+            ):
+                job_attempts_cache[job_id] = get_job_attempts_sync(endpoint=event_jm_endpoint, job_id=job_id)
 
-            job_attempts = job_attempts_cache.get(job_id)
+            job_attempts = job_attempts_cache.get(job_id) if normalized else None
             latest_job_attempt = job_attempts[0] if job_attempts else None
 
             if (
@@ -693,15 +717,21 @@ class RulesEngine:
             # truth for resolution.
             #
             # Historical resolution is only for audit as it is best-effort.
-            deliver_job_identity = job_identity or try_get_job_identity_for_event(
-                event,
-                match_time_with_job_attempt=latest_job_attempt,
+            deliver_job_identity = (
+                (job_identity or try_get_job_identity_for_event(event, match_time_with_job_attempt=latest_job_attempt))
+                if normalized
+                else None
             )
 
             audit_identity = job_identity
             if audit_identity is None and job_attempts:
                 matched_attempt = get_job_attempt_for_event(event, job_attempts)
                 audit_identity = try_get_job_identity_for_event(event, match_time_with_job_attempt=matched_attempt)
+
+            # Task attempts must use the unique historical match for both
+            # delivery and audit; a latest-only match can hide overlapping windows.
+            if is_array_task:
+                deliver_job_identity = audit_identity
 
             # Resolve the audit identity first so this inferred label cannot
             # bypass the historical selector's ambiguity check.

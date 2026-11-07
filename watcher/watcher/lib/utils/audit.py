@@ -60,7 +60,7 @@ def try_add_audit_event_from_anomaly(
             heimdall_job_id=heimdall_job_id,
             event_level=AuditEventLevel.OPERATIONAL,
             payload=WatcherAnomalyAuditPayload(
-                job_id=str(anomaly_event.job_id),
+                job_id=audit_identity.job_id,
                 attempt_index=attempt_index,
                 anomaly_type=anomaly_event.type,
                 anomaly_uuid=anomaly_event.attributes.uuid,

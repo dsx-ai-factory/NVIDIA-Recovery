@@ -4,10 +4,11 @@ Status: accepted
 
 Date: 2026-11-03
 
-> **Implementation note (2026-11-16):** Task identity and conservative accounting
-> reuse per-task recovery; cross-record identity admission hardening is a separate
-> follow-up in the [implementation plan](../architecture/job-array-support-plan.md).
-> Checkpoint association and end-to-end qualification remain outstanding.
+> **Implementation note (2026-11-16):** Task identity, recovery, checkpoint
+> association, and replay-stable checkpoint audits are implemented.
+> Cross-record identity admission hardening is a separate follow-up, and deployed
+> end-to-end qualification remains required; see the
+> [implementation plan](../architecture/job-array-support-plan.md).
 
 ## Context
 

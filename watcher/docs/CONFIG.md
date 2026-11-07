@@ -327,3 +327,27 @@ contract.
 For complete umbrella-chart examples, exact Secret paths, the Helm array
 replacement caveat, and the backend-switch checklist, see
 [`docs/ops/configure-log-query-backends.md`](../../docs/ops/configure-log-query-backends.md).
+
+
+### Slurm array checkpoint identity
+
+Array task events use the complete `job_id`, for example `4200_0`. Producers
+that retain an array-level label must supply string `slurm_array_job_id` and
+`slurm_array_task_id` together in `attributes.scheduler_metadata`. Watcher also
+translates these explicit top-level log labels into that metadata map. Task
+index `"0"` is valid; a shared filename alone never identifies a task.
+
+A legacy raw job label requires an explicit `slurm_raw_job_id` in scheduler
+metadata (or the corresponding log label). Watcher and Job Manager resolve it
+only through a unique stored metadata mapping. Job Manager's existing `/jobs`
+read accepts a `scheduler_metadata` JSON string map for exact string matching;
+metadata lookup is paginated with bounded page size and fails closed if the
+backend does not honor the filter. Deploy this reader support before producers
+that rely on raw-ID resolution.
+
+An explicit `slurm_job_attempt` remains authoritative. Otherwise array events
+need a unique execution-time match using the source timestamp. Unknown or
+ambiguous events retain bounded backend redelivery and do not produce a
+successful checkpoint-association audit. Saves record progress only for the
+resolved task attempt; loads emit association evidence without adding saved
+progress. Array-level checkpoint association is deferred to a future iteration.

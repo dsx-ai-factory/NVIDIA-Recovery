@@ -837,7 +837,11 @@ loki.source.file "slurm_logs" {
 loki.process "slurm_logs" {
   stage.regex {
     source     = "filename"
-    expression = "(?:.*)[_-](?P<job_id>\\d+)(?:_date_.*|\\.(?:out|log))$"
+    expression = "(?:^|/)[^0-9/]*[_-](?P<job_id>\\d+)(?:_date_[^/]*|\\.(?:out|log))$"
+  }
+  stage.regex {
+    source     = "filename"
+    expression = "(?:^|/)slurm-(?P<job_id>\\d+_\\d+)\\.(?:out|log)$"
   }
   stage.labels {
     values = { job_id = "" }
@@ -853,7 +857,13 @@ loki.write "default" {
 }
 ```
 
-The filename expression matches the controller's job-ID link convention.
+These expressions retain standalone job IDs and canonical task IDs from
+standard `slurm-<array_job_id>_<task_id>.out` or `.log` filenames. Other numeric
+pairs, such as `train-4200_7.out`, remain unlabeled rather than becoming job `7`.
+Custom array output conventions need a validated site-specific identity rule or
+explicit array/task labels; a shared path alone cannot establish task identity.
+Standalone filename prefixes containing other numeric tokens also need an
+explicit identity rule.
 Preserve the `filename` supplied by `loki.source.file`; it supports exact-attempt
 resolution without synthesizing an attempt number. For direct collection of
 shared output without links, mount that output tree read-only and use its

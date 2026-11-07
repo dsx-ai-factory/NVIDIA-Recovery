@@ -90,13 +90,18 @@ def get_job_info_sync(
 
 def get_job_attempts_sync(
     endpoint: str,
-    job_id: str,
+    job_id: str | None,
+    *,
+    scheduler_metadata: dict[str, str] | None = None,
+    first_match_only: bool = False,
 ) -> list[SlurmJobExecutionStatus] | None:
     """Fetch all attempts for a job, ordered by descending attempt index.
 
     Args:
         endpoint: Job Manager endpoint.
-        job_id: The unique identifier of the job to query.
+        job_id: The unique identifier of the job to query; omit only with metadata filters.
+        scheduler_metadata: Optional exact scheduler metadata string matches.
+        first_match_only: Return at most one candidate for existence checks.
 
     Returns:
         The deduplicated attempt history, an empty list if none exist, or None
@@ -104,23 +109,30 @@ def get_job_attempts_sync(
         attempts being registered and does not provide a consistent snapshot.
     """
     url = f"{endpoint}/jobs"
+    if job_id is None and not scheduler_metadata:
+        return None
     attempts: list[SlurmJobExecutionStatus] = []
-    seen_attempts: set[int] = set()
+    seen_attempts: set[tuple[str, int]] = set()
     offset = 0
     try:
         with httpx.Client() as client:
-            while True:
+            for _ in range(100):
                 response = client.get(
                     url,
                     params={
-                        "job_id": job_id,
-                        "sort_by": "job_attempt_index:desc",
-                        "limit": 50,
+                        **({"job_id": job_id} if job_id is not None else {}),
+                        **({"scheduler_metadata": json.dumps(scheduler_metadata)} if scheduler_metadata else {}),
+                        "sort_by": "id:asc" if scheduler_metadata else "job_attempt_index:desc",
+                        "limit": 1 if first_match_only else 50,
                         "offset": offset,
                     },
                 )
                 response.raise_for_status()
-                page = JobExecutionStatuses.model_validate(response.json())
+                payload = response.json()
+                for item in payload.get("statuses", []):
+                    if "schedulerMetadata" in item:
+                        item["scheduler_metadata"] = item["schedulerMetadata"]
+                page = JobExecutionStatuses.model_validate(payload)
                 if not page.statuses:
                     return attempts
 
@@ -129,12 +141,38 @@ def get_job_attempts_sync(
                 offset += len(page.statuses)
 
                 for attempt in page.statuses:
-                    if attempt.job_attempt_index in seen_attempts:
+                    # An older backend may ignore the filter. Never treat its
+                    # unfiltered response as a complete scheduler identity mapping.
+                    if scheduler_metadata and any(
+                        attempt.scheduler_metadata.get(key) != value for key, value in scheduler_metadata.items()
+                    ):
+                        logger.warning("Job Manager returned a record outside the scheduler metadata filter")
+                        return None
+                    identity = (attempt.job_id, attempt.job_attempt_index)
+                    if identity in seen_attempts:
                         continue
 
-                    seen_attempts.add(attempt.job_attempt_index)
+                    seen_attempts.add(identity)
                     attempts.append(attempt)
+                if first_match_only:
+                    return attempts
+            logger.warning("Job identity lookup exceeded its bounded page budget for %s", job_id)
     except (httpx.HTTPError, ValueError) as err:
         logger.error(f"Unable to retrieve job attempt history for {job_id}: {err}")
 
     return None
+
+
+def get_jobs_by_scheduler_metadata_sync(
+    endpoint: str,
+    metadata: dict[str, str],
+    *,
+    first_match_only: bool = False,
+) -> list[SlurmJobExecutionStatus] | None:
+    """Read filtered identity candidates, failing closed on incomplete pagination."""
+    return get_job_attempts_sync(
+        endpoint,
+        None,
+        scheduler_metadata=metadata,
+        first_match_only=first_match_only,
+    )

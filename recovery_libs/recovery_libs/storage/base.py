@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any, NamedTuple, Optional
 
 from recovery_libs.schema.job_manager.models import (
+    JobCheckpointInfo,
     JobTimeFilter,
 )
 from recovery_libs.storage.dataclass import (
@@ -135,6 +136,7 @@ class BaseStorage(ABC):
         heimdall_job_id: Optional["uuid.UUID"] = None,
         job_name_match: str = "prefix",
         workflow_id: str | None = None,
+        scheduler_metadata: dict[str, str] | None = None,
     ) -> tuple[list[SlurmJobExecutionRecord], int]:
         """
         Method to read a list of job records from recovery_libs.storage with given filters.
@@ -152,6 +154,7 @@ class BaseStorage(ABC):
             job_name: Optional job name filter.
             job_name_match: How to match job_name: "prefix" (default), "exact", or "fuzzy" (case-insensitive substring match).
             workflow_id: Optional exact workflow ID filter, independent of job_name.
+            scheduler_metadata: Optional exact string matches on scheduler-owned JSON keys.
             user: Optional job username filter.
             states: Optional list of job states filter.
             limit: Number of records to return.
@@ -191,6 +194,18 @@ class BaseStorage(ABC):
         Raises:
             RecoveryStorageException when the update fails due to reasons like
             invalid job id, invalid job id, wrong field name, disallowed values, etc.
+        """
+
+    @abstractmethod
+    def append_job_checkpoint(
+        self, job_id: str, job_attempt_index: int, checkpoint: JobCheckpointInfo
+    ) -> SlurmJobExecutionRecord | None:
+        """Atomically append a saved checkpoint to one exact job attempt.
+
+        Concurrent saves retain each distinct checkpoint UUID. Replaying a UUID
+        leaves its original progress unchanged. Return the committed record, or
+        None if the attempt no longer exists. Storage failures raise
+        RecoveryStorageException; callers must not audit success before return.
         """
 
     @abstractmethod

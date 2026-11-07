@@ -6,7 +6,9 @@ import os
 from typing import Any
 
 from opentelemetry.proto.logs.v1.logs_pb2 import LogRecord as OTLPLogRecord
-from recovery_libs.schema.watcher.model import Attributes
+from recovery_libs.schema.event_type import EventType
+from recovery_libs.schema.watcher.model import Attributes, Event
+from recovery_libs.utils.slurm_event_identity import normalize_slurm_event_identity
 
 from watcher.lib.utils.data import generate_uuid7, is_json
 from watcher.lib.utils.logging import logger
@@ -182,7 +184,8 @@ def first_events_by_job_id_and_logfile_name(workflow_items: list[WorkflowItem]) 
     """
     Given a list of WorkflowItem objects, return a new list that
     contains the first occurrence per explicit job attempt and log filename.
-    Unlabeled records are retained until downstream attempt resolution.
+    Unresolved scheduler labels and unlabeled attempts are retained for downstream
+    resolution; array parents and raw aliases must not collapse sibling events.
 
     Args:
         workflow_items (List[WorkflowItem]): list of WorkflowItem objects.
@@ -194,6 +197,10 @@ def first_events_by_job_id_and_logfile_name(workflow_items: list[WorkflowItem]) 
     results = []
 
     for item in workflow_items:
+        event = Event(type=EventType.UNKNOWN, attributes=item.record.attributes)
+        if not normalize_slurm_event_identity(event, lambda _: None):
+            results.append(item)
+            continue
         job_id = item.record.attributes.job_id  # type: ignore[union-attr]
         log_file_name = item.record.attributes.log_file_name  # type: ignore[union-attr]
 

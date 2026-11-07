@@ -1940,6 +1940,7 @@ type ApiGetJobsRequest struct {
 	ApiService                 *DefaultAPIService
 	completeData               *bool
 	jobId                      *string
+	schedulerMetadata          *string
 	jobAttemptIndex            *string
 	heimdallJobId              *string
 	user                       *string
@@ -1969,6 +1970,12 @@ func (r ApiGetJobsRequest) CompleteData(completeData bool) ApiGetJobsRequest {
 // The job_id filter.
 func (r ApiGetJobsRequest) JobId(jobId string) ApiGetJobsRequest {
 	r.jobId = &jobId
+	return r
+}
+
+// JSON object of exact scheduler metadata string filters, combined with AND (at most 8 keys).
+func (r ApiGetJobsRequest) SchedulerMetadata(schedulerMetadata string) ApiGetJobsRequest {
+	r.schedulerMetadata = &schedulerMetadata
 	return r
 }
 
@@ -2193,6 +2200,9 @@ func (a *DefaultAPIService) GetJobsExecute(r ApiGetJobsRequest) (*JobExecutionSt
 	}
 	if r.jobId != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "job_id", r.jobId, "form", "")
+	}
+	if r.schedulerMetadata != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "scheduler_metadata", r.schedulerMetadata, "form", "")
 	}
 	if r.jobAttemptIndex != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "job_attempt_index", r.jobAttemptIndex, "form", "")

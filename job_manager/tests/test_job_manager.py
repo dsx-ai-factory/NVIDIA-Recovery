@@ -96,6 +96,11 @@ class TestJobManager(unittest.TestCase):
         self._config = create_basic_service_config()
         self._job_manager = JobManager(config=self._config, shutdown_event=Event())
         self._job_manager.storage = MagicMock(spec=MySQLStorage)
+        # These legacy fixtures contain standalone jobs only. Array registry
+        # resolution is exercised through the callback in test_array_checkpoints.
+        registry = patch.object(self._job_manager, "_lookup_event_scheduler_metadata", return_value=[])
+        registry.start()
+        self.addCleanup(registry.stop)
         self._job_manager.attribution_storage = MagicMock(spec=AttributionStorage)
         self._job_manager.notifications_client = MagicMock(spec=NotificationsApi)
 
@@ -936,6 +941,8 @@ class TestJobManager(unittest.TestCase):
         storage_mock = self._job_manager.storage
         with patch("job_manager.service.CHECKPOINT_MESSAGE_RECEIVED_COUNTER") as checkpoint_counter_mock:
             storage_mock.read_job_records.return_value = ([job_record], 1)
+            storage_mock.read_job_record.return_value = job_record
+            storage_mock.append_job_checkpoint.return_value = job_record
             process_job_anomalies = self._job_manager.get_watcher_job_event_message_callback()
             process_job_anomalies(
                 MagicMock(),
@@ -951,7 +958,7 @@ class TestJobManager(unittest.TestCase):
                 offset=0,
                 join_job_events_table=False,
             )
-            storage_mock.update_job_record.assert_called_once()
+            storage_mock.append_job_checkpoint.assert_called_once()
             checkpoint_counter_mock.inc.assert_called_once()
 
     def test_find_matching_job_attempt_by_slurm_job_attempt(self):
@@ -1033,34 +1040,32 @@ class TestJobManager(unittest.TestCase):
         latest_counter.labels.assert_not_called()
         storage_mock.read_job_record.assert_not_called()
 
-    def test_watcher_replay_deduplicates_persisted_evidence_after_storage_retry(self):
+    def test_anomaly_replay_deduplicates_persisted_evidence_after_storage_retry(self):
         """Replay retries persistence without appending duplicate durable evidence."""
-        for event_type, field in [(EventType.CRASH, "anomalies"), (EventType.CHECKPOINTSAVE, "checkpoints")]:
-            with self.subTest(event_type=event_type):
-                durable = create_example_slurm_job_record(attempt_index=0)
-                self._job_manager.storage.read_job_record.side_effect = lambda _durable=durable, **_: deepcopy(_durable)
-                event = create_example_anomaly(anomaly_type=event_type, slurm_job_attempt=0)
-                callback = self._job_manager.get_watcher_job_event_message_callback()
-                writes = 0
+        durable = create_example_slurm_job_record(attempt_index=0)
+        self._job_manager.storage.read_job_record.side_effect = lambda **_: deepcopy(durable)
+        event = create_example_anomaly(anomaly_type=EventType.CRASH, slurm_job_attempt=0)
+        callback = self._job_manager.get_watcher_job_event_message_callback()
+        writes = 0
 
-                def persist(*args, _durable=durable, _field=field, **updates):
-                    nonlocal writes
-                    writes += 1
-                    if writes == 1:
-                        raise RecoveryStorageException("temporary storage failure")
-                    setattr(_durable, _field, deepcopy(updates[_field]))
-                    return True
+        def persist(*args, **updates):
+            nonlocal writes
+            writes += 1
+            if writes == 1:
+                raise RecoveryStorageException("temporary storage failure")
+            durable.anomalies = deepcopy(updates["anomalies"])
+            return True
 
-                with patch.object(self._job_manager, "update_job_record", side_effect=persist):
-                    for _ in range(3):
-                        callback(MagicMock(), MagicMock(), MagicMock(headers={}), event.model_dump_json().encode())
-                    assert len(getattr(durable, field)) == 1
-                    assert getattr(durable, field)[0].uuid == event.attributes.uuid
-                    # A distinct source event still survives (including same body).
-                    event.attributes.uuid = str(uuid.uuid4())
-                    callback(MagicMock(), MagicMock(), MagicMock(headers={}), event.model_dump_json().encode())
-                    assert len(getattr(durable, field)) == 2
-                assert writes == 4
+        with patch.object(self._job_manager, "update_job_record", side_effect=persist):
+            for _ in range(3):
+                callback(MagicMock(), MagicMock(), MagicMock(headers={}), event.model_dump_json().encode())
+            assert len(durable.anomalies) == 1
+            assert durable.anomalies[0].uuid == event.attributes.uuid
+            # A distinct source event still survives (including same body).
+            event.attributes.uuid = str(uuid.uuid4())
+            callback(MagicMock(), MagicMock(), MagicMock(headers={}), event.model_dump_json().encode())
+            assert len(durable.anomalies) == 2
+        assert writes == 4
 
     def test_shared_log_replay_cannot_attach_to_newer_attempt(self):
         """Restart replay and a rapid retry share paths, but never action identity."""

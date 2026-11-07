@@ -83,3 +83,27 @@ class AdviceUnpublishedPayload(RecoveryCorrelation):
 class AdviceUnpublishedEvent(ProducerEvent[AdviceUnpublishedPayload], frozen=True):
     event_producer: Literal["job-manager"] = "job-manager"
     event_type: Literal["advice_unpublished"] = "advice_unpublished"
+
+
+class CheckpointAssociatedPayload(BaseModel):
+    """Successful association of a source checkpoint with one job attempt."""
+
+    job_id: str
+    """Canonical task or standalone job ID."""
+    attempt_index: int
+    """Resolved attempt index within the job."""
+    source_event_uuid: str
+    """Stable UUID carried by the checkpoint source event."""
+    checkpoint_kind: Literal["save", "load"]
+    """Whether the event reports persisted progress or checkpoint loading."""
+    event_occurred_at: int | None
+    """Source occurrence time in Unix microseconds, absent when unavailable."""
+
+
+class CheckpointAssociatedEvent(ProducerEvent[CheckpointAssociatedPayload], frozen=True):
+    """Operational evidence emitted after checkpoint association succeeds."""
+
+    event_producer: Literal["job-manager"] = "job-manager"
+    """Owner of checkpoint association and persistence."""
+    event_type: Literal["checkpoint_associated"] = "checkpoint_associated"
+    """Release-owned checkpoint association event type."""
