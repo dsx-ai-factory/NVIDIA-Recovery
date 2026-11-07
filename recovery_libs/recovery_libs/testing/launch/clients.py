@@ -119,6 +119,7 @@ class _SlurmCommandClient:
             f"--chdir={description['current_working_directory']}",
             *((f"--time={time_limit['number']}",) if time_limit else ()),
             *(("--hold",) if description.get("hold") else ()),
+            *((f"--array={description['array']}",) if description.get("array") else ()),
             *((f"--comment={description['comment']}",) if description.get("comment") else ()),
         )
         command = ("bash", "-c", SBATCH_PROGRAM, "_", str(len(assignments)), *assignments, *options)

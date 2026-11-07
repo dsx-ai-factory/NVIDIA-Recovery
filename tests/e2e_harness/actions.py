@@ -8,9 +8,12 @@ from __future__ import annotations
 import functools
 import re
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
+from recovery_libs.testing.kubernetes import StackControl
+from recovery_libs.testing.launch.jobs import JobSpec
 from recovery_libs.testing.launch.launcher import SlurmLauncher
 from recovery_libs.testing.scenario import JOB, Action, Run, unsafe
 
@@ -25,6 +28,20 @@ def staging_directory() -> str:
     """A new directory path on the Slurm shared filesystem, unique to one scenario run."""
 
     return f"/home/e2e/python-e2e.{uuid.uuid4().hex[:6]}"
+
+
+def launch_array(spec: JobSpec, *, roles: Mapping[str, int]) -> Action[RecoveryClient]:
+    """Submit one owned Slurm array and register each concrete task for checks and cleanup."""
+
+    def action(run: Run[RecoveryClient]) -> Run[RecoveryClient]:
+        if set(roles) & set(run.jobs):
+            raise ValueError("array roles must not replace jobs already owned by this run")
+        tasks = _slurm_launcher(run).submit_array(spec, task_ids=tuple(roles.values()))
+        for role, task in zip(roles, tasks, strict=True):
+            run = run.launched(role, task)
+        return run
+
+    return action
 
 
 def cancel_job(role: str = JOB) -> Action[RecoveryClient]:
@@ -108,11 +125,11 @@ def disable_attribution(deployment: str) -> Action[E2EServices]:
 
 
 @unsafe
-def restart(deployment: str) -> Action[E2EServices]:
+def restart(deployment: str, *, stack: StackControl | None = None) -> Action[E2EServices]:
     """Replace every pod of `deployment` and wait until the new ones are ready."""
 
     def action(run: Run[E2EServices]) -> None:
-        run.services.stack.restart(deployment)
+        (stack or run.services.stack).restart(deployment)
 
     return action
 

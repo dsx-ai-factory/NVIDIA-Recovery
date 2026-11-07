@@ -142,6 +142,29 @@ func TestAuditReadPublicTransports(t *testing.T) {
 	if len(queries) != 0 {
 		t.Fatal("unauthenticated requests reached downstream")
 	}
+
+	// Composite task IDs remain opaque on whole-task and exact-attempt reads.
+	// In particular task zero must never become the bare array selector.
+	for _, taskQuery := range []string{
+		"jobId=4200_0",
+		"jobId=4200_0&attemptIndex=0",
+		"jobId=4200_1&attemptIndex=2&eventType=checkpoint_associated",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/v1/audit/events?"+taskQuery, nil)
+		req.Header.Set("Authorization", "Bearer allowed")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		if response.Code != http.StatusOK {
+			t.Fatalf("task query %s: %d %s", taskQuery, response.Code, response.Body.String())
+		}
+		want := req.URL.Query()
+		got := <-queries
+		for public, internal := range map[string]string{"jobId": "job_id", "attemptIndex": "attempt_index", "eventType": "event_type"} {
+			if got.Get(internal) != want.Get(public) || got.Has(internal) != want.Has(public) {
+				t.Errorf("task query %s: %s = %q, want %q", taskQuery, internal, got.Get(internal), want.Get(public))
+			}
+		}
+	}
 }
 
 type auditReadTransport func(*http.Request) (*http.Response, error)

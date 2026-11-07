@@ -174,6 +174,52 @@ metadata text. Scheduler-action changes require human review.
 
 ## Rollout and Compatibility
 
+### Local Qualification Evidence (2026-11-07)
+
+The recovery, checkpoint, and qualification slices build on Task identity.
+Cross-record identity hardening is reviewed separately. Component and database
+validation passed:
+
+- SAC lint, vet, unit tests, and race tests, including partial accounting,
+  restart/bootstrap, sibling actions, and watchdog isolation.
+- Gateway lint, vet, unit tests, and race tests; task IDs remain opaque in public
+  whole-task and exact-attempt audit queries.
+- Job Manager, Watcher, and shared-storage tests; real MySQL independent retry
+  allowances, concurrent checkpoint saves and replay deduplication, exact metadata
+  filtering, and paginated task audit reads.
+- Native Alloy validation and log-pipeline checks for standard array filenames,
+  standalone jobs, dated files, and ambiguous custom numeric pairs.
+- Qualification launcher, scenario cleanup, and audit-evidence checks.
+
+Scenario `58-job-array-recovery` exercises actual workload failures, persistent
+retry state across service restart, task-level checkpoint ingestion, unaffected
+siblings, and authenticated audit reads. It has been collected and reviewed,
+but **has not passed a deployed end-to-end run**. The Docker Slurm smoke build
+failed certificate verification downloading gosu; full E2E setup failed
+certificate verification downloading Tilt. TLS verification was not disabled.
+Pre-commit initialization also failed on an upstream GitHub 503, and full
+Gateway generated-artifact verification was blocked by the remote Buf service.
+The Job Manager OpenAPI and downstream client were regenerated with the native
+generator and the resulting Go code passed component checks.
+
+After the environment can fetch these verified dependencies, run on an isolated
+local stack:
+
+```bash
+COMPOSE_PROJECT_NAME=job-array-smoke IMAGE_TAG=job-array-smoke \
+  make test-slurm-advisor-harness
+CLUSTER_NAME=job-array-qualification DEPLOY_INFRA=1 DEPLOY_STACK=1 \
+  E2E_PROFILE=advisor-act E2E_ATTRIBUTION_MODE=unavailable \
+  E2E_KUBERNETES_SERVICE_AUTH_SMOKE= E2E_SCENARIOS=58-job-array-recovery \
+  make e2e
+```
+
+Complete the blocked generated/pre-commit checks too. Keep array support
+unqualified until the actual scheduler and ingestion run passes; unit tests and
+simulated scheduler observations do not replace that evidence.
+
+### Deployment Order
+
 Deploy event/metadata readers and checkpoint audit payload support before
 enabling their producers. Qualify every deployed Slurm JSON version using
 captured, sanitized output. Recovery requires restart Advice as recorded in
