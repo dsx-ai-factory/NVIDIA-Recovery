@@ -36,6 +36,7 @@ type Options struct {
 }
 
 type slurmCluster struct {
+	accountingIdentities     accountingIdentities
 	timeout                  time.Duration
 	logger                   *zap.Logger
 	invalidRecoveryCaps      invalidRecoveryCapWarnings
@@ -132,6 +133,7 @@ func (s *slurmCluster) GetJobs(ctx context.Context) ([]cluster.JobExecutionRecor
 		activeStdoutPaths[jobAttemptRef(observations[i].Job)] = observations[i].Source.StdoutExpanded
 	}
 	s.activeStdoutPaths = activeStdoutPaths
+	s.SetAccountingIdentities(jobs)
 	s.warnInvalidRecoveryCaps(jobs)
 	return jobs, nil
 }
@@ -162,8 +164,13 @@ func (s *slurmCluster) FinalizedJobs(ctx context.Context, records []cluster.JobA
 	jobIDs := uniqueJobIDs(records)
 
 	seen := map[cluster.JobAttemptRef]struct{}{}
+	requested := make(map[string][]cluster.JobAttemptRef)
 	for _, record := range records {
+		if _, duplicate := seen[record]; duplicate {
+			continue
+		}
 		seen[record] = struct{}{}
+		requested[record.JobID] = append(requested[record.JobID], record)
 	}
 
 	accountingCtx := ctx
@@ -186,7 +193,7 @@ func (s *slurmCluster) FinalizedJobs(ctx context.Context, records []cluster.JobA
 				if ctxErr := accountingCtx.Err(); ctxErr != nil {
 					result.err = ctxErr
 				} else {
-					result.jobs, result.logPaths, result.err = s.queryFinalizedJob(accountingCtx, query.jobID)
+					result.jobs, result.logPaths, result.err = s.queryFinalizedJob(accountingCtx, query.jobID, requested[query.jobID])
 				}
 				if result.err != nil {
 					result.err = errors.Wrapf(result.err, "query finalized Slurm job %s", query.jobID)
@@ -218,13 +225,16 @@ func (s *slurmCluster) FinalizedJobs(ctx context.Context, records []cluster.JobA
 	jobs := make([]cluster.JobExecutionRecord, 0, len(records))
 	nativePaths := make(map[cluster.JobAttemptRef]sacctAttemptLogPaths)
 	for _, result := range orderedResults {
-		if result.err != nil {
-			continue
-		}
 		for ref, paths := range result.logPaths {
+			if ref.JobID != result.query.jobID {
+				continue
+			}
 			nativePaths[ref] = paths
 		}
 		for _, job := range result.jobs {
+			if job.JobID != result.query.jobID {
+				continue
+			}
 			if _, ok := seen[cluster.JobAttemptRef{JobID: job.JobID, AttemptIndex: job.AttemptIndex}]; ok {
 				jobs = append(jobs, job)
 			}
@@ -268,6 +278,7 @@ func submitFinalizedJobQueries(
 func (s *slurmCluster) queryFinalizedJob(
 	ctx context.Context,
 	jobID string,
+	requested []cluster.JobAttemptRef,
 ) ([]cluster.JobExecutionRecord, map[cluster.JobAttemptRef]sacctAttemptLogPaths, error) {
 	args := []string{"-Xj", jobID, "--duplicates", "--json"}
 	output, err := s.execute(ctx, s.roCommands, "sacct", args...)
@@ -277,17 +288,14 @@ func (s *slurmCluster) queryFinalizedJob(
 		}
 		return nil, nil, err
 	}
-	jobs, err := observedJobsFromSacct(output.stdout)
+	jobs, err := requestedJobsFromSacct(output.stdout, requested, s.resolveAccountingAttempt)
 	s.logSacctOutput(jobID, "sacct_status", args, output, err)
-	if err != nil {
-		return nil, nil, err
-	}
 	var paths map[cluster.JobAttemptRef]sacctAttemptLogPaths
 	if s.logMetadata != nil && s.logMetadata.legacyMode.Load() {
 		// Reuse expanded parent paths already returned by the status query.
-		paths, _ = logPathsFromSacct(output.stdout)
+		paths, _ = logPathsFromSacct(output.stdout, s.resolveAccountingAttempt)
 	}
-	return jobs, paths, nil
+	return jobs, paths, err
 }
 
 func (s *slurmCluster) JobKill(ctx context.Context, jobID string) error {

@@ -563,7 +563,7 @@ func (s *slurmCluster) queryActiveLogPaths(
 	var err error
 	if s.logMetadata.legacyMode.Load() {
 		discovered, err = queryLegacyLogPaths(ctx, ref.JobID,
-			[]logRefreshCandidate{{ref: ref, stepsDue: true}}, runner)
+			[]logRefreshCandidate{{ref: ref, stepsDue: true}}, runner, s.resolveAccountingAttempt)
 	} else {
 		discovered, err = s.queryJSONLogPaths(ctx, ref.JobID, "sacct_steps", runner)
 	}
@@ -796,7 +796,7 @@ func (s *slurmCluster) queryFinalizedLogPaths(
 				candidates[i].parentDue = false
 			}
 		}
-		results, err := queryLegacyLogPaths(ctx, group.jobID, candidates, runner)
+		results, err := queryLegacyLogPaths(ctx, group.jobID, candidates, runner, s.resolveAccountingAttempt)
 		if results == nil {
 			results = make(map[cluster.JobAttemptRef]sacctAttemptLogPaths)
 		}

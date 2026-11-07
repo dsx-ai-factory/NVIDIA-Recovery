@@ -75,12 +75,40 @@ row lock before updating a record or comparing Advice desired state, keeping
 the persistence mechanism scheduler-neutral. Recovery and checkpoint behavior
 remain follow-up slices; this slice does not qualify array recovery for rollout.
 
-Job and Advice identity checks use preflight reads and separate record locks.
-They reject conflicts with an already observed counterpart, but concurrent
-first registration of both records can still establish different raw Slurm IDs
-for the same canonical task attempt. Resolve this cross-record admission race
-and qualify recovery-side-effect ordering in the Task recovery slice before
-enabling array actions; the current locking guarantee is per record.
+### Task Recovery Implementation
+
+Canonical task IDs let the existing backend retry policy and storage keys manage
+each sibling independently. Task recovery does not introduce a shared Job/Advice
+admission lock or change connection-pool behavior.
+
+SAC reconciles task accounting using explicit restart counts when available or
+matching submission/start timestamps from observed task attempts. It omits
+unresolved array history with diagnostics instead of assigning an ordinal that
+could reset the retry allowance. Bootstrap observations supply identity anchors,
+but fresh scheduler state remains necessary for actions. Advice and bootstrap
+identity checks reject inconsistent task selectors and attempt UUIDs. Task-level
+selectors, retry budgets, and independent watchdog timers have focused coverage.
+
+Checkpoint association and production end-to-end qualification remain required
+before claiming supported array recovery. The Docker Slurm harness currently
+cannot build in this environment because GitHub's certificate issuer is not
+trusted by its base image; TLS verification remains enabled.
+
+### Separate Identity Consistency Hardening
+
+Cross-record identity admission is a separate follow-up, outside the array-support
+stack. PR 2b retains identity and rejects conflicts against observed records using
+existing per-record locks. It does not atomically admit identity across Job and
+Advice: concurrent first observations with contradictory raw Slurm IDs could each
+pass before either sees the other. This requires conflicting inputs; no normal
+correct-writer path producing that conflict has been identified.
+
+The follow-up proposes a shared exact-attempt advisory lock, pinned connections,
+and failure handling before recovery side effects. Its conflicting-input races,
+connection-loss tests, pool occupancy, and lock-query overhead belong in that
+review. Array support does not depend on adopting this stronger guarantee. Any
+checkpoint progress read-modify-write must remain atomic independently of this
+follow-up.
 
 ## Behavioral Acceptance
 
@@ -125,9 +153,11 @@ metadata text. Scheduler-action changes require human review.
 
 Deploy event/metadata readers and checkpoint audit payload support before
 enabling their producers. Qualify every deployed Slurm JSON version using
-captured, sanitized output. Roll out arrays with eager requeue disabled so
-backend retry and checkpoint stop policy precedes creation of a successor.
-Retained eager compatibility behavior is not evidence for that guarantee.
+captured, sanitized output. Recovery requires restart Advice as recorded in
+[ADR 0045](../decisions/0045-require-advice-before-slurm-requeue.md); the eager
+compatibility path has been removed. Job status arrives through HTTP after
+retirement of the legacy queue consumer in
+[ADR 0055](../decisions/0055-retire-job-status-event-consumer.md).
 
 No new array-specific database columns or tables are planned. Before enabling
 array recovery, inspect existing array-related records for raw-ID/composite-ID

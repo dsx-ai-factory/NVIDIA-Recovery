@@ -546,3 +546,24 @@ func assertRelease(t *testing.T, releases []Release, jobID string, attempt int32
 		t.Fatalf("Release = %#v, want job=%s attempt=%d outcome=%s", releases[0], jobID, attempt, outcome)
 	}
 }
+
+// Each sibling starts and clears its own hold timer, including task zero whose
+// raw Slurm ID equals the array submission ID.
+func TestWatchdogArraySiblingTimersAreIndependent(t *testing.T) {
+	start := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	watchdog, slurm, clock := newTestWatchdog(t, ModeAct, time.Minute, 10*time.Minute)
+	first := heldJob("4200_0", 2)
+	first.RawJobID = "4200"
+	second := heldJob("4200_1", 1)
+	syncJobs(t, watchdog, slurm, clock, start, first)
+	syncJobs(t, watchdog, slurm, clock, start.Add(30*time.Second), first, second)
+	result := syncJobs(t, watchdog, slurm, clock, start.Add(time.Minute), first, second)
+	assertRelease(t, result.Releases, first.JobID, 2, ReleaseApplied)
+	first.Held = false
+	first.State = cluster.JobStateRunning
+	result = syncJobs(t, watchdog, slurm, clock, start.Add(90*time.Second), first, second)
+	assertRelease(t, result.Releases, second.JobID, 1, ReleaseApplied)
+	if !slices.Equal(slurm.releaseCalls, []string{"4200_0", "4200_1"}) {
+		t.Fatalf("release calls=%v", slurm.releaseCalls)
+	}
+}

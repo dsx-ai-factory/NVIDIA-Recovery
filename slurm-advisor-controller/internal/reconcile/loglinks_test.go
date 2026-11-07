@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/loglinks"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/state"
 	"github.com/google/go-cmp/cmp"
@@ -96,7 +97,8 @@ func TestLogLinkTargetsAreDeterministicAndLimitedToManagedActiveNonIgnoredJobs(t
 
 func TestControllerLogLinkErrorsDoNotBlockUpsertOrSchedulerAction(t *testing.T) {
 	observedAt := time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
-	job := logLinkJob("12345", 7, "12000", true, []string{"/work/12345/stdout.log"})
+	job := logLinkJob("12000_345", 7, "12000", true, []string{"/work/12345/stdout.log"})
+	job.RawJobID, job.ArrayTaskID = "12345", "345"
 	job.WorkflowID = "workflow-12345"
 	job.State = cluster.JobStateRunning
 	job.ModeRequest = cluster.JobModeRequest{
@@ -105,7 +107,7 @@ func TestControllerLogLinkErrorsDoNotBlockUpsertOrSchedulerAction(t *testing.T) 
 		Valid:     true,
 	}
 	advice := newAdvice(t, adviceFixture{
-		adviceID:     "terminate-12345",
+		adviceID:     jobidentity.HeimdallJobID(job.JobID, job.AttemptIndex),
 		jobID:        job.JobID,
 		attemptIndex: job.AttemptIndex,
 		state:        adviceState(pb.AdviceState_ADVICE_STATE_TERMINATED),

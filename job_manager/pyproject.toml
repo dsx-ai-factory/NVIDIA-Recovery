@@ -23,6 +23,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "recovery-libs[testing]",
     "pytest-cov",
     "pytest",
     "pytest-mock",

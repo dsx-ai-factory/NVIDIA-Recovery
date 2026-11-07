@@ -36,3 +36,11 @@ type Cluster interface {
 	ActiveJobEnricher
 	JobMutator
 }
+
+// AccountingIdentityReceiver accepts known attempt identities for matching fresh
+// accounting observations whose scheduler representation omits an attempt count.
+// Implementations must not treat these records as fresh scheduler state.
+type AccountingIdentityReceiver interface {
+	// SetAccountingIdentities replaces the relevant attempt identity evidence.
+	SetAccountingIdentities([]JobExecutionRecord)
+}

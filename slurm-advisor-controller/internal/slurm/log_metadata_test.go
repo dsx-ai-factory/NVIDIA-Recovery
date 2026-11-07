@@ -232,6 +232,7 @@ func TestLogPathsFromSacctUsesExistingArrayAttemptIdentity(t *testing.T) {
 	discovered, err := logPathsFromSacct([]byte(`{
 		"jobs": [{
 			"job_id": 9002,
+            "restart_cnt": 0,
 			"array": {"job_id": 9000, "task_id": {"set": true, "number": 2}},
 			"time": {"submission": 10, "start": 20},
 			"stdout_expanded": "/logs/array-9000_2.out",

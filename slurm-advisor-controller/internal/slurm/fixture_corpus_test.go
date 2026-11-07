@@ -6,12 +6,14 @@ package slurm
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRedactedSqueueCorpusParsesRealOutputShapes(t *testing.T) {
@@ -79,7 +81,12 @@ func TestRedactedSacctCorpusParsesRealOutputShapes(t *testing.T) {
 			assertRedactedFixturePayload(t, fixture, data)
 			assertJSONNumberAtPath(t, fixture, data, "jobs", "0", "job_id")
 
-			jobs, err := observedJobsFromSacct(data)
+			// This older fixture omits restart_cnt. Supply the known initial
+			// attempt timestamps independently, as bootstrap does in production.
+			scheduler := newSlurmCluster(Options{})
+			submitted, started := time.Unix(1722495600, 0), time.Unix(1722495660, 0)
+			scheduler.SetAccountingIdentities([]cluster.JobExecutionRecord{{JobID: "9200_4", AttemptIndex: 0, SubmitTime: &submitted, StartTime: &started}})
+			jobs, err := observedJobsFromSacct(data, scheduler.resolveAccountingAttempt)
 			if err != nil {
 				t.Fatalf("observedJobsFromSacct(%s) failed: %v", fixture, err)
 			}

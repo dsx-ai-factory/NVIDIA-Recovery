@@ -15,6 +15,7 @@ import (
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/slurm"
 )
 
 type UpsertRequestOptions struct {
@@ -27,6 +28,9 @@ const maxWorkflowIDRunes = 256
 var ErrInvalidWorkflowID = errors.New("job execution record has an invalid workflow ID")
 
 func BuildCreateOrUpdateJobRequest(job cluster.JobExecutionRecord, opts UpsertRequestOptions) (*pb.CreateOrUpdateJobRequest, error) {
+	if err := slurm.ValidateRecordIdentity(job); err != nil {
+		return nil, err
+	}
 	if err := validateWorkflowID(job.WorkflowID); err != nil {
 		return nil, err
 	}

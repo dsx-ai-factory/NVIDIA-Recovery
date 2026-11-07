@@ -6,6 +6,7 @@ package slurm
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"strconv"
 	"strings"
 
@@ -178,6 +179,9 @@ func observedJobsWithSourceFromSqueue(data []byte) ([]squeueObservation, error) 
 }
 
 func observedJobFromSqueue(jobData SlurmJob) (cluster.JobExecutionRecord, bool, error) {
+	if jobData.RestartCnt < 0 || int64(jobData.RestartCnt) > math.MaxInt32 {
+		return cluster.JobExecutionRecord{}, false, errors.Newf("invalid squeue restart count for job %d", jobData.JobID)
+	}
 	jobID, arrayJobID, arrayTaskID, include, err := jobIdentityFromSqueue(jobData)
 	if err != nil {
 		return cluster.JobExecutionRecord{}, false, errors.Wrapf(err, "squeue job %d identity", jobData.JobID)

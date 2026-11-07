@@ -4,10 +4,10 @@ Status: accepted
 
 Date: 2026-11-03
 
-> **Implementation note (2026-11-08):** Task identity covers parsing, metadata
-> preservation, and per-record conflict validation; cross-record admission,
-> recovery, checkpoint association, and end-to-end qualification remain in the
-> [implementation plan](../architecture/job-array-support-plan.md).
+> **Implementation note (2026-11-16):** Task identity and conservative accounting
+> reuse per-task recovery; cross-record identity admission hardening is a separate
+> follow-up in the [implementation plan](../architecture/job-array-support-plan.md).
+> Checkpoint association and end-to-end qualification remain outstanding.
 
 ## Context
 
