@@ -325,3 +325,10 @@ def jm_job_status_running() -> AsyncGenerator[str, None]:
             "config_validation_failure_types": [],
         }
     )
+
+
+@pytest.fixture(autouse=True)
+def standalone_scheduler_registry():
+    """Legacy fixtures contain standalone jobs; array tests override this registry read."""
+    with patch("watcher.workflow.get_jobs_by_scheduler_metadata_sync", return_value=[]) as lookup:
+        yield lookup

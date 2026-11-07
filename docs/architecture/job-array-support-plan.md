@@ -93,10 +93,32 @@ but fresh scheduler state remains necessary for actions. Advice and bootstrap
 identity checks reject inconsistent task selectors and attempt UUIDs. Task-level
 selectors, retry budgets, and independent watchdog timers have focused coverage.
 
-Checkpoint association and production end-to-end qualification remain required
-before claiming supported array recovery. The Docker Slurm harness currently
+Production end-to-end qualification remains required before claiming supported
+array recovery. The Docker Slurm harness currently
 cannot build in this environment because GitHub's certificate issuer is not
 trusted by its base image; TLS verification remains enabled.
+
+### Checkpoint Association Implementation
+
+Watcher and Job Manager normalize canonical task IDs, explicit array/task pairs,
+and explicitly labeled raw aliases before association and deduplication. Raw
+aliases resolve through a bounded exact-match `scheduler_metadata` query on the
+existing Job API. Bare array labels never select a child, including a child whose
+raw numeric ID equals the parent. Explicit attempts remain authoritative;
+otherwise shared paths require an unambiguous source-time match. Missing
+registration retains the existing bounded retry behavior.
+
+Saved progress is reread and appended under the same exact-attempt admission
+scope, preserving concurrent saves. Loads do not count as saved progress.
+`checkpoint_associated` audit facts carry the resolved task/attempt, source UUID,
+kind, and source time; deterministic producer keys suppress replay duplicates.
+Audit delivery remains best effort. Array-level checkpoint association remains
+a future iteration.
+
+The application collector preserves standard Slurm array filenames and leaves
+ambiguous custom numeric-pair filenames unlabeled. Custom naming conventions
+require explicit site identity rules. Native Alloy validation and pipeline
+checks cover standard array, custom ambiguous, standalone, and dated filenames.
 
 ## Behavioral Acceptance
 

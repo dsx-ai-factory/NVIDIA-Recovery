@@ -112,3 +112,56 @@ def test_history_empty_job(mocker):
     )
     mocker.patch("watcher.lib.plugins.job_manager.httpx.Client", return_value=client)
     assert get_job_attempts_sync(ENDPOINT, JOB_ID) == []
+
+
+def test_metadata_lookup_preserves_siblings_and_wire_metadata(mocker):
+    """Filtered pagination must not collapse task siblings sharing an attempt index."""
+    metadata = {"scheduler": "slurm", "slurm_raw_job_id": "4200"}
+    offsets = []
+
+    def respond(request):
+        assert "job_id" not in request.url.params
+        assert json.loads(request.url.params["scheduler_metadata"]) == metadata
+        offset = int(request.url.params["offset"])
+        offsets.append(offset)
+        if offset == 2:
+            return httpx.Response(200, json={"item_count": 2, "statuses": []})
+        return httpx.Response(
+            200,
+            json={
+                "item_count": 2,
+                "statuses": [
+                    {
+                        "job_id": f"4200_{index}",
+                        "job_attempt_index": 0,
+                        "workflow_id": "array",
+                        "schedulerMetadata": {
+                            **metadata,
+                            "slurm_array_job_id": "4200",
+                            "slurm_array_task_id": str(index),
+                        },
+                    }
+                    for index in (0, 1)
+                ],
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    mocker.patch("watcher.lib.plugins.job_manager.httpx.Client", return_value=client)
+    records = get_job_attempts_sync(ENDPOINT, None, scheduler_metadata=metadata)
+    assert [record.job_id for record in records] == ["4200_0", "4200_1"]
+    assert [record.scheduler_metadata["slurm_array_task_id"] for record in records] == ["0", "1"]
+    assert offsets == [0, 2]
+
+
+def test_metadata_lookup_fails_closed_when_server_ignores_filter(mocker):
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={"item_count": 1, "statuses": [_history_status(0)]},
+            )
+        )
+    )
+    mocker.patch("watcher.lib.plugins.job_manager.httpx.Client", return_value=client)
+    assert get_job_attempts_sync(ENDPOINT, None, scheduler_metadata={"slurm_raw_job_id": "4200"}) is None

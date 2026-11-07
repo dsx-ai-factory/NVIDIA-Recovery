@@ -154,6 +154,7 @@ class BaseStorage(ABC):
         heimdall_job_id: Optional["uuid.UUID"] = None,
         job_name_match: str = "prefix",
         workflow_id: str | None = None,
+        scheduler_metadata: dict[str, str] | None = None,
     ) -> tuple[list[SlurmJobExecutionRecord], int]:
         """
         Method to read a list of job records from recovery_libs.storage with given filters.
@@ -171,6 +172,7 @@ class BaseStorage(ABC):
             job_name: Optional job name filter.
             job_name_match: How to match job_name: "prefix" (default), "exact", or "fuzzy" (case-insensitive substring match).
             workflow_id: Optional exact workflow ID filter, independent of job_name.
+            scheduler_metadata: Optional exact string matches on scheduler-owned JSON keys.
             user: Optional job username filter.
             states: Optional list of job states filter.
             limit: Number of records to return.

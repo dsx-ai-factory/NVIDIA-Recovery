@@ -435,6 +435,25 @@
                         "description": "The job_id filter."
                     },
                     {
+                        "name": "scheduler_metadata",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "maxLength": 4096
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "JSON object of exact scheduler metadata string filters, combined with AND (at most 8 keys).",
+                            "title": "Scheduler Metadata"
+                        },
+                        "description": "JSON object of exact scheduler metadata string filters, combined with AND (at most 8 keys)."
+                    },
+                    {
                         "name": "job_attempt_index",
                         "in": "query",
                         "required": false,

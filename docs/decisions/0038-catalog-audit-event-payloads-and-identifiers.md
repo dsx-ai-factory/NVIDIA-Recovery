@@ -4,6 +4,8 @@ Status: accepted
 
 Implementation note: [ADR 0048](0048-start-recovery-traces-in-backend-and-share-observations.md) adds optional `recovery_sequence_id`, `trace_id`, and `span_id` to the Advice and attribution payloads below; trace and span IDs are recorded only for sampled spans, and historical payloads remain readable.
 
+Implementation note (2026-11-07): [ADR 0054](0054-recover-slurm-array-tasks-independently.md) adds task/attempt-scoped `checkpoint_associated` facts and a narrow exception to random producer keys: checkpoint association uses a deterministic UUIDv5 so replay after a producer restart does not duplicate the logical association. This does not change Audit Trail row IDs or query ordering.
+
 Date: 2026-09-09
 
 Related:
@@ -36,6 +38,7 @@ Two UUID-shaped values serve different purposes. Audit Trail creates an
 internal UUIDv7 for each accepted row. Producers supply a UUIDv4 idempotency
 key and reuse it across delivery retries. Treating either value as the other
 would make retry behavior, ordering, and API ownership ambiguous.
+The checkpoint association exception is specified below.
 
 ## Decision
 
@@ -90,7 +93,8 @@ Every producer submits a `ProducerEvent` with these fields:
 - `event_level` (`recovery | operational`): event classification.
 - `payload` (`object`): event-specific typed payload.
 - `event_produced_at` (`int64`): producer emission time as Unix microseconds.
-- `idempotency_key` (`UUIDv4 string`): producer-owned retry identity.
+- `idempotency_key` (`UUID string`): producer-owned retry identity; UUIDv4 by default,
+  deterministic UUIDv5 for checkpoint association.
 
 The Notifications `/v1/audit/events` query response uses snake_case field
 names and numeric `int64` values. It omits `idempotency_key` and the internal
@@ -164,6 +168,21 @@ objects.
 | `attribution_response_received` | `anomaly-detection-isolator` | `advice_id`, `job_id`, `attempt_index`, `request_uuid`, `response_payload` |
 | `job_attempt_observed` | `job-manager` | `job_id`, `attempt_index`, `job` (`JobAuditSnapshot`) |
 | `job_attempt_updated` | `job-manager` | `job_id`, `attempt_index`, `old_job`, `new_job` (`JobAuditSnapshot`) |
+| `checkpoint_associated` | `job-manager` | `job_id`, `attempt_index`, `source_event_uuid`, `checkpoint_kind` (`save` or `load`), nullable `event_occurred_at` (Unix microseconds) |
+
+`checkpoint_associated` records a successful association with an existing job
+attempt. Saves emit after checkpoint persistence; loads emit after matching and
+never create saved progress. The envelope uses that same attempt's
+`heimdall_job_id`. Array tasks use their canonical task ID in both the payload
+and the UUID input, so exact-attempt and whole-task queries exclude siblings.
+Delivery remains best effort; audit failure does not retry a checkpoint write.
+
+For this event, the producer computes UUIDv5 in `NAMESPACE_URL` from the JSON
+array `["checkpoint_associated", heimdall_job_id, source_event_uuid, checkpoint_kind]`
+using the serializer in
+[`job_manager.audit.checkpoints`](../../job_manager/job_manager/audit/checkpoints.py).
+Replaying the same source association reuses the key across restarts; another
+task, attempt, source event, or checkpoint kind has a different key.
 
 `job_attempt_observed` is emitted for the first persisted observation of an
 attempt. `job_attempt_updated` is emitted only when the approved Job projection
@@ -233,11 +252,11 @@ and payload fields `job_id`, `attempt_index`, `success`, and optional `error`.
 | --- | --- | --- |
 | Stored field | `AuditEvents.id` | `AuditEvents.idempotency_key` |
 | Owner | Audit Trail | Event producer |
-| Required form | UUIDv7 | UUIDv4 |
+| Required form | UUIDv7 | UUIDv4; UUIDv5 for checkpoint association |
 | Generated | When Audit Trail constructs an accepted row | Before the first delivery attempt |
 | Retry behavior | New accepted logical event receives a new ID | Retries of one logical event reuse the same key |
 | Purpose | Row identity, pagination, deterministic tie-breaking | Suppress duplicate persistence after delivery retries |
-| Ordering | Roughly time-sortable | Random; conveys no ordering |
+| Ordering | Roughly time-sortable | Conveys no ordering |
 | Query visibility | Not returned directly | Not returned |
 
 Audit queries order by `event_produced_at` and use the internal UUIDv7 as a
@@ -248,7 +267,8 @@ ordering.
 Every producer generates an idempotency key before its first delivery attempt.
 Audit Trail treats the value as opaque, places a unique constraint on it, and
 preserves the first accepted event for a duplicate key. A producer generates a
-new UUIDv4 for each distinct event and retains it for retries of that event.
+new UUIDv4 for each distinct event and retains it for retries of that event,
+except for replay-stable checkpoint association keys described above.
 
 ## Consequences
 

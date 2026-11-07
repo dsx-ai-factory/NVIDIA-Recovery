@@ -105,6 +105,12 @@ class TestJobManager(unittest.TestCase):
         self._config = create_basic_service_config()
         self._job_manager = JobManager(config=self._config, shutdown_event=Event())
         self._job_manager.storage = MagicMock(spec=MySQLStorage)
+        self._job_manager.storage.job_attempt_scope = MagicMock()
+        # These legacy fixtures contain standalone jobs only. Array registry
+        # resolution is exercised through the callback in test_array_checkpoints.
+        registry = patch.object(self._job_manager, "_lookup_event_scheduler_metadata", return_value=[])
+        registry.start()
+        self.addCleanup(registry.stop)
         self._job_manager.attribution_storage = MagicMock(spec=AttributionStorage)
         self._job_manager.notifications_client = MagicMock(spec=NotificationsApi)
 
@@ -1258,6 +1264,7 @@ class TestJobManager(unittest.TestCase):
         storage_mock = self._job_manager.storage
         with patch("job_manager.service.CHECKPOINT_MESSAGE_RECEIVED_COUNTER") as checkpoint_counter_mock:
             storage_mock.read_job_records.return_value = ([job_record], 1)
+            storage_mock.read_job_record.return_value = job_record
             process_job_anomalies = self._job_manager.get_watcher_job_event_message_callback()
             process_job_anomalies(
                 MagicMock(),
