@@ -236,6 +236,7 @@ class Scenario[Services]:
     entry may be a function of the run so far, so a child job can name the job IDs of parents listed before it.
     `submit` steps launch more jobs later, when the time of submission matters. `setup` acts prepare what the jobs
     need before any launches, such as files they read.
+    A setup-only scenario may register an owned group of jobs through a launcher action, such as one array.
     """
 
     name: str
@@ -245,8 +246,8 @@ class Scenario[Services]:
     setup: tuple[Act[Services], ...] = ()
 
     def __post_init__(self) -> None:
-        if (self.job is None) == (not self.jobs):
-            raise ValueError(f"scenario {self.name!r} needs exactly one of job or jobs")
+        if (self.job is not None and self.jobs) or (self.job is None and not self.jobs and not self.setup):
+            raise ValueError(f"scenario {self.name!r} needs job, jobs, or setup-owned jobs")
         object.__setattr__(self, "jobs", MappingProxyType({JOB: self.job} if self.job else dict(self.jobs)))
 
 

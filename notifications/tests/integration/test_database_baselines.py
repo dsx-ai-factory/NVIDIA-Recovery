@@ -180,6 +180,53 @@ def test_notifications_runtime_bootstrap_upgrades_empty_database_and_is_idempote
     assert set(inspect(database_engine).get_table_names()) == NOTIFICATIONS_TABLES | {"alembic_versions__notifications"}
 
 
+def test_array_audit_queries_keep_tasks_attempts_and_parent_distinct(database_engine: Engine) -> None:
+    """Persisted task queries must neither collapse an array nor lose task zero across paginated retries."""
+
+    _upgrade("notifications")
+    identities = (("4200_0", 0), ("4200_1", 0), ("4200_0", 1), ("4200", 0))
+    events = [
+        ProducerAuditEvent(
+            heimdall_job_id=str(generate_heimdall_job_id(job_id, attempt)),
+            event_producer="job-manager",
+            event_type="checkpoint_associated",
+            event_level="operational",
+            payload={
+                "job_id": job_id,
+                "attempt_index": attempt,
+                "source_event_uuid": str(uuid.uuid4()),
+                "checkpoint_kind": "save",
+                "event_occurred_at": 100 + index,
+            },
+            idempotency_key=str(uuid.uuid4()),
+            event_produced_at=200 + index,
+        )
+        for index, (job_id, attempt) in enumerate(identities)
+    ]
+    with Session(database_engine) as session:
+        insert_audit_events(session, events)
+        insert_audit_events(session, [events[0]])
+        first = query_audit_events(session, AuditEventQuery(job_id="4200_0", limit=1, sort_by="event_produced_at:asc"))
+        assert first.cursor.next_cursor
+        second = query_audit_events(
+            session,
+            AuditEventQuery(job_id="4200_0", limit=1, sort_by="event_produced_at:asc", cursor=first.cursor.next_cursor),
+        )
+        observed = [*first.items, *second.items]
+        assert [(event.payload["job_id"], event.payload["attempt_index"]) for event in observed] == [
+            ("4200_0", 0),
+            ("4200_0", 1),
+        ]
+        assert not second.cursor.next_cursor
+        for job_id, attempt in identities:
+            page = query_audit_events(session, AuditEventQuery(job_id=job_id, attempt_index=attempt))
+            assert len(page.items) == 1
+            event = page.items[0]
+            assert event.payload["job_id"] == job_id
+            assert event.payload["attempt_index"] == attempt
+            assert event.heimdall_job_id == str(generate_heimdall_job_id(job_id, attempt))
+
+
 def test_audit_scheduler_migration_backfill_and_mixed_writers(database_engine: Engine) -> None:
     """Old inserts survive expansion, final catch-up covers late commits, and filters are exact on MySQL."""
     command.upgrade(_config(NOTIFICATIONS_ALEMBIC_ROOT), "000000000003")

@@ -261,6 +261,15 @@ checks the job-level limit; `57-system-requeue-limit` checks a lower system cap.
 Scenarios 55 (checkpoint stopping) and 57 temporarily change JM policy and must
 run serially on a dedicated test stack.
 
+`58-job-array-recovery` submits one real two-task array, exhausts task zero's
+retry allowance, then verifies its sibling can still recover. It restarts Job
+Manager and SAC, associates a checkpoint with task zero's second attempt, and
+checks persisted task/attempt audit isolation through the authenticated gateway.
+It requires Advice-only recovery and a dedicated test stack because it changes
+JM policy. Its tasks and failure gates are owned and cleaned up by the scenario.
+The launcher waits for concrete scheduler task records rather than fabricating
+tasks from a pending range.
+
 `56-eager-requeue` skips unless eager recovery is enabled. Run it separately on
 a fresh stack with:
 

@@ -492,4 +492,7 @@ Because the reconcilers are crash safe they are also cancel safe.
 
 1. Repeated failures for a reconcilation are not backed off and there is no circuit breaker for jobs.
 2. Fast repolling. The architecture is purposefully simplistic. A more sophisticated channel and even based system could have dynamiclly scheduled targeted polling.
-3. Not all slurm features are covered. Currently only simple non-array jobs are supported.
+3. Only simple non-array jobs are currently qualified. Array task identity,
+   recovery, checkpoint association, and audit support are implemented, but the
+   real Slurm end-to-end qualification run is still pending. See the
+   [job array plan](job-array-support-plan.md) for evidence and rollout gates.
