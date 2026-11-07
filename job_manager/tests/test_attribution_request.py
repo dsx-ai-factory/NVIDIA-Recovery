@@ -10,6 +10,7 @@ from job_manager.attribution_request import emit_attribution_request_if_needed
 from recovery_libs.schema.event_type import EventType
 from recovery_libs.schema.job_manager.models import JobAnomaly, JobAnomalyHandledBy
 from recovery_libs.schema.job_updates_attribution_request.attribution_request import AttributionRequest
+from recovery_libs.storage.base import RecoveryStorageAdmissionError
 from test_utils import create_example_slurm_job_record
 
 ROUTING_KEY = "job.updates.attribution_request"
@@ -118,3 +119,37 @@ class TestEmitAttributionRequest(unittest.TestCase):
         publisher.publish_message.side_effect = RuntimeError("boom")
         result, _, _ = _emit(_terminal_record(), storage=storage, publisher=publisher)
         self.assertFalse(result)
+
+
+class TestAttributionAdmissionFailure(unittest.TestCase):
+    def test_lost_admission_cannot_degrade_to_uncorrelated_publication(self):
+        publisher = MagicMock()
+        context = MagicMock(side_effect=RecoveryStorageAdmissionError("lock lost"))
+        storage = MagicMock()
+        with self.assertRaises(RecoveryStorageAdmissionError):
+            emit_attribution_request_if_needed(
+                _terminal_record(),
+                storage=storage,
+                publisher=publisher,
+                routing_key=ROUTING_KEY,
+                enabled=True,
+                straggler_enabled=False,
+                recovery_context_provider=context,
+            )
+        publisher.publish_message.assert_not_called()
+        storage.claim_attribution_request_emission.assert_not_called()
+
+    def test_optional_correlation_failure_still_claims_and_publishes(self):
+        publisher = MagicMock()
+        storage = MagicMock()
+        assert emit_attribution_request_if_needed(
+            _terminal_record(),
+            storage=storage,
+            publisher=publisher,
+            routing_key=ROUTING_KEY,
+            enabled=True,
+            straggler_enabled=False,
+            recovery_context_provider=MagicMock(side_effect=RuntimeError("tracing unavailable")),
+        )
+        storage.claim_attribution_request_emission.assert_called_once()
+        publisher.publish_message.assert_called_once()

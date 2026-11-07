@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import uuid
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
@@ -37,6 +38,10 @@ from test_utils import create_example_slurm_job_record
 
 class DagStorage:
     """Small in-memory implementation of the production storage surface used by DAG policy tests."""
+
+    def job_attempt_scope(self, job_id, attempt_index):
+        # This in-memory DAG fixture executes serially.
+        return nullcontext()
 
     def __init__(self) -> None:
         self.jobs: dict[tuple[str, int], SlurmJobExecutionRecord] = {}

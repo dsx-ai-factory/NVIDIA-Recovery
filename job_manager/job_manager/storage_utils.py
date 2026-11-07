@@ -37,7 +37,7 @@ from recovery_libs.schema.job_manager.models import (
 )
 from recovery_libs.schema.watcher.model import Event
 from recovery_libs.storage.attribution_storage import AttributionStorage
-from recovery_libs.storage.base import BaseStorage, RecoveryStorageException
+from recovery_libs.storage.base import BaseStorage, RecoveryStorageAdmissionError, RecoveryStorageException
 from recovery_libs.storage.dataclass import (
     AdviceRecord,
     DagDependency,
@@ -80,18 +80,10 @@ def _resolve_advice_scheduler_identity(
     attempt_index: int,
     metadata: dict | None,
 ) -> tuple[dict | None, SlurmJobExecutionRecord | None]:
-    """Preflight identity before callbacks; storage rechecks its own row under lock."""
+    """Read both identities inside the admission scope before any recovery effects."""
     known_advice = storage.read_advice_by_job(job_id=job_id, attempt_index=attempt_index)
     advice_metadata = known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None
-    try:
-        known_job = storage.read_job_record(job_id=job_id, job_attempt_index=attempt_index)
-    except Exception:
-        # Preserve legacy availability for identity-free/non-Slurm Advice when
-        # its optional correlation Job read fails. Known Slurm identity fails
-        # closed; the Advice row is always checked again under the write lock.
-        if any((values or {}).get("scheduler") == "slurm" for values in (metadata, advice_metadata)):
-            raise
-        known_job = None
+    known_job = storage.read_job_record(job_id=job_id, job_attempt_index=attempt_index)
     job = known_job if isinstance(known_job, SlurmJobExecutionRecord) else None
     return preserve_job_scheduler_identity(
         job_id,
@@ -123,101 +115,104 @@ def persist_advice_record(
     Returns:
         The persisted record, whether it was created, and its prior value.
     """
-    # Resolve identity before a recovery sequence or audit event can be created.
-    advice_record.scheduler_metadata, known_job = _resolve_advice_scheduler_identity(
-        storage,
-        advice_record.job_id,
-        advice_record.attempt_index,
-        advice_record.scheduler_metadata,
-    )
-    # All audited upserts share this fallback, including DAG descendant
-    # termination. Correlation failure must never prevent committing Advice.
-    operation_by_state: dict[str | None, RecoveryOperation] = {
-        "Restarted": RecoveryOperation.RESTART,
-        "Terminated": RecoveryOperation.TERMINATE,
-        "Released": RecoveryOperation.DAG_RELEASE,
-    }
-    operation = operation_by_state.get(advice_record.advice_state)
-    if operation is None or advice_record.recovery_operation != operation.value:
-        # An Advice generation can change operation. Its old context must not
-        # parent the new operation span before storage selects the new sequence.
-        advice_record.recovery_sequence_id = None
-        advice_record.recovery_traceparent = None
-        advice_record.recovery_tracestate = None
-        advice_record.recovery_operation = None
-        advice_record.recovery_triggered_at = None
-    if advice_record.recovery_sequence_id is None and operation is not None:
-        try:
-            job = known_job
-            if job is not None:
-                dependency_decision = (
-                    operation == RecoveryOperation.DAG_RELEASE or audit_reason == "DAG_PARENT_TERMINATED"
-                )
-                anomalies = job.anomalies or []
-                trigger = anomalies[0] if anomalies and not dependency_decision else None
-                recovery = RecoveryService(storage).begin_for_job(
-                    job,
-                    operation=operation,
-                    scheduler_metadata=advice_record.scheduler_metadata,
-                    trigger_type=(
-                        RecoveryTriggerType.DEPENDENCY
-                        if dependency_decision
-                        else RecoveryTriggerType.ANOMALY
-                        if trigger is not None
-                        else RecoveryTriggerType.JOB_STATE
-                    ),
-                    trigger_identifier=str(trigger.uuid) if trigger is not None and trigger.uuid else None,
-                    triggered_at=(
-                        None if dependency_decision else trigger.timestamp if trigger is not None else job.end_time
-                    ),
-                )
-                advice_record.recovery_sequence_id = uuid.UUID(recovery.sequence_id)
-                advice_record.recovery_traceparent = recovery.traceparent
-                advice_record.recovery_tracestate = recovery.tracestate
-                advice_record.recovery_operation = recovery.operation.value
-                advice_record.recovery_triggered_at = recovery.triggered_at
-        except Exception:
-            logger.exception("Failed to obtain recovery context; persisting Advice without correlation.")
-    parent_context = (
-        restore_trace_context(advice_record.recovery_traceparent, advice_record.recovery_tracestate)
-        if advice_record.recovery_traceparent is not None
-        else None
-    )
-    attributes: dict[str, Any] = {
-        "job.id": advice_record.job_id,
-        "job.attempt.source": advice_record.attempt_index,
-        "advice.id": str(advice_record.heimdall_id),
-    }
-    if advice_record.recovery_sequence_id is not None:
-        attributes["recovery.sequence.id"] = str(advice_record.recovery_sequence_id)
-    if advice_record.recovery_operation is not None:
-        attributes["recovery.operation"] = advice_record.recovery_operation
+    with storage.job_attempt_scope(advice_record.job_id, advice_record.attempt_index):
+        # Resolve identity before a recovery sequence or audit event can be created.
+        advice_record.scheduler_metadata, known_job = _resolve_advice_scheduler_identity(
+            storage,
+            advice_record.job_id,
+            advice_record.attempt_index,
+            advice_record.scheduler_metadata,
+        )
+        # All audited upserts share this fallback, including DAG descendant
+        # termination. Correlation failure must never prevent committing Advice.
+        operation_by_state: dict[str | None, RecoveryOperation] = {
+            "Restarted": RecoveryOperation.RESTART,
+            "Terminated": RecoveryOperation.TERMINATE,
+            "Released": RecoveryOperation.DAG_RELEASE,
+        }
+        operation = operation_by_state.get(advice_record.advice_state)
+        if operation is None or advice_record.recovery_operation != operation.value:
+            # An Advice generation can change operation. Its old context must not
+            # parent the new operation span before storage selects the new sequence.
+            advice_record.recovery_sequence_id = None
+            advice_record.recovery_traceparent = None
+            advice_record.recovery_tracestate = None
+            advice_record.recovery_operation = None
+            advice_record.recovery_triggered_at = None
+        if advice_record.recovery_sequence_id is None and operation is not None:
+            try:
+                job = known_job
+                if job is not None:
+                    dependency_decision = (
+                        operation == RecoveryOperation.DAG_RELEASE or audit_reason == "DAG_PARENT_TERMINATED"
+                    )
+                    anomalies = job.anomalies or []
+                    trigger = anomalies[0] if anomalies and not dependency_decision else None
+                    recovery = RecoveryService(storage).begin_for_job(
+                        job,
+                        operation=operation,
+                        scheduler_metadata=advice_record.scheduler_metadata,
+                        trigger_type=(
+                            RecoveryTriggerType.DEPENDENCY
+                            if dependency_decision
+                            else RecoveryTriggerType.ANOMALY
+                            if trigger is not None
+                            else RecoveryTriggerType.JOB_STATE
+                        ),
+                        trigger_identifier=str(trigger.uuid) if trigger is not None and trigger.uuid else None,
+                        triggered_at=(
+                            None if dependency_decision else trigger.timestamp if trigger is not None else job.end_time
+                        ),
+                    )
+                    advice_record.recovery_sequence_id = uuid.UUID(recovery.sequence_id)
+                    advice_record.recovery_traceparent = recovery.traceparent
+                    advice_record.recovery_tracestate = recovery.tracestate
+                    advice_record.recovery_operation = recovery.operation.value
+                    advice_record.recovery_triggered_at = recovery.triggered_at
+            except RecoveryStorageAdmissionError:
+                raise
+            except Exception:
+                logger.exception("Failed to obtain recovery context; persisting Advice without correlation.")
+        parent_context = (
+            restore_trace_context(advice_record.recovery_traceparent, advice_record.recovery_tracestate)
+            if advice_record.recovery_traceparent is not None
+            else None
+        )
+        attributes: dict[str, Any] = {
+            "job.id": advice_record.job_id,
+            "job.attempt.source": advice_record.attempt_index,
+            "advice.id": str(advice_record.heimdall_id),
+        }
+        if advice_record.recovery_sequence_id is not None:
+            attributes["recovery.sequence.id"] = str(advice_record.recovery_sequence_id)
+        if advice_record.recovery_operation is not None:
+            attributes["recovery.operation"] = advice_record.recovery_operation
 
-    with _TRACER.start_as_current_span(
-        "job.recovery.advice",
-        context=parent_context,
-        attributes=attributes,
-    ) as span:
-        try:
-            result = storage.upsert_advice(
-                advice_record,
-                issue_merge=issue_merge,
-                scheduler_metadata_merge=partial(preserve_job_scheduler_identity, advice_record.job_id),
-            )
-            audit_advice_upsert(
-                result,
-                audit_buffer,
-                additional_reason=audit_reason,
-                operation_span=span,
-            )
-        except Exception as error:
-            span.set_attribute("recovery.outcome", "failed")
-            span.set_status(Status(StatusCode.ERROR, str(error)))
-            raise
-        span.set_attribute("advice.id", str(result[0].heimdall_id))
-        span.set_attribute("advice.generation", result[0].generation)
-        span.set_attribute("recovery.outcome", "applied" if result[1] else "skipped")
-        return result
+        with _TRACER.start_as_current_span(
+            "job.recovery.advice",
+            context=parent_context,
+            attributes=attributes,
+        ) as span:
+            try:
+                result = storage.upsert_advice(
+                    advice_record,
+                    issue_merge=issue_merge,
+                    scheduler_metadata_merge=partial(preserve_job_scheduler_identity, advice_record.job_id),
+                )
+                audit_advice_upsert(
+                    result,
+                    audit_buffer,
+                    additional_reason=audit_reason,
+                    operation_span=span,
+                )
+            except Exception as error:
+                span.set_attribute("recovery.outcome", "failed")
+                span.set_status(Status(StatusCode.ERROR, str(error)))
+                raise
+            span.set_attribute("advice.id", str(result[0].heimdall_id))
+            span.set_attribute("advice.generation", result[0].generation)
+            span.set_attribute("recovery.outcome", "applied" if result[1] else "skipped")
+            return result
 
 
 def persist_job_record(
@@ -228,19 +223,20 @@ def persist_job_record(
     populate_heimdall_id_log_path: bool = False,
 ) -> UpsertJobResult:
     """Persist a Job attempt and audit its committed approved projection."""
-    known_advice = storage.read_advice_by_job(job_record.job_id, job_record.job_attempt_index)
-    result = storage.upsert_job_record(
-        job_record,
-        populate_heimdall_id_log_path=populate_heimdall_id_log_path,
-        scheduler_metadata_merge=lambda incoming, known: preserve_job_scheduler_identity(
-            job_record.job_id,
-            incoming,
-            known,
-            known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
-        ),
-    )
-    audit_job_upsert(result, audit_buffer)
-    return result
+    with storage.job_attempt_scope(job_record.job_id, job_record.job_attempt_index):
+        known_advice = storage.read_advice_by_job(job_record.job_id, job_record.job_attempt_index)
+        result = storage.upsert_job_record(
+            job_record,
+            populate_heimdall_id_log_path=populate_heimdall_id_log_path,
+            scheduler_metadata_merge=lambda incoming, known: preserve_job_scheduler_identity(
+                job_record.job_id,
+                incoming,
+                known,
+                known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
+            ),
+        )
+        audit_job_upsert(result, audit_buffer)
+        return result
 
 
 def update_job_record(
@@ -252,12 +248,22 @@ def update_job_record(
 ) -> bool:
     """Apply a partial Job update and audit its committed transition."""
     if "scheduler_metadata" in updates:
-        updates["scheduler_metadata_merge"] = partial(preserve_job_scheduler_identity, job_id)
-    result = storage.update_job_record(
-        job_id=job_id,
-        job_attempt_index=job_attempt_index,
-        **updates,
-    )
+        if job_attempt_index is None:
+            known_job = storage.read_job_record(job_id)
+            if known_job is None:
+                return True
+            job_attempt_index = known_job.job_attempt_index
+        with storage.job_attempt_scope(job_id, job_attempt_index):
+            known_advice = storage.read_advice_by_job(job_id, job_attempt_index)
+            updates["scheduler_metadata_merge"] = lambda incoming, known: preserve_job_scheduler_identity(
+                job_id,
+                incoming,
+                known,
+                known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
+            )
+            result = storage.update_job_record(job_id=job_id, job_attempt_index=job_attempt_index, **updates)
+    else:
+        result = storage.update_job_record(job_id=job_id, job_attempt_index=job_attempt_index, **updates)
     audit_job_update(result, audit_buffer)
     # Preserve the existing Job Manager contract: a completed storage call is
     # successful even when its UPDATE matched no record.
@@ -726,74 +732,75 @@ def create_terminal_advice_for_job(
     are cancelled because of this parent.
     """
     try:
-        existing_advice = _read_existing_advice_for_terminal_event(
-            storage,
-            job_id=job_id,
-            job_attempt_index=job_attempt_index,
-            status=status,
-        )
-        advice_payload = build_terminal_advice(
-            job_id=job_id,
-            job_attempt_index=job_attempt_index,
-            terminal_advice=terminal_advice,
-            status=status,
-            anomaly_attribution=anomaly_attribution,
-            existing_advice=existing_advice,
-            exclusion_stickiness_enabled=exclusion_stickiness_enabled,
-            get_previous_attempt=get_previous_attempt,
-        )
-        # Stamp scheduler=slurm so the controller treats JM-authored advice as owned
-        # even before it registers the job. TODO(multi-scheduler): derive per-job / drop
-        # once ordering is fixed -- see TD-20260706-advice-scheduler-metadata-hardcoded-slurm.
-        advice_payload.scheduler_metadata = ensure_slurm_scheduler_metadata(advice_payload.scheduler_metadata)
-        if advice_payload.advice and advice_payload.advice.state == AdviceState.TERMINATED:
-            terminal_reason_issue = Issue(
-                issue_type=terminal_advice.value,
-                timestamp=datetime.now(UTC),
-                detected_by="Heimdall Job Manager",
+        with storage.job_attempt_scope(job_id, job_attempt_index):
+            existing_advice = _read_existing_advice_for_terminal_event(
+                storage,
+                job_id=job_id,
+                job_attempt_index=job_attempt_index,
+                status=status,
             )
-            if not any(
-                issue.issue_type == terminal_reason_issue.issue_type
-                and issue.detected_by == terminal_reason_issue.detected_by
-                for issue in advice_payload.issues or []
-            ):
-                advice_payload.issues = [*(advice_payload.issues or []), terminal_reason_issue]
-        exclusion_nodes = (
-            set(advice_payload.advice.node_constraints.exclusions)
-            if advice_payload.advice.node_constraints and advice_payload.advice.node_constraints.exclusions
-            else set()
-        )
-        logger.info(
-            f"Persisting terminal advice for job {advice_payload.job_id} attempt {advice_payload.restart_count}: "
-            f"advice={terminal_advice}, exclusion_nodes={sorted(exclusion_nodes)}"
-        )
-        advice_payload.scheduler_metadata, _ = _resolve_advice_scheduler_identity(
-            storage,
-            advice_payload.job_id,
-            advice_payload.restart_count,
-            advice_payload.scheduler_metadata,
-        )
-        if on_advice_ready is not None:
-            try:
-                recovery_context = on_advice_ready(advice_payload)
-                advice_payload.recovery_context = (
-                    recovery_context if isinstance(recovery_context, RecoveryContext) else None
+            advice_payload = build_terminal_advice(
+                job_id=job_id,
+                job_attempt_index=job_attempt_index,
+                terminal_advice=terminal_advice,
+                status=status,
+                anomaly_attribution=anomaly_attribution,
+                existing_advice=existing_advice,
+                exclusion_stickiness_enabled=exclusion_stickiness_enabled,
+                get_previous_attempt=get_previous_attempt,
+            )
+            # Stamp scheduler=slurm so the controller treats JM-authored advice as owned
+            # even before it registers the job. TODO(multi-scheduler): derive per-job / drop
+            # once ordering is fixed -- see TD-20260706-advice-scheduler-metadata-hardcoded-slurm.
+            advice_payload.scheduler_metadata = ensure_slurm_scheduler_metadata(advice_payload.scheduler_metadata)
+            if advice_payload.advice and advice_payload.advice.state == AdviceState.TERMINATED:
+                terminal_reason_issue = Issue(
+                    issue_type=terminal_advice.value,
+                    timestamp=datetime.now(UTC),
+                    detected_by="Heimdall Job Manager",
                 )
-            except Exception as error:
-                logger.exception(
-                    "Failed to attach recovery context to Advice %s; persisting without correlation",
-                    advice_payload.id,
-                    extra={"advice_id": advice_payload.id, "error": str(error)},
-                )
-        upsert_result = persist_advice_record(
-            storage,
-            audit_buffer,
-            http_to_storage_advice(advice_payload),
-            audit_reason=audit_reason,
-            # The payload's Issues come from an unlocked read. Keep Issues that a
-            # concurrent watcher event committed after that read.
-            issue_merge=AdviceIssueMerge.UNION,
-        )
+                if not any(
+                    issue.issue_type == terminal_reason_issue.issue_type
+                    and issue.detected_by == terminal_reason_issue.detected_by
+                    for issue in advice_payload.issues or []
+                ):
+                    advice_payload.issues = [*(advice_payload.issues or []), terminal_reason_issue]
+            exclusion_nodes = (
+                set(advice_payload.advice.node_constraints.exclusions)
+                if advice_payload.advice.node_constraints and advice_payload.advice.node_constraints.exclusions
+                else set()
+            )
+            logger.info(
+                f"Persisting terminal advice for job {advice_payload.job_id} attempt {advice_payload.restart_count}: "
+                f"advice={terminal_advice}, exclusion_nodes={sorted(exclusion_nodes)}"
+            )
+            advice_payload.scheduler_metadata, _ = _resolve_advice_scheduler_identity(
+                storage,
+                advice_payload.job_id,
+                advice_payload.restart_count,
+                advice_payload.scheduler_metadata,
+            )
+            if on_advice_ready is not None:
+                try:
+                    recovery_context = on_advice_ready(advice_payload)
+                    advice_payload.recovery_context = (
+                        recovery_context if isinstance(recovery_context, RecoveryContext) else None
+                    )
+                except Exception as error:
+                    logger.exception(
+                        "Failed to attach recovery context to Advice %s; persisting without correlation",
+                        advice_payload.id,
+                        extra={"advice_id": advice_payload.id, "error": str(error)},
+                    )
+            upsert_result = persist_advice_record(
+                storage,
+                audit_buffer,
+                http_to_storage_advice(advice_payload),
+                audit_reason=audit_reason,
+                # The payload's Issues come from an unlocked read. Keep Issues that a
+                # concurrent watcher event committed after that read.
+                issue_merge=AdviceIssueMerge.UNION,
+            )
         if on_advice_persisted is not None:
             on_advice_persisted(upsert_result[0], terminal_advice.value)
         return terminal_advice
@@ -964,58 +971,60 @@ def persist_dag_release_advice(
     on_advice_ready: AdviceReadyCallback | None = None,
 ) -> Advice:
     """Persist and audit exact-attempt RELEASED Advice for a dependency-ready child."""
-    existing_record = storage.read_advice_by_job(
-        job_id=job_record.job_id,
-        attempt_index=job_record.job_attempt_index,
-    )
-    if existing_record is not None:
-        advice = storage_to_http_advice(existing_record)
-        existing_state = advice.advice.state if advice.advice else None
-        if existing_state not in (None, AdviceState.RELEASED):
-            assert existing_state is not None
-            raise ValueError(
-                f"Cannot replace {existing_state.value} advice with RELEASED for job "
-                f"{job_record.job_id} attempt {job_record.job_attempt_index}"
-            )
-        advice.visible = True
-        advice.advice = AdviceRecommendation(state=AdviceState.RELEASED, node_constraints=None)
-    else:
-        advice = Advice(
-            id=str(
-                job_record.heimdall_job_id or generate_heimdall_job_id(job_record.job_id, job_record.job_attempt_index)
-            ),
-            visible=True,
+    with storage.job_attempt_scope(job_record.job_id, job_record.job_attempt_index):
+        existing_record = storage.read_advice_by_job(
             job_id=job_record.job_id,
-            restart_count=job_record.job_attempt_index,
-            scheduler_metadata=job_record.scheduler_metadata or {},
-            advice=AdviceRecommendation(state=AdviceState.RELEASED, node_constraints=None),
+            attempt_index=job_record.job_attempt_index,
         )
-
-    advice.scheduler_metadata = ensure_slurm_scheduler_metadata(advice.scheduler_metadata)
-    advice.scheduler_metadata, _ = _resolve_advice_scheduler_identity(
-        storage,
-        advice.job_id,
-        advice.restart_count,
-        advice.scheduler_metadata,
-    )
-    if on_advice_ready is not None:
-        try:
-            recovery_context = on_advice_ready(advice)
-            advice.recovery_context = recovery_context if isinstance(recovery_context, RecoveryContext) else None
-        except Exception as error:
-            logger.exception(
-                "Failed to attach recovery context to DAG Advice %s; persisting without correlation",
-                advice.id,
-                extra={"advice_id": advice.id, "error": str(error)},
+        if existing_record is not None:
+            advice = storage_to_http_advice(existing_record)
+            existing_state = advice.advice.state if advice.advice else None
+            if existing_state not in (None, AdviceState.RELEASED):
+                assert existing_state is not None
+                raise ValueError(
+                    f"Cannot replace {existing_state.value} advice with RELEASED for job "
+                    f"{job_record.job_id} attempt {job_record.job_attempt_index}"
+                )
+            advice.visible = True
+            advice.advice = AdviceRecommendation(state=AdviceState.RELEASED, node_constraints=None)
+        else:
+            advice = Advice(
+                id=str(
+                    job_record.heimdall_job_id
+                    or generate_heimdall_job_id(job_record.job_id, job_record.job_attempt_index)
+                ),
+                visible=True,
+                job_id=job_record.job_id,
+                restart_count=job_record.job_attempt_index,
+                scheduler_metadata=job_record.scheduler_metadata or {},
+                advice=AdviceRecommendation(state=AdviceState.RELEASED, node_constraints=None),
             )
-    persisted_advice, _, _ = persist_advice_record(
-        storage,
-        audit_buffer,
-        http_to_storage_advice(advice),
-        audit_reason=_DAG_RELEASE_AUDIT_REASON,
-    )
-    logger.info(f"Persisted DAG release advice for job {job_record.job_id} attempt {job_record.job_attempt_index}.")
-    return storage_to_http_advice(persisted_advice)
+
+        advice.scheduler_metadata = ensure_slurm_scheduler_metadata(advice.scheduler_metadata)
+        advice.scheduler_metadata, _ = _resolve_advice_scheduler_identity(
+            storage,
+            advice.job_id,
+            advice.restart_count,
+            advice.scheduler_metadata,
+        )
+        if on_advice_ready is not None:
+            try:
+                recovery_context = on_advice_ready(advice)
+                advice.recovery_context = recovery_context if isinstance(recovery_context, RecoveryContext) else None
+            except Exception as error:
+                logger.exception(
+                    "Failed to attach recovery context to DAG Advice %s; persisting without correlation",
+                    advice.id,
+                    extra={"advice_id": advice.id, "error": str(error)},
+                )
+        persisted_advice, _, _ = persist_advice_record(
+            storage,
+            audit_buffer,
+            http_to_storage_advice(advice),
+            audit_reason=_DAG_RELEASE_AUDIT_REASON,
+        )
+        logger.info(f"Persisted DAG release advice for job {job_record.job_id} attempt {job_record.job_attempt_index}.")
+        return storage_to_http_advice(persisted_advice)
 
 
 def read_all_dag_dependencies(

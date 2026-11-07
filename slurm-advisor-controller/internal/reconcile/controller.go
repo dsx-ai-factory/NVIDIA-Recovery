@@ -11,9 +11,12 @@ import (
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/heimdall"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/slurm"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/state"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"strings"
 )
 
 type ControllerOptions struct {
@@ -68,6 +71,8 @@ type Controller struct {
 	// discovery set plus fresh Slurm and Advice reads instead of reloading every
 	// persisted job.
 	heimdallJobsBootstrapped bool
+	// accountingIdentities retains timestamps only, never cached scheduler state.
+	accountingIdentities map[cluster.JobAttemptRef]cluster.JobExecutionRecord
 
 	// processedFailedJobRecoveries suppresses duplicate decisions for the exact
 	// same Slurm attempt while this controller process is alive. Passive planning
@@ -399,6 +404,28 @@ func (c *Controller) buildBaseSnapshot(ctx context.Context, observation *SyncObs
 		return snapshot, errors.Join(errs...)
 	}
 
+	for _, job := range activeJobs {
+		if err := slurm.ValidateRecordIdentity(job); err != nil {
+			return snapshot, errors.Wrap(err, "invalid active Slurm identity")
+		}
+	}
+	for _, job := range heimdallJobs {
+		if job.GetSchedulerMetadata().GetFields()["scheduler"].GetStringValue() == cluster.SchedulerSlurm {
+			if strings.Contains(job.GetJobId(), "_") && job.GetHeimdallJobId() != "" && job.GetHeimdallJobId() != jobidentity.HeimdallJobID(job.GetJobId(), job.GetAttemptIndex()) {
+				return snapshot, errors.New("bootstrapped UUID does not identify its Slurm task attempt")
+			}
+			if err := slurm.ValidateMetadataIdentity(job.GetJobId(), job.GetSchedulerMetadata().AsMap()); err != nil {
+				return snapshot, errors.Wrap(err, "invalid bootstrapped Slurm identity")
+			}
+		}
+	}
+	for _, item := range advice {
+		if _, skip := c.ownershipSkip(item); !skip {
+			if err := validateAdviceIdentity(item); err != nil {
+				return snapshot, err
+			}
+		}
+	}
 	// Admission must be complete before filtering because a newer rejected
 	// attempt blocks older attempts regardless of squeue response order.
 	for _, job := range activeJobs {
@@ -411,6 +438,7 @@ func (c *Controller) buildBaseSnapshot(ctx context.Context, observation *SyncObs
 			admittedActiveJobs = append(admittedActiveJobs, job)
 		}
 	}
+	c.seedAccountingIdentities(admittedActiveJobs, heimdallJobs, advice, seenJobs)
 	if c.ActiveJobEnricher != nil {
 		sourceStartedAt := time.Now()
 		admittedActiveJobs = c.ActiveJobEnricher.EnrichActiveJobs(ctx, admittedActiveJobs)

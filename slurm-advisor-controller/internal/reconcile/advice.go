@@ -6,11 +6,14 @@ package reconcile
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/slurm"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -111,6 +114,9 @@ func (c *Controller) reconcileAdviceItem(ctx context.Context, snapshot Controlle
 		if reason, ok := c.ownershipSkip(advice); ok {
 			return skippedAdviceResult(advice, reason)
 		}
+		if err := validateAdviceIdentity(advice); err != nil {
+			return AdviceSyncResult{}, err
+		}
 		if adviceIsStale(advice, snapshot.ObservedAt, c.Options.AdviceMaxAge) {
 			return terminalAdviceResult(advice, AdviceSkipStaleAdvice,
 				pb.AdviceReconciliationDisposition_ADVICE_RECONCILIATION_DISPOSITION_ABANDONED,
@@ -141,6 +147,18 @@ func (c *Controller) reconcileAdviceItem(ctx context.Context, snapshot Controlle
 }
 
 func (c *Controller) applyAdviceForJob(ctx context.Context, advice *pb.Advice, job cluster.JobExecutionRecord, mode cluster.JobMode, observation *SyncObservation, auditObservation *AdviceApplicationObservation) (result AdviceSyncResult, err error) {
+	if err := validateAdviceIdentity(advice); err != nil {
+		return result, err
+	}
+	if err := slurm.ValidateRecordIdentity(job); err != nil {
+		return result, err
+	}
+	if advice.GetJobId() != job.JobID {
+		return result, errors.New("Advice and observed job identities disagree")
+	}
+	if raw := advice.GetSchedulerMetadata().GetFields()["slurm_raw_job_id"].GetStringValue(); strings.Contains(job.JobID, "_") && raw != "" && job.RawJobID != "" && raw != job.RawJobID {
+		return result, errors.New("Advice and observed raw task identities disagree")
+	}
 	auditObservation.recoverySpan.SetMode(mode)
 
 	desiredState := advice.GetAdvice().GetState()
@@ -590,4 +608,14 @@ func overlapStrings(left, right []string) []string {
 	}
 
 	return overlap
+}
+
+func validateAdviceIdentity(advice *pb.Advice) error {
+	if err := slurm.ValidateMetadataIdentity(advice.GetJobId(), advice.GetSchedulerMetadata().AsMap()); err != nil {
+		return errors.Wrap(err, "invalid Advice identity")
+	}
+	if strings.Contains(advice.GetJobId(), "_") && (advice.GetAttemptIndex() < 0 || advice.GetHeimdallJobId() != jobidentity.HeimdallJobID(advice.GetJobId(), advice.GetAttemptIndex())) {
+		return errors.New("Advice UUID does not identify its Slurm task attempt")
+	}
+	return nil
 }

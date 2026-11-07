@@ -75,12 +75,28 @@ row lock before updating a record or comparing Advice desired state, keeping
 the persistence mechanism scheduler-neutral. Recovery and checkpoint behavior
 remain follow-up slices; this slice does not qualify array recovery for rollout.
 
-Job and Advice identity checks use preflight reads and separate record locks.
-They reject conflicts with an already observed counterpart, but concurrent
-first registration of both records can still establish different raw Slurm IDs
-for the same canonical task attempt. Resolve this cross-record admission race
-and qualify recovery-side-effect ordering in the Task recovery slice before
-enabling array actions; the current locking guarantee is per record.
+### Task Recovery Implementation
+
+Job Manager serializes identity admission across Job and Advice with a generic,
+database-scoped exact-attempt MySQL advisory lock. Storage pins one connection
+for the scope, permits same-attempt reentrancy, and rejects nested scopes for
+different attempts. A ten-second acquisition timeout or a failed identity read
+fails admission before recovery side effects. All Job Manager replicas must
+run this implementation before task actions are enabled; older writers do not
+participate in the lock.
+
+SAC reconciles task accounting using explicit restart counts when available or
+matching submission/start timestamps from observed task attempts. It omits
+unresolved array history with diagnostics instead of assigning an ordinal that
+could reset the retry allowance. Bootstrap observations supply identity anchors,
+but fresh scheduler state remains necessary for actions. Advice and bootstrap
+identity checks reject inconsistent task selectors and attempt UUIDs. Task-level
+selectors, retry budgets, and independent watchdog timers have focused coverage.
+
+Checkpoint association and production end-to-end qualification remain required
+before claiming supported array recovery. The Docker Slurm harness currently
+cannot build in this environment because GitHub's certificate issuer is not
+trusted by its base image; TLS verification remains enabled.
 
 ## Behavioral Acceptance
 

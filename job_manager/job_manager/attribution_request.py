@@ -23,6 +23,7 @@ from opentelemetry.context import Context
 from recovery_libs.event_bus.event_bus_utils import RabbitMQPublisher
 from recovery_libs.schema.event_type import EventType
 from recovery_libs.schema.job_updates_attribution_request.attribution_request import AttributionRequest
+from recovery_libs.storage.base import RecoveryStorageAdmissionError
 from recovery_libs.storage.dataclass import SlurmJobExecutionRecord
 from recovery_libs.tracing.recovery import recovery_headers
 from recovery_libs.tracing.traces import inject_trace_context, populate_headers_with_span_context
@@ -78,12 +79,6 @@ def emit_attribution_request_if_needed(
             "no ADI-processable anomaly."
         )
         return False
-    if not storage.claim_attribution_request_emission(record.job_id, record.job_attempt_index):
-        ATTRIBUTION_REQUEST_SKIPPED_COUNTER.labels(reason="already_claimed").inc()
-        logger.info(
-            f"AttributionRequest skipped for job {record.job_id} attempt {record.job_attempt_index}: emission already claimed."
-        )
-        return False
 
     # Attribution scope-end timestamp: the attempt's end time, or now() for a
     # still-running (hang/straggler) anomaly. ADI consumes it as the anomaly's
@@ -99,9 +94,11 @@ def emit_attribution_request_if_needed(
     if recovery_context_provider is not None:
         try:
             recovery_context = recovery_context_provider()
+        except RecoveryStorageAdmissionError:
+            raise
         except Exception as error:
             # Recovery context is observability data. Failure to obtain it must
-            # not suppress an attribution request that already won its claim.
+            # not suppress an eligible attribution request while admission remains valid.
             logger.exception(
                 f"Failed to obtain recovery context for AttributionRequest for job "
                 f"{record.job_id} attempt {record.job_attempt_index}",
@@ -113,6 +110,15 @@ def emit_attribution_request_if_needed(
         else populate_headers_with_span_context(trace.get_current_span())
     )
     headers.update(recovery_headers(recovery_context))
+    # Resolve admission-dependent correlation before consuming the durable claim.
+    # A lost scope can then retry without losing its only publication opportunity.
+    if not storage.claim_attribution_request_emission(record.job_id, record.job_attempt_index):
+        ATTRIBUTION_REQUEST_SKIPPED_COUNTER.labels(reason="already_claimed").inc()
+        logger.info(
+            f"AttributionRequest skipped for job {record.job_id} attempt {record.job_attempt_index}: emission already claimed."
+        )
+        return False
+
     try:
         publisher.publish_message(
             message=event.model_dump_json(),

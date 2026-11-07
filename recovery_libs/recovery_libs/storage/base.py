@@ -24,6 +24,10 @@ class RecoveryStorageException(Exception):
     """
 
 
+class RecoveryStorageAdmissionError(RecoveryStorageException):
+    """An admission scope lost ownership and must stop all dependent effects."""
+
+
 class RecoveryStorageInputValidationError(Exception):
     """
     Custom exception class when storage error happened due to invalid input.

@@ -47,6 +47,7 @@ func queryLegacyLogPaths(
 	jobID string,
 	candidates []logRefreshCandidate,
 	runner logMetadataCommandRunner,
+	resolvers ...sacctAttemptResolver,
 ) (map[cluster.JobAttemptRef]sacctAttemptLogPaths, error) {
 	output, err := runner(ctx, "env", "SLURM_TIME_FORMAT=%s",
 		"sacct", "--noheader", "--parsable2", "--duplicates", "--array", "-j", jobID,
@@ -54,7 +55,7 @@ func queryLegacyLogPaths(
 	if err != nil {
 		return nil, errors.Wrap(err, "query legacy sacct log metadata")
 	}
-	return logPathsFromLegacySacct(output.stdout, candidates)
+	return logPathsFromLegacySacct(output.stdout, candidates, resolvers...)
 }
 
 // logPathsFromLegacySacct validates the entire response's allocation identities
@@ -64,6 +65,7 @@ func queryLegacyLogPaths(
 func logPathsFromLegacySacct(
 	data []byte,
 	candidates []logRefreshCandidate,
+	resolvers ...sacctAttemptResolver,
 ) (map[cluster.JobAttemptRef]sacctAttemptLogPaths, error) {
 	rows, err := parseLegacySacctRows(data)
 	if err != nil {
@@ -122,8 +124,13 @@ func logPathsFromLegacySacct(
 	}
 	var outputErrors []error
 	for jobID, jobs := range grouped {
-		for attemptIndex, attempt := range groupSacctAttempts(jobs) {
-			ref := cluster.JobAttemptRef{JobID: jobID, AttemptIndex: int32(attemptIndex)}
+		attempts, err := resolveSacctAttempts(jobs, resolvers, nil)
+		if err != nil {
+			outputErrors = append(outputErrors, err)
+		}
+		for _, resolved := range attempts {
+			attempt := resolved.rows
+			ref := cluster.JobAttemptRef{JobID: jobID, AttemptIndex: resolved.index}
 			candidate, wanted := requested[ref]
 			if !wanted {
 				continue

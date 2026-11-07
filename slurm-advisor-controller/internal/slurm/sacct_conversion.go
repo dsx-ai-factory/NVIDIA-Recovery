@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"strconv"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
@@ -20,8 +21,9 @@ type SacctJob struct {
 	// databaseIndex joins legacy text steps to allocations while reusing the
 	// JSON attempt grouping algorithm. JSON discovery does not need this field.
 	databaseIndex   uint64
-	AllocationNodes int `json:"allocation_nodes"`
-	JobID           int `json:"job_id"`
+	AllocationNodes int    `json:"allocation_nodes"`
+	JobID           int    `json:"job_id"`
+	RestartCount    *int64 `json:"restart_cnt"`
 	Array           struct {
 		JobID  identityNumber `json:"job_id"`
 		TaskID identityNumber `json:"task_id"`
@@ -126,12 +128,23 @@ func (e *sacctDecodeError) Error() string { return e.err.Error() }
 
 func (e *sacctDecodeError) Unwrap() error { return e.err }
 
-func observedJobsFromSacct(data []byte) ([]cluster.JobExecutionRecord, error) {
+func observedJobsFromSacct(data []byte, resolvers ...sacctAttemptResolver) ([]cluster.JobExecutionRecord, error) {
+	return requestedJobsFromSacct(data, nil, resolvers...)
+}
+
+// requestedJobsFromSacct separates required observations from extra history
+// returned by --duplicates. Only confirmed requested attempts can make an
+// unanchored older allocation irrelevant to this scheduler decision.
+func requestedJobsFromSacct(data []byte, requested []cluster.JobAttemptRef, resolvers ...sacctAttemptResolver) ([]cluster.JobExecutionRecord, error) {
 	parsed, err := parseSacctOutput(data)
 	if err != nil {
 		return nil, err
 	}
 
+	requestedIDs := make(map[string]struct{})
+	for _, ref := range requested {
+		requestedIDs[ref.JobID] = struct{}{}
+	}
 	grouped := map[string][]SacctJob{}
 	groupOrder := []string{}
 	for _, job := range parsed.Jobs {
@@ -142,6 +155,11 @@ func observedJobsFromSacct(data []byte) ([]cluster.JobExecutionRecord, error) {
 		if !include {
 			continue
 		}
+		if len(requestedIDs) > 0 {
+			if _, wanted := requestedIDs[jobID]; !wanted {
+				continue
+			}
+		}
 		if _, ok := grouped[jobID]; !ok {
 			groupOrder = append(groupOrder, jobID)
 		}
@@ -149,17 +167,36 @@ func observedJobsFromSacct(data []byte) ([]cluster.JobExecutionRecord, error) {
 	}
 
 	jobs := make([]cluster.JobExecutionRecord, 0, len(parsed.Jobs))
+	var errs []error
 	for _, jobID := range groupOrder {
-		for attemptIndex, attempt := range groupSacctAttempts(grouped[jobID]) {
-			job, err := observedJobFromSacct(attempt[0], int32(attemptIndex))
+		wanted := make(map[int32]struct{})
+		for _, ref := range requested {
+			if ref.JobID == jobID {
+				wanted[ref.AttemptIndex] = struct{}{}
+			}
+		}
+		attempts, err := resolveSacctAttempts(grouped[jobID], resolvers, wanted)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		for _, attempt := range attempts {
+			job, err := observedJobFromSacct(attempt.rows[0], attempt.index)
 			if err != nil {
 				return nil, err
 			}
 			jobs = append(jobs, job)
 		}
 	}
-
-	return jobs, nil
+	found := make(map[cluster.JobAttemptRef]struct{}, len(jobs))
+	for _, job := range jobs {
+		found[jobAttemptRef(job)] = struct{}{}
+	}
+	for _, ref := range requested {
+		if _, ok := found[ref]; !ok && strings.Contains(ref.JobID, "_") {
+			errs = append(errs, errors.Newf("cannot confirm requested Slurm task %s attempt %d from accounting", ref.JobID, ref.AttemptIndex))
+		}
+	}
+	return jobs, errors.Join(errs...)
 }
 
 func observedJobFromSacct(jobData SacctJob, attemptIndex int32) (cluster.JobExecutionRecord, error) {
