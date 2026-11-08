@@ -42,7 +42,10 @@ func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPa
 		return nil, err
 	}
 
-	grouped := sacctJobsByIdentity(parsed.Jobs)
+	grouped, err := sacctJobsByIdentity(parsed.Jobs)
+	if err != nil {
+		return nil, err
+	}
 	discovered := make(map[cluster.JobAttemptRef]sacctAttemptLogPaths)
 
 	for jobID, jobs := range grouped {
@@ -90,15 +93,18 @@ func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPa
 
 // sacctJobsByIdentity preserves accounting row order within each canonical job
 // ID, which groupSacctAttempts uses to assign attempt indices.
-func sacctJobsByIdentity(jobs []SacctJob) map[string][]SacctJob {
+func sacctJobsByIdentity(jobs []SacctJob) (map[string][]SacctJob, error) {
 	grouped := make(map[string][]SacctJob)
 	for _, job := range jobs {
-		jobID, _, _, include := jobIdentityFromSacct(job)
+		jobID, _, _, include, err := jobIdentityFromSacct(job)
+		if err != nil {
+			return nil, errors.Wrapf(err, "sacct job %d identity", job.JobID)
+		}
 		if include {
 			grouped[jobID] = append(grouped[jobID], job)
 		}
 	}
-	return grouped
+	return grouped, nil
 }
 
 // UnmarshalJSON accepts both compound and structured Slurm step IDs.
