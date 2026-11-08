@@ -111,6 +111,7 @@ from job_manager.dag_utils import (
     register_dag_dependencies,
 )
 from job_manager.job_mapping import storage_to_http_job_status
+from job_manager.job_scheduler_identity import preserve_job_scheduler_identity
 from job_manager.logger import logger
 from job_manager.metrics import (
     ANOMALY_ATTRIBUTION_MESSAGE_RECEIVED_COUNTER,
@@ -1034,6 +1035,25 @@ class JobManager:
                 json_dict = json.loads(body.decode())
 
                 record = SlurmJobExecutionRecord.from_json(json_dict)
+                observed_metadata = record.scheduler_metadata
+                known_identity_record = self.storage.read_job_record(record.job_id, record.job_attempt_index)
+                known_identity_advice = self.storage.read_advice_by_job(record.job_id, record.job_attempt_index)
+                # Validate before terminal events, notifications, or persistence.
+                record.scheduler_metadata = preserve_job_scheduler_identity(
+                    record.job_id,
+                    record.scheduler_metadata
+                    or (
+                        known_identity_record.scheduler_metadata
+                        if isinstance(known_identity_record, SlurmJobExecutionRecord)
+                        else record.scheduler_metadata
+                    ),
+                    known_identity_record.scheduler_metadata
+                    if isinstance(known_identity_record, SlurmJobExecutionRecord)
+                    else None,
+                    known_identity_advice.scheduler_metadata
+                    if isinstance(known_identity_advice, AdviceRecord)
+                    else None,
+                )
                 logger.debug(f"Persisting a job update message to storage, raw message: {json_dict}")
                 latest_job_attempt_index = self.storage.get_job_latest_attempt_index(record.job_id)
                 logger.debug(f"Latest job attempt index for job '{record.job_id}' is: {latest_job_attempt_index}")
@@ -1112,7 +1132,7 @@ class JobManager:
                         if record.state == SlurmJobFinalStates.COMPLETED.value:
                             self._evaluate_dag_dependencies_for_completed_job(record)
                 else:
-                    known_record = self.storage.read_job_record(record.job_id, record.job_attempt_index)
+                    known_record = known_identity_record
                     if known_record is None:
                         logger.warning(
                             f"Job record not found for job {record.job_id}, attempt {record.job_attempt_index} "
@@ -1235,6 +1255,12 @@ class JobManager:
                     # Trace persistence for either state-based event. END and
                     # CRASH are mutually exclusive for a single transition.
                     persisted_anomaly_event = job_end_event or job_crash_event
+                    updates = asdict(record)
+                    if not observed_metadata:
+                        # Queue omission historically leaves the whole stored map
+                        # alone. Enriched identity is for downstream work, not a
+                        # replacement based on an unlocked snapshot.
+                        updates["scheduler_metadata"] = observed_metadata
                     if persisted_anomaly_event:
                         with tracer.start_as_current_span(
                             name=f"job_anomaly.{JobAnomalySpanName.PERSISTENCE}",
@@ -1246,10 +1272,10 @@ class JobManager:
                                 "job_anomaly.uuid": persisted_anomaly_event.attributes.uuid,  # type: ignore[union-attr]
                             },
                         ) as persistence_span:
-                            self.update_job_record(**asdict(record))
+                            self.update_job_record(**updates)
                             persistence_span.set_status(StatusCode.OK)
                     else:
-                        self.update_job_record(**asdict(record))
+                        self.update_job_record(**updates)
 
                     if not record.anomalies:
                         record.anomalies = known_record.anomalies

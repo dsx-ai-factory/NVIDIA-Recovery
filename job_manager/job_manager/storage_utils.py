@@ -5,6 +5,7 @@
 import uuid
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from functools import partial
 from typing import Any
 
 from opentelemetry import trace
@@ -61,6 +62,7 @@ from job_manager.audit.job_changes import (
     audit_job_upsert,
 )
 from job_manager.job_mapping import storage_to_http_job_status
+from job_manager.job_scheduler_identity import preserve_job_scheduler_identity
 from job_manager.logger import logger
 from job_manager.recovery import RecoveryService
 
@@ -70,6 +72,33 @@ NON_FINAL_JOB_STATES = {s.value for s in SlurmJobNonFinalStates}
 _DAG_READ_PAGE_SIZE = 50
 _DAG_RELEASE_AUDIT_REASON = "DAG_DEPENDENCIES_SATISFIED"
 _TRACER = trace.get_tracer(__name__)
+
+
+def _resolve_advice_scheduler_identity(
+    storage: MySQLStorage,
+    job_id: str,
+    attempt_index: int,
+    metadata: dict | None,
+) -> tuple[dict | None, SlurmJobExecutionRecord | None]:
+    """Preflight identity before callbacks; storage rechecks its own row under lock."""
+    known_advice = storage.read_advice_by_job(job_id=job_id, attempt_index=attempt_index)
+    advice_metadata = known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None
+    try:
+        known_job = storage.read_job_record(job_id=job_id, job_attempt_index=attempt_index)
+    except Exception:
+        # Preserve legacy availability for identity-free/non-Slurm Advice when
+        # its optional correlation Job read fails. Known Slurm identity fails
+        # closed; the Advice row is always checked again under the write lock.
+        if any((values or {}).get("scheduler") == "slurm" for values in (metadata, advice_metadata)):
+            raise
+        known_job = None
+    job = known_job if isinstance(known_job, SlurmJobExecutionRecord) else None
+    return preserve_job_scheduler_identity(
+        job_id,
+        metadata,
+        job.scheduler_metadata if job is not None else None,
+        advice_metadata,
+    ), job
 
 
 def persist_advice_record(
@@ -94,6 +123,13 @@ def persist_advice_record(
     Returns:
         The persisted record, whether it was created, and its prior value.
     """
+    # Resolve identity before a recovery sequence or audit event can be created.
+    advice_record.scheduler_metadata, known_job = _resolve_advice_scheduler_identity(
+        storage,
+        advice_record.job_id,
+        advice_record.attempt_index,
+        advice_record.scheduler_metadata,
+    )
     # All audited upserts share this fallback, including DAG descendant
     # termination. Correlation failure must never prevent committing Advice.
     operation_by_state: dict[str | None, RecoveryOperation] = {
@@ -112,8 +148,8 @@ def persist_advice_record(
         advice_record.recovery_triggered_at = None
     if advice_record.recovery_sequence_id is None and operation is not None:
         try:
-            job = storage.read_job_record(job_id=advice_record.job_id, job_attempt_index=advice_record.attempt_index)
-            if isinstance(job, SlurmJobExecutionRecord):
+            job = known_job
+            if job is not None:
                 dependency_decision = (
                     operation == RecoveryOperation.DAG_RELEASE or audit_reason == "DAG_PARENT_TERMINATED"
                 )
@@ -163,7 +199,11 @@ def persist_advice_record(
         attributes=attributes,
     ) as span:
         try:
-            result = storage.upsert_advice(advice_record, issue_merge=issue_merge)
+            result = storage.upsert_advice(
+                advice_record,
+                issue_merge=issue_merge,
+                scheduler_metadata_merge=partial(preserve_job_scheduler_identity, advice_record.job_id),
+            )
             audit_advice_upsert(
                 result,
                 audit_buffer,
@@ -188,9 +228,16 @@ def persist_job_record(
     populate_heimdall_id_log_path: bool = False,
 ) -> UpsertJobResult:
     """Persist a Job attempt and audit its committed approved projection."""
+    known_advice = storage.read_advice_by_job(job_record.job_id, job_record.job_attempt_index)
     result = storage.upsert_job_record(
         job_record,
         populate_heimdall_id_log_path=populate_heimdall_id_log_path,
+        scheduler_metadata_merge=lambda incoming, known: preserve_job_scheduler_identity(
+            job_record.job_id,
+            incoming,
+            known,
+            known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
+        ),
     )
     audit_job_upsert(result, audit_buffer)
     return result
@@ -204,6 +251,8 @@ def update_job_record(
     **updates: Any,
 ) -> bool:
     """Apply a partial Job update and audit its committed transition."""
+    if "scheduler_metadata" in updates:
+        updates["scheduler_metadata_merge"] = partial(preserve_job_scheduler_identity, job_id)
     result = storage.update_job_record(
         job_id=job_id,
         job_attempt_index=job_attempt_index,
@@ -718,6 +767,12 @@ def create_terminal_advice_for_job(
             f"Persisting terminal advice for job {advice_payload.job_id} attempt {advice_payload.restart_count}: "
             f"advice={terminal_advice}, exclusion_nodes={sorted(exclusion_nodes)}"
         )
+        advice_payload.scheduler_metadata, _ = _resolve_advice_scheduler_identity(
+            storage,
+            advice_payload.job_id,
+            advice_payload.restart_count,
+            advice_payload.scheduler_metadata,
+        )
         if on_advice_ready is not None:
             try:
                 recovery_context = on_advice_ready(advice_payload)
@@ -937,6 +992,12 @@ def persist_dag_release_advice(
         )
 
     advice.scheduler_metadata = ensure_slurm_scheduler_metadata(advice.scheduler_metadata)
+    advice.scheduler_metadata, _ = _resolve_advice_scheduler_identity(
+        storage,
+        advice.job_id,
+        advice.restart_count,
+        advice.scheduler_metadata,
+    )
     if on_advice_ready is not None:
         try:
             recovery_context = on_advice_ready(advice)
