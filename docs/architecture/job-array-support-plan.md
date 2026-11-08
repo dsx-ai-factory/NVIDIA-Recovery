@@ -66,9 +66,21 @@ task zero, skips synthetic pending rows, and rejects malformed task identity.
 Existing publication and gateway mappings preserve the canonical ID and
 scheduler metadata without new contract fields.
 
-Backend identity preservation and conflict validation follow in PR 2b. Recovery,
-checkpoint association, and end-to-end qualification remain later slices;
-parsing alone does not qualify array recovery for rollout.
+### Backend Identity Preservation Implementation (PR 2b)
+
+Job Manager validates Slurm identity at its compatibility boundary. Partial Job
+and Advice updates retain established identity keys; conflicting updates are
+rejected. Storage applies the caller-provided metadata policy under its existing
+row lock before updating a record or comparing Advice desired state, keeping
+the persistence mechanism scheduler-neutral. Recovery and checkpoint behavior
+remain follow-up slices; this slice does not qualify array recovery for rollout.
+
+Job and Advice identity checks use preflight reads and separate record locks.
+They reject conflicts with an already observed counterpart, but concurrent
+first registration of both records can still establish different raw Slurm IDs
+for the same canonical task attempt. Resolve this cross-record admission race
+and qualify recovery-side-effect ordering in the Task recovery slice before
+enabling array actions; the current locking guarantee is per record.
 
 ## Behavioral Acceptance
 

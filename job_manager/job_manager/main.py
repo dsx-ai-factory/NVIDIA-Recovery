@@ -59,7 +59,13 @@ from recovery_libs.storage.base import (
     RecoveryStorageException,
     RecoveryStorageInputValidationError,
 )
-from recovery_libs.storage.dataclass import SlurmJobFinalStates, SlurmJobNonFinalStates
+from recovery_libs.storage.dataclass import (
+    AdviceRecord,
+    SlurmJobExecutionRecord,
+    SlurmJobFinalStates,
+    SlurmJobNonFinalStates,
+)
+from recovery_libs.storage.scheduler_metadata import SchedulerMetadataConflictError
 from recovery_libs.tracing.traces import set_up_trace_provider
 from recovery_libs.utils.nodeset import operations, parser, topology
 from recovery_libs.utils.nodeset.operations import EvaluationError
@@ -85,6 +91,7 @@ from job_manager.job_log_file_paths import (
     project_job_log_file_paths,
 )
 from job_manager.job_mapping import http_to_storage_job_status, storage_to_http_job_status
+from job_manager.job_scheduler_identity import preserve_job_scheduler_identity
 from job_manager.job_scheduler_metadata import (
     INVALID_SLURM_JOB_METADATA_DETAIL,
     SlurmJobMetadataValidationError,
@@ -410,6 +417,22 @@ def post_jobs(
     logger.info(f"Upserting job: job_id={job.job_id}, attempt_index={job.job_attempt_index}")
 
     try:
+        known_identity_record = job_manager.storage.read_job_record(  # type: ignore[union-attr]
+            job_id=job.job_id,
+            job_attempt_index=job.job_attempt_index,
+        )
+        known_identity_advice = job_manager.storage.read_advice_by_job(  # type: ignore[union-attr]
+            job_id=job.job_id,
+            attempt_index=job.job_attempt_index,
+        )
+        job.scheduler_metadata = preserve_job_scheduler_identity(
+            job.job_id,
+            job.scheduler_metadata,
+            known_identity_record.scheduler_metadata
+            if isinstance(known_identity_record, SlurmJobExecutionRecord)
+            else None,
+            known_identity_advice.scheduler_metadata if isinstance(known_identity_advice, AdviceRecord) else None,
+        )
         (
             job.cluster,
             job.partition,
@@ -481,12 +504,7 @@ def post_jobs(
         # negative-control and scheduler-timeout e2e contracts). The controller
         # drives the requeue for a failed job from its own reconcile loop.
         effective_final_state = resolve_effective_final_state(job_record)
-        known_record = None
-        if effective_final_state is not None:
-            known_record = job_manager.storage.read_job_record(  # type: ignore[union-attr]
-                job_id=job_record.job_id,
-                job_attempt_index=job_record.job_attempt_index,
-            )
+        known_record = known_identity_record if effective_final_state is not None else None
         known_effective_final_state = resolve_effective_final_state(known_record) if known_record is not None else None
 
         anomaly_record = known_record or job_record
@@ -589,6 +607,8 @@ def post_jobs(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=INVALID_SLURM_JOB_METADATA_DETAIL,
         ) from error
+    except SchedulerMetadataConflictError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     except RecoveryStorageInputValidationError as ve:
         logger.exception("Validation error upserting job", extra={"error": str(ve)})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve)) from ve
@@ -882,32 +902,41 @@ def post_advice(
     except RecoveryStorageException:
         pass  # If job record lookup fails, proceed with caller-supplied ID
 
-    if job_record:
-        if job_record.heimdall_job_id is None:
-            canonical_heimdall_job_id = generate_heimdall_job_id(advice.job_id, advice.restart_count)
-            job_manager.update_job_record(  # type: ignore[union-attr]
-                job_id=advice.job_id,
-                job_attempt_index=advice.restart_count,
-                heimdall_job_id=canonical_heimdall_job_id,
-            )
-            advice.id = str(canonical_heimdall_job_id)
-        elif advice.id != str(job_record.heimdall_job_id):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"Advice ID mismatch: caller sent {advice.id}, "
-                    f"but job record for {advice.job_id} attempt {advice.restart_count} "
-                    f"has canonical heimdall_job_id {job_record.heimdall_job_id}"
-                ),
-            )
-
     try:
-        # Backend storage alone chooses canonical recovery identity. Never
-        # parent Advice work from caller-supplied correlation, even on a lookup miss.
-        advice.recovery_context = None
-        # Backfill scheduler metadata from the job record when callers omit it.
+        known_advice = job_manager.storage.read_advice_by_job(  # type: ignore[union-attr]
+            job_id=advice.job_id,
+            attempt_index=advice.restart_count,
+        )
+        # Keep the historical complete backfill for omitted metadata, and retain
+        # immutable Slurm identity even when the caller supplies a partial map.
         if not advice.scheduler_metadata and job_record and job_record.scheduler_metadata:
-            advice.scheduler_metadata = job_record.scheduler_metadata
+            advice.scheduler_metadata = dict(job_record.scheduler_metadata)
+        advice.scheduler_metadata = preserve_job_scheduler_identity(
+            advice.job_id,
+            advice.scheduler_metadata,
+            job_record.scheduler_metadata if isinstance(job_record, SlurmJobExecutionRecord) else None,
+            known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
+        )
+        if job_record:
+            if job_record.heimdall_job_id is None:
+                canonical_heimdall_job_id = generate_heimdall_job_id(advice.job_id, advice.restart_count)
+                job_manager.update_job_record(  # type: ignore[union-attr]
+                    job_id=advice.job_id,
+                    job_attempt_index=advice.restart_count,
+                    heimdall_job_id=canonical_heimdall_job_id,
+                )
+                advice.id = str(canonical_heimdall_job_id)
+            elif advice.id != str(job_record.heimdall_job_id):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"Advice ID mismatch: caller sent {advice.id}, "
+                        f"but job record for {advice.job_id} attempt {advice.restart_count} "
+                        f"has canonical heimdall_job_id {job_record.heimdall_job_id}"
+                    ),
+                )
+        # Only backend storage chooses canonical recovery identity.
+        advice.recovery_context = None
 
         if job_record is not None:
             recovery_context = job_manager._begin_sequence_for_advice(  # type: ignore[union-attr]
@@ -926,6 +955,10 @@ def post_advice(
         logger.info(f"Successfully {action} advice: id={updated_record.heimdall_id}")
 
         return storage_to_http_advice(updated_record)
+    except HTTPException:
+        raise
+    except SchedulerMetadataConflictError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     except RecoveryStorageInputValidationError as ve:
         logger.exception("Validation error upserting advice", extra={"error": str(ve)})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve)) from ve

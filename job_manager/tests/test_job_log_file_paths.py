@@ -232,7 +232,6 @@ def test_post_jobs_projects_deduplicated_sorted_slurm_paths():
         assert upserted_record.log_file_paths == ["/logs/a.out", "/logs/z.out"]
         assert response.json()["log_file_paths"] == ["/logs/a.out", "/logs/z.out"]
         assert job_manager_mock.upsert_job_record.call_args.kwargs == {"populate_heimdall_id_log_path": False}
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_preserves_retry_paths_reused_from_previous_attempt():
@@ -316,7 +315,6 @@ def test_post_jobs_does_not_sanitize_non_slurm_retry_paths():
         assert response.status_code == 200
         upserted_record = job_manager_mock.upsert_job_record.call_args.args[0]
         assert upserted_record.log_file_paths == ["/logs/from-kubernetes-client.out"]
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_slurm_key_absence_passes_none_to_preserve_last_known_good():
@@ -337,7 +335,6 @@ def test_post_jobs_slurm_key_absence_passes_none_to_preserve_last_known_good():
         assert response.status_code == 200
         assert received_log_file_paths == [None]
         assert response.json()["log_file_paths"] == ["/logs/last-known-good.out"]
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_slurm_key_absence_preserves_explicit_direct_legacy_paths():
@@ -355,7 +352,6 @@ def test_post_jobs_slurm_key_absence_preserves_explicit_direct_legacy_paths():
         upserted_record = job_manager_mock.upsert_job_record.call_args.args[0]
         assert upserted_record.log_file_paths == ["/logs/from-legacy-client.out"]
         assert job_manager_mock.upsert_job_record.call_args.kwargs == {"populate_heimdall_id_log_path": False}
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_empty_slurm_metadata_projects_none_for_last_known_good_update():
@@ -379,7 +375,6 @@ def test_post_jobs_empty_slurm_metadata_projects_none_for_last_known_good_update
         assert response.status_code == 200
         assert received_log_file_paths == [None]
         assert response.json()["log_file_paths"] == ["/logs/last-known-good.out"]
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -405,7 +400,6 @@ def test_post_jobs_adds_heimdall_id_placeholder_for_non_slurm(scheduler_metadata
         upserted_record = job_manager_mock.upsert_job_record.call_args.args[0]
         assert upserted_record.log_file_paths == [str(heimdall_job_id)]
         assert job_manager_mock.upsert_job_record.call_args.kwargs == {"populate_heimdall_id_log_path": True}
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_omitted_id_create_generates_canonical_placeholder():
@@ -424,7 +418,6 @@ def test_post_jobs_omitted_id_create_generates_canonical_placeholder():
         assert response.json()["heimdall_job_id"] == str(canonical_heimdall_job_id)
         assert response.json()["log_file_paths"] == [str(canonical_heimdall_job_id)]
         assert job_manager_mock.upsert_job_record.call_args.kwargs == {"populate_heimdall_id_log_path": True}
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_omitted_id_update_uses_existing_id_placeholder():
@@ -450,7 +443,6 @@ def test_post_jobs_omitted_id_update_uses_existing_id_placeholder():
         assert upserted_record.log_file_paths == [str(existing_heimdall_job_id)]
         assert response.json()["heimdall_job_id"] == str(existing_heimdall_job_id)
         assert response.json()["log_file_paths"] == [str(existing_heimdall_job_id)]
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_omitted_paths_update_preserves_existing_nonempty_paths():
@@ -479,7 +471,6 @@ def test_post_jobs_omitted_paths_update_preserves_existing_nonempty_paths():
         assert upserted_record.heimdall_job_id == existing_heimdall_job_id
         assert upserted_record.log_file_paths == existing_log_file_paths
         assert response.json()["log_file_paths"] == existing_log_file_paths
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_omitted_id_update_fills_null_existing_id_with_canonical_placeholder():
@@ -510,7 +501,6 @@ def test_post_jobs_omitted_id_update_fills_null_existing_id_with_canonical_place
         assert upserted_record.log_file_paths == [str(canonical_heimdall_job_id)]
         assert response.json()["heimdall_job_id"] == str(canonical_heimdall_job_id)
         assert response.json()["log_file_paths"] == [str(canonical_heimdall_job_id)]
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_preserves_explicit_non_slurm_log_file_paths():
@@ -530,7 +520,6 @@ def test_post_jobs_preserves_explicit_non_slurm_log_file_paths():
         upserted_record = job_manager_mock.upsert_job_record.call_args.args[0]
         assert upserted_record.log_file_paths == ["/logs/from-legacy-client.out"]
         assert job_manager_mock.upsert_job_record.call_args.kwargs == {"populate_heimdall_id_log_path": False}
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 def test_post_jobs_preserves_explicit_empty_non_slurm_log_file_paths():
@@ -549,7 +538,6 @@ def test_post_jobs_preserves_explicit_empty_non_slurm_log_file_paths():
         upserted_record = job_manager_mock.upsert_job_record.call_args.args[0]
         assert upserted_record.log_file_paths == []
         assert job_manager_mock.upsert_job_record.call_args.kwargs == {"populate_heimdall_id_log_path": False}
-        job_manager_mock.storage.read_job_record.assert_not_called()
 
 
 @pytest.mark.parametrize(
