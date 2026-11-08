@@ -89,8 +89,8 @@ type SlurmMeta struct {
 }
 
 type SlurmJob struct {
-	ArrayJobID     numberField     `json:"array_job_id"`
-	ArrayTaskID    numberField     `json:"array_task_id"`
+	ArrayJobID     identityNumber  `json:"array_job_id"`
+	ArrayTaskID    identityNumber  `json:"array_task_id"`
 	Cluster        string          `json:"cluster"`
 	Command        string          `json:"command"`
 	Comment        string          `json:"comment"`
@@ -178,7 +178,10 @@ func observedJobsWithSourceFromSqueue(data []byte) ([]squeueObservation, error) 
 }
 
 func observedJobFromSqueue(jobData SlurmJob) (cluster.JobExecutionRecord, bool, error) {
-	jobID, arrayJobID, arrayTaskID, include := jobIdentityFromSqueue(jobData)
+	jobID, arrayJobID, arrayTaskID, include, err := jobIdentityFromSqueue(jobData)
+	if err != nil {
+		return cluster.JobExecutionRecord{}, false, errors.Wrapf(err, "squeue job %d identity", jobData.JobID)
+	}
 	if !include {
 		return cluster.JobExecutionRecord{}, false, nil
 	}
@@ -290,19 +293,8 @@ func observedJobFromSqueue(jobData SlurmJob) (cluster.JobExecutionRecord, bool, 
 	return job, true, nil
 }
 
-func jobIdentityFromSqueue(job SlurmJob) (jobID, arrayJobID, arrayTaskID string, include bool) {
-	rawJobID := strconv.Itoa(job.JobID)
-	if !job.ArrayJobID.Set || job.ArrayJobID.Number <= 0 {
-		return rawJobID, "", "", true
-	}
-
-	arrayJobID = strconv.Itoa(job.ArrayJobID.Number)
-	arrayTaskID = strconv.Itoa(job.ArrayTaskID.Number)
-	if !job.ArrayTaskID.Set {
-		return "", arrayJobID, arrayTaskID, false
-	}
-
-	return arrayJobID + "_" + arrayTaskID, arrayJobID, arrayTaskID, true
+func jobIdentityFromSqueue(job SlurmJob) (jobID, arrayJobID, arrayTaskID string, include bool, err error) {
+	return slurmJobIdentity(job.JobID, job.ArrayJobID, job.ArrayTaskID)
 }
 
 func parseTresReqStr(tresReqStr string) (map[string]float64, error) {
