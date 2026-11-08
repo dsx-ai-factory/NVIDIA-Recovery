@@ -10,7 +10,6 @@ import time as time_module
 import uuid
 from collections.abc import Callable
 from copy import copy
-from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
@@ -26,7 +25,6 @@ from opentelemetry.context import Context
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from recovery_libs.audit import AuditBuffer, NoOpAuditBuffer, ProducerEvent
-from recovery_libs.event_bus.event_bus_error import EventBusError
 from recovery_libs.event_bus.event_bus_utils import (
     RabbitMQConsumer,
     RabbitMQConsumerConfig,
@@ -37,7 +35,6 @@ from recovery_libs.event_bus.event_bus_utils import (
 from recovery_libs.notifications_client import (
     ApiClient,
     Configuration,
-    InvalidJobConfig,
     NotificationCreate,
     NotificationsApi,
     TemplateData,
@@ -101,7 +98,6 @@ from job_manager.constants import (
     DEFAULT_SYSTEM_MAX_REQUEUE_TIMES,
     INFINITE_SYSTEM_REQUEUE_LIMIT,
     WATCHER,
-    WORKFLOW_CONTROLLER,
 )
 from job_manager.dag_utils import (
     dependency_is_satisfied,
@@ -124,22 +120,18 @@ from job_manager.metrics import (
     EVENT_ATTEMPT_MATCH_BY_SLURM_JOB_ATTEMPT,
     EVENT_BUS_RETRYABLE_ERROR_COUNTER,
     EVENT_BUS_UNEXPECTED_ERROR_COUNTER,
-    JOB_UPDATE_MESSAGE_RECEIVED_COUNTER,
-    JOB_WITH_INVALID_CONFIG_COUNTER,
     LEADER_STATUS_GAUGE,
     STALE_RUNNING_JOBS_GAUGE,
     UNEXPECTED_EARLY_STOP_REQUEUE_JOBS_GAUGE,
 )
-from job_manager.notification_utils import build_recovery_notification, invalid_job_config_messages
+from job_manager.notification_utils import build_recovery_notification
 from job_manager.recovery import RecoveryService
 from job_manager.storage_utils import (
     create_advice_issue_from_event,
     maybe_persist_job_released_terminal_advice_from_attribution,
     maybe_persist_requeue_terminal_advice,
     persist_dag_release_advice,
-    populate_sticky_exclusion_node_list,
     read_all_dag_dependencies,
-    sanitize_log_file_paths_for_retry,
 )
 
 MESSAGE_MAX_DELIVERY_TIMES = 5
@@ -616,18 +608,6 @@ class JobManager:
             ),
         )
 
-        workflow_controller_consumer_config = RabbitMQConsumerConfig(
-            host=rabbitmq_settings.host,
-            username=rabbitmq_settings.username,
-            password=rabbitmq_settings.password.get_secret_value(),
-            vhost=rabbitmq_settings.vhost,
-            exchange_name=service_config["event_bus"]["workflow_controller_exchange"],
-            exchange_type=service_config["event_bus"].get("workflow_controller_exchange_type", "direct"),
-            queue_name=service_config["event_bus"]["job_queue"],
-            routing_keys=[service_config["event_bus"]["job_routing_key"]],
-            callback_func=self.get_job_update_message_callback(),
-        )
-
         anomaly_isolator_consumer_config = RabbitMQConsumerConfig(
             host=rabbitmq_settings.host,
             username=rabbitmq_settings.username,
@@ -642,12 +622,6 @@ class JobManager:
 
         self.event_bus_consumers[WATCHER] = RabbitMQConsumer(
             consumer_config=watcher_consumer_config,
-            thread_event=self.shutdown_event,
-            EVENT_BUS_RETRYABLE_ERROR_COUNTER=EVENT_BUS_RETRYABLE_ERROR_COUNTER,
-            EVENT_BUS_UNEXPECTED_ERROR_COUNTER=EVENT_BUS_UNEXPECTED_ERROR_COUNTER,
-        )
-        self.event_bus_consumers[WORKFLOW_CONTROLLER] = RabbitMQConsumer(
-            consumer_config=workflow_controller_consumer_config,
             thread_event=self.shutdown_event,
             EVENT_BUS_RETRYABLE_ERROR_COUNTER=EVENT_BUS_RETRYABLE_ERROR_COUNTER,
             EVENT_BUS_UNEXPECTED_ERROR_COUNTER=EVENT_BUS_UNEXPECTED_ERROR_COUNTER,
@@ -1009,263 +983,6 @@ class JobManager:
                     span.set_status(Status(StatusCode.ERROR, "Failed to persist anomaly attribution result."))
 
         return process_anomaly_isolator_message
-
-    def get_job_update_message_callback(
-        self,
-    ) -> Callable[
-        [
-            pika.adapters.blocking_connection.BlockingChannel,
-            pika.spec.Basic.Deliver,
-            pika.spec.BasicProperties,
-            bytes,
-        ],
-        None,
-    ]:
-        def process_job_updates(
-            channel: pika.channel,
-            method: pika.spec.Basic.Deliver,
-            properties: pika.spec.BasicProperties,
-            body: bytes,
-        ) -> None:
-            try:
-                JOB_UPDATE_MESSAGE_RECEIVED_COUNTER.inc(1)
-                # Per contract, the event_data should be the JSON serialization of the
-                # SlurmJobExecutionRecord so it can be deserialized directly.
-                json_dict = json.loads(body.decode())
-
-                record = SlurmJobExecutionRecord.from_json(json_dict)
-                logger.debug(f"Persisting a job update message to storage, raw message: {json_dict}")
-                latest_job_attempt_index = self.storage.get_job_latest_attempt_index(record.job_id)
-                logger.debug(f"Latest job attempt index for job '{record.job_id}' is: {latest_job_attempt_index}")
-                # job_attempt_index is marked as optional in the data class but it should always be set, this is to
-                # guard against the rare case when it's not available.
-                job_end_event: Event | None = None
-                job_crash_event: Event | None = None
-                if record.job_attempt_index is None:
-                    logger.error(
-                        f"Malformed job record data: job_attempt_index for job {record.job_name} "
-                        "must be provided, skipping save."
-                    )
-                    logger.error(f"Raw message: {json_dict}.")
-                elif record.job_attempt_index > latest_job_attempt_index:
-                    effective_final_state = resolve_effective_final_state(record)
-                    if effective_final_state is not None:
-                        logger.info(
-                            f"First time seeing job {record.job_id} reach terminal state "
-                            f"(effective final state: {effective_final_state}, raw state: {record.state}, "
-                            f"state_reason: {record.state_reason}). "
-                            f"Raw update message: {body.decode()}"
-                        )
-                        if self.should_send_crash_anomaly(record=record, state=effective_final_state):
-                            job_crash_event = self._generate_crash_event(record=record, base_anomalies=None)
-                        elif self.should_send_end_event(record=record, state=effective_final_state):
-                            job_end_event = self._generate_end_event(record=record, base_anomalies=None)
-
-                    # Note to future: Unless absolutely necessary, all job config validations should be done at the
-                    # producer side to simplify the logic here.
-                    if record.config_validation_failure_types:
-                        notification_segments = []
-                        for failure_type in record.config_validation_failure_types:
-                            JOB_WITH_INVALID_CONFIG_COUNTER.labels(failure_type=failure_type.name).inc(1)
-                            if failure_type in invalid_job_config_messages:
-                                notification_segments.append(
-                                    f"{failure_type.name}: {invalid_job_config_messages[failure_type]}"
-                                )
-                            else:
-                                logger.warning(
-                                    f"No explanation message defined for config validation failure type {failure_type.name}."
-                                )
-
-                        if notification_segments and self.notifications_client:
-                            self.send_notification(
-                                template_data=TemplateData(
-                                    InvalidJobConfig(
-                                        job_id=record.job_id,
-                                        job_attempt_index=record.job_attempt_index,
-                                        job_name=record.job_name,
-                                        reason="\n".join(notification_segments),
-                                        user=record.user,
-                                    )
-                                ),
-                                job_record=record,
-                            )
-
-                    record.last_state_transition_time = record.last_updated_at
-                    logger.info(
-                        f"Creating job record for job {record.job_id}, attempt {record.job_attempt_index}, "
-                        f"raw payload: {json_dict}"
-                    )
-                    sanitize_log_file_paths_for_retry(record, self.storage)
-                    self.storage.create_job_record(job_record=record)
-                    self.reconcile_anomaly_advice(record)
-                    self._maybe_emit_attribution_request(record)
-
-                    if self._is_dag_support_enabled():
-                        # Register DAG dependencies if the job has them
-                        if record.aps_spec and record.aps_spec.dag_dependencies:
-                            self._register_dag_dependencies(record)
-
-                        if record.state != SlurmJobFinalStates.COMPLETED.value:
-                            self.refresh_dag_dependency_observability_for_observed_job(record)
-
-                        # Evaluate DAG dependencies if the job completed (new attempt already in final COMPLETED state)
-                        if record.state == SlurmJobFinalStates.COMPLETED.value:
-                            self._evaluate_dag_dependencies_for_completed_job(record)
-                else:
-                    known_record = self.storage.read_job_record(record.job_id, record.job_attempt_index)
-                    if known_record is None:
-                        logger.warning(
-                            f"Job record not found for job {record.job_id}, attempt {record.job_attempt_index} "
-                            f"despite latest attempt index being {latest_job_attempt_index}. "
-                            f"Creating as new record. Raw message: {json_dict}"
-                        )
-                        record.last_state_transition_time = record.last_updated_at
-                        sanitize_log_file_paths_for_retry(record, self.storage)
-                        self.storage.create_job_record(job_record=record)
-
-                        if self._is_dag_support_enabled():
-                            # Register DAG dependencies if the job has them
-                            # TODO: Handle corner cases where dag action condition is already met or will never be met
-                            if record.aps_spec and record.aps_spec.dag_dependencies:
-                                self._register_dag_dependencies(record)
-
-                            self.refresh_dag_dependency_observability_for_observed_job(record)
-
-                        return
-                    effective_final_state = resolve_effective_final_state(record)
-                    known_effective_final_state = resolve_effective_final_state(known_record)
-                    if effective_final_state is not None and known_effective_final_state is None:
-                        logger.info(
-                            f"First time seeing job {record.job_id} reach terminal state "
-                            f"(effective final state: {effective_final_state}, raw state: {record.state}, "
-                            f"state_reason: {record.state_reason}). "
-                            f"Raw update message: {body.decode()}"
-                        )
-                        if self.should_send_crash_anomaly(record=known_record, state=effective_final_state):
-                            job_crash_event = self._generate_crash_event(
-                                record=record, base_anomalies=known_record.anomalies
-                            )
-                        elif self.should_send_end_event(record=known_record, state=effective_final_state):
-                            job_end_event = self._generate_end_event(
-                                record=record, base_anomalies=known_record.anomalies
-                            )
-
-                    # Downstream final-state work remains tied to the actual
-                    # state transition, not the early COMPLETING observation.
-                    if (
-                        (
-                            record.state in SLURM_JOB_FINAL_STATE_SET
-                            and known_record.state not in SLURM_JOB_FINAL_STATE_SET
-                            and record.state != known_record.state
-                        )
-                        and self._is_dag_support_enabled()
-                        and record.state == SlurmJobFinalStates.COMPLETED.value
-                    ):
-                        self._evaluate_dag_dependencies_for_completed_job(record)
-
-                    if record.state != known_record.state or record.state_reason != known_record.state_reason:
-                        # When either state or state_reason changes, the last_state_transition_time should be
-                        # updated to the last_updated_at time.
-                        record.last_state_transition_time = record.last_updated_at
-
-                    if record.state == SlurmJobNonFinalStates.RUNNING:
-                        # Slurm sometimes doesn't clear the pervious state reason after the job starts running, to avoid
-                        # showing confusing information, we explicitly clear it at RUNNING state. This doesn't prevent
-                        # the state_reason to be reset in later stages of the job.
-                        logger.debug(
-                            f"Explicitly setting the state_reason for job {record.job_id} from {record.state_reason} "
-                            "to 'None' since it's already running."
-                        )
-                        record.state_reason = "None"
-
-                    # Only checks whether the value is None to avoid unnecessary function call when the value is set
-                    # to an empty list.
-                    if known_record.sticky_exclusion_node_list is None:
-                        populate_sticky_exclusion_node_list(
-                            self.storage,
-                            self.attribution_storage,
-                            record,
-                            known_record,
-                        )
-
-                    # Only validate log file paths if they were not set before.
-                    if not known_record.log_file_paths and record.log_file_paths:
-                        sanitize_log_file_paths_for_retry(record, self.storage)
-
-                    # Note to future: Unless absolutely necessary, all job config validations should be done at the
-                    # producer side to simplify the consumer logic here.
-                    if record.config_validation_failure_types and not known_record.config_validation_failure_types:
-                        notification_segments = []
-                        for failure_type in record.config_validation_failure_types:
-                            JOB_WITH_INVALID_CONFIG_COUNTER.labels(failure_type=failure_type.name).inc(1)
-                            if failure_type in invalid_job_config_messages:
-                                notification_segments.append(
-                                    f"{failure_type.name}: {invalid_job_config_messages[failure_type]}"
-                                )
-                            else:
-                                logger.warning(
-                                    f"No explanation message defined for config validation failure type {failure_type.name}."
-                                )
-
-                        if notification_segments and self.notifications_client:
-                            self.send_notification(
-                                template_data=TemplateData(
-                                    InvalidJobConfig(
-                                        job_id=record.job_id,
-                                        job_attempt_index=record.job_attempt_index,
-                                        job_name=record.job_name,
-                                        reason="\n".join(notification_segments),
-                                        user=record.user,
-                                    )
-                                ),
-                                job_record=record,
-                            )
-
-                    if (
-                        record.state != known_record.state
-                        or (record.log_file_paths and record.log_file_paths != known_record.log_file_paths)
-                        or record.start_time != known_record.start_time
-                        or record.end_time != known_record.end_time
-                    ):
-                        logger.info(
-                            f"Updating job record for job {record.job_id}, attempt {record.job_attempt_index}, "
-                            f"raw payload: {json_dict}"
-                        )
-
-                    # Trace persistence for either state-based event. END and
-                    # CRASH are mutually exclusive for a single transition.
-                    persisted_anomaly_event = job_end_event or job_crash_event
-                    if persisted_anomaly_event:
-                        with tracer.start_as_current_span(
-                            name=f"job_anomaly.{JobAnomalySpanName.PERSISTENCE}",
-                            kind=SpanKind.INTERNAL,
-                            attributes={
-                                "job_id": record.job_id,
-                                "job_attempt_index": record.job_attempt_index,
-                                "job_anomaly.type": persisted_anomaly_event.type,
-                                "job_anomaly.uuid": persisted_anomaly_event.attributes.uuid,  # type: ignore[union-attr]
-                            },
-                        ) as persistence_span:
-                            self.update_job_record(**asdict(record))
-                            persistence_span.set_status(StatusCode.OK)
-                    else:
-                        self.update_job_record(**asdict(record))
-
-                    if not record.anomalies:
-                        record.anomalies = known_record.anomalies
-                    self.reconcile_anomaly_advice(record)
-                    self._maybe_emit_attribution_request(record)
-            except EventBusError as e:
-                logger.exception(f"Event bus error. Raw message: {body.decode()}", extra={"error": str(e)})
-            except RecoveryStorageException as e:
-                logger.exception(f"Persistence failed. Raw message: {body.decode()}", extra={"error": str(e)})
-            except Exception as e:
-                logger.exception(
-                    f"Failed to process job update message. Raw message: {body.decode()}",
-                    extra={"error": str(e)},
-                )
-
-        return process_job_updates
 
     def _find_matching_job_attempt_for_event(self, job_id: str, event: Event) -> SlurmJobExecutionRecord | None:
         """

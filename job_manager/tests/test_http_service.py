@@ -15,7 +15,7 @@ from job_manager.audit.events import (
     JobAttemptFirstSeenEvent,
     JobAttemptUpdatedEvent,
 )
-from job_manager.constants import WATCHER, WORKFLOW_CONTROLLER
+from job_manager.constants import ANOMALY_ISOLATOR, WATCHER
 from job_manager.main import app, start_http_server
 from job_manager.service import JobManager
 from recovery_libs.audit import AuditEventLevel
@@ -100,7 +100,7 @@ class TestHttpService(unittest.TestCase):
             job_manager_mock.storage.ready.return_value = True
             job_manager_mock.event_bus_consumer_threads = {
                 WATCHER: MagicMock(),
-                WORKFLOW_CONTROLLER: MagicMock(),
+                ANOMALY_ISOLATOR: MagicMock(),
             }
             for thread in job_manager_mock.event_bus_consumer_threads.values():
                 thread.is_alive.return_value = True

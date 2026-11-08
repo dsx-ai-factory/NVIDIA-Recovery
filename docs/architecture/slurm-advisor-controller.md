@@ -177,6 +177,30 @@ Generated-anomaly metrics replace the former ARM publication counters:
 dashboards use these names; custom dashboards and alerts need the same update.
 See [ADR 0040](../decisions/0040-retire-job-anomaly-relay.md).
 
+### Retired job status event consumer
+
+Job Manager receives job status through its HTTP API, including the Advisor
+Controller's publication through API Gateway. It no longer declares or consumes
+the legacy workflow-controller job update queue. Watcher anomaly/checkpoint
+ingestion and ADI attribution request/result routes remain active.
+
+Remove `workflow_controller_exchange`, `workflow_controller_exchange_type`,
+`job_queue`, and `job_routing_key` from custom Job Manager configuration and Helm
+overrides. The bus-only insert storage method and sticky-exclusion enrichment
+helper are removed; shared job tables, HTTP upsert, and partial updates remain.
+No database migration is required. The bus-only metrics
+`aps_job_manager_job_update_message_received_total` and
+`aps_job_manager_job_with_invalid_config_total` are retired; update custom
+dashboards and alerts accordingly.
+
+Deploy the updated Job Manager, then inspect the old queue (default
+`job_updates`), bindings, consumers, and backlog. Once confirmed unused, retire
+the queue and its binding through the approved broker change process. Removing
+configuration does not delete existing broker objects. Do not delete a shared
+exchange or the active Watcher and attribution queues.
+
+See [ADR 0054](../decisions/0054-retire-job-status-event-consumer.md).
+
 ### Retired ARM attribution result queue
 
 ADI publishes normal fast and slow attribution results to
