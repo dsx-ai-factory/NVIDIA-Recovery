@@ -34,6 +34,53 @@ class TestConfigValidations(unittest.TestCase):
         }
         self.assertIsNone(validate_service_config(config=self.config))
 
+    def test_advice_management_requires_delayed_attribution_retry(self):
+        """Late attribution must not be consumed without a working retry delay."""
+        self.config["service"]["advice_management_enabled"] = True
+
+        with self.assertRaisesRegex(RuntimeError, "must be greater than 0 when Advice management is enabled"):
+            validate_service_config(config=self.config)
+
+    def test_advice_management_uses_consumer_retry_delay_default(self):
+        """Omitting the delay uses the same safe default as consumer creation."""
+        self.config["service"]["advice_management_enabled"] = True
+        self.config["service"]["event_bus"].pop("anomaly_queue_delivery_retry_delay_secs")
+
+        self.assertIsNone(validate_service_config(config=self.config))
+
+    def test_disabled_advice_management_does_not_require_retry_configuration(self):
+        """Observe-only configurations need no attribution retry topology."""
+        event_bus = self.config["service"]["event_bus"]
+        event_bus.pop("anomaly_queue_delivery_retry_delay_secs")
+        event_bus.pop("anomaly_dead_letter_routing_key")
+        event_bus.pop("anomaly_dead_letter_redelivery_routing_key")
+
+        self.assertIsNone(validate_service_config(config=self.config))
+
+    def test_delayed_attribution_retry_requires_both_routing_keys(self):
+        """A positive retry delay is usable only when both queue bindings exist."""
+        event_bus = self.config["service"]["event_bus"]
+        event_bus["anomaly_queue_delivery_retry_delay_secs"] = 30
+
+        for missing_key in (
+            "anomaly_dead_letter_routing_key",
+            "anomaly_dead_letter_redelivery_routing_key",
+        ):
+            with self.subTest(missing_key=missing_key):
+                configured_value = event_bus.pop(missing_key)
+                with self.assertRaisesRegex(RuntimeError, "must be specified"):
+                    validate_service_config(config=self.config)
+                event_bus[missing_key] = configured_value
+
+    def test_delayed_attribution_retry_requires_distinct_routing_keys(self):
+        """One key cannot safely address both the timer and consumer queues."""
+        event_bus = self.config["service"]["event_bus"]
+        event_bus["anomaly_queue_delivery_retry_delay_secs"] = 30
+        event_bus["anomaly_dead_letter_redelivery_routing_key"] = event_bus["anomaly_dead_letter_routing_key"]
+
+        with self.assertRaisesRegex(RuntimeError, "must be different"):
+            validate_service_config(config=self.config)
+
     def test_invalid_audit_trail_batch_size(self):
         self.config["service"]["audit_trail"] = {"max_batch_size": 0}
         with self.assertRaisesRegex(RuntimeError, "Invalid audit trail configuration"):

@@ -12,6 +12,7 @@ import (
 )
 
 type JobSource interface {
+	CreateApplicationIntention(ctx context.Context, req *pb.CreateApplicationIntentionRequest) (*pb.CreateApplicationIntentionResponse, error)
 	CreateOrUpdateJob(ctx context.Context, req *pb.CreateOrUpdateJobRequest) (*pb.CreateOrUpdateJobResponse, error)
 	GetJob(ctx context.Context, req *pb.GetJobRequest) (*pb.GetJobResponse, error)
 	GetJobs(ctx context.Context, req *pb.GetJobsRequest) (*pb.GetJobsResponse, error)
@@ -28,6 +29,10 @@ type NotImplementedJobSource struct{}
 
 func NewNotImplementedJobSource() JobSource {
 	return &NotImplementedJobSource{}
+}
+
+func (s *NotImplementedJobSource) CreateApplicationIntention(ctx context.Context, req *pb.CreateApplicationIntentionRequest) (*pb.CreateApplicationIntentionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateApplicationIntention not implemented")
 }
 
 func (s *NotImplementedJobSource) CreateOrUpdateJob(ctx context.Context, req *pb.CreateOrUpdateJobRequest) (*pb.CreateOrUpdateJobResponse, error) {

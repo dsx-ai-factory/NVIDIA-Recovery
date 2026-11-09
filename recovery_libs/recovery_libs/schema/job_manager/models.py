@@ -59,6 +59,33 @@ class JobTerminalAdvice(str, Enum):
     MANUAL_RELEASE = "manual_release"
     """Job was manually released via API."""
 
+    APPLICATION_REQUESTED_CANCELLATION = "application_requested_cancellation"
+    """The application requested that the scheduler job and its retries stop."""
+
+
+class ApplicationIntentionDesiredState(str, Enum):
+    """Desired states that an application may request for its scheduler job."""
+
+    CANCELLED = "CANCELLED"
+
+
+class ApplicationIntentionInput(BaseModel):
+    """Application request to stop a scheduler job and prevent later retries."""
+
+    job_id: str = Field(min_length=1, max_length=64)
+    desired_state: ApplicationIntentionDesiredState
+    reason: str | None = Field(default=None, max_length=1024)
+
+
+class ApplicationIntention(BaseModel):
+    """Durably accepted application intention for a scheduler job."""
+
+    id: int = Field(json_schema_extra={"format": "int64"})
+    job_id: str
+    desired_state: ApplicationIntentionDesiredState
+    reason: str | None = None
+    created_at: datetime
+
 
 class JobAnomaly(BaseModel):
     """

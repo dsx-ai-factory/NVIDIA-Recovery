@@ -114,6 +114,13 @@ def _summarize_audit_event(event: AuditEventBase) -> AuditEventHumanSummary:
                 granularity=AuditEventHumanSummaryGranularityClass.FINE,
             )
 
+        case "application_termination_requested":
+            return AuditEventHumanSummary(
+                title="Application termination requested",
+                description="Application requested that recovery stop and the job be terminated",
+                granularity=AuditEventHumanSummaryGranularityClass.COARSE,
+            )
+
         case "job_attempt_observed":
             job_id = event.payload.get("job_id")
             attempt_index = event.payload.get("attempt_index")

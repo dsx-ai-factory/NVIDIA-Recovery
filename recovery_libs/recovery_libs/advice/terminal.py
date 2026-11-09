@@ -28,6 +28,7 @@ def map_advice_state(advice: JobTerminalAdvice | str) -> AdviceState:
         JobTerminalAdvice.USER_CANCELED: AdviceState.TERMINATED,
         JobTerminalAdvice.MAX_REQUEUE_REACHED: AdviceState.TERMINATED,
         JobTerminalAdvice.MANUAL_KILL: AdviceState.TERMINATED,
+        JobTerminalAdvice.APPLICATION_REQUESTED_CANCELLATION: AdviceState.TERMINATED,
     }
     if advice not in mapping:
         return AdviceState.TERMINATED

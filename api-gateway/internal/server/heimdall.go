@@ -142,6 +142,27 @@ func (s *heimdallServer) CreateOrUpdateJob(ctx context.Context, req *pb.CreateOr
 	return s.jobSource.CreateOrUpdateJob(ctx, req)
 }
 
+func (s *heimdallServer) CreateApplicationIntention(ctx context.Context, req *pb.CreateApplicationIntentionRequest) (*pb.CreateApplicationIntentionResponse, error) {
+	ctx, _ = util.GetZapLoggerFromContextWith(ctx, zap.String("job_id", req.JobId))
+
+	if err := validateRequiredBoundedString("job id", req.JobId, 64); err != nil {
+		return nil, err
+	}
+	if req.DesiredState != pb.ApplicationIntentionDesiredState_APPLICATION_INTENTION_DESIRED_STATE_CANCELLED {
+		return nil, status.Error(codes.InvalidArgument, "desired_state must be CANCELLED")
+	}
+	if req.Reason != nil {
+		if !utf8.ValidString(*req.Reason) {
+			return nil, status.Error(codes.InvalidArgument, "reason must be valid UTF-8")
+		}
+		if utf8.RuneCountInString(*req.Reason) > 1024 {
+			return nil, status.Error(codes.InvalidArgument, "reason must not exceed 1024 characters")
+		}
+	}
+
+	return s.jobSource.CreateApplicationIntention(ctx, req)
+}
+
 func (s *heimdallServer) GetJobsBySchedulerId(ctx context.Context, req *pb.GetJobsBySchedulerIdRequest) (*pb.GetJobsBySchedulerIdResponse, error) {
 	if err := validateSchedulerJobId(req.SchedulerJobId); err != nil {
 		return nil, err
