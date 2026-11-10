@@ -14,7 +14,7 @@ export KUBECONFIG="$state/kubeconfig"
 export LAUNCHER_KUBERNETES_JOBSET_CONTEXT="kind-$KUBERNETES_DEV_CLUSTER"
 
 require_owned() {
-  [[ -f "$state/owned" && -f "$KUBECONFIG" ]] || {
+  [[ -s "$state/owned" && -f "$KUBECONFIG" ]] || {
     echo "No owned development cluster; run $0 up first" >&2; exit 1;
   }
   uid="$(kubectl --context "$LAUNCHER_KUBERNETES_JOBSET_CONTEXT" --request-timeout=15s get namespace kube-system -o jsonpath='{.metadata.uid}')"
@@ -32,11 +32,32 @@ case "${1:-}" in
     if printf '%s\n' "$clusters" | grep -Fxq "$KUBERNETES_DEV_CLUSTER"; then
       require_owned
     else
+      rm -f "$state/owned"
+      create_status=0
       kind create cluster --name "$KUBERNETES_DEV_CLUSTER" \
         --kubeconfig "$KUBECONFIG" --image kindest/node:v1.35.0 \
-        --config "${KUBERNETES_DEV_KIND_CONFIG:-$script_dir/kind.yaml}" --wait 180s
-      kubectl --context "$LAUNCHER_KUBERNETES_JOBSET_CONTEXT" get namespace kube-system \
-        -o jsonpath='{.metadata.uid}' > "$state/owned"
+        --config "${KUBERNETES_DEV_KIND_CONFIG:-$script_dir/kind.yaml}" --wait 180s \
+        || create_status=$?
+      # A readiness failure can leave a usable API server. Record its identity
+      # before returning the failure so a later up/down can recover safely.
+      if uid="$(kubectl --context "$LAUNCHER_KUBERNETES_JOBSET_CONTEXT" --request-timeout=15s \
+          get namespace kube-system -o jsonpath='{.metadata.uid}')" && [[ -n "$uid" ]]; then
+        printf '%s\n' "$uid" > "$state/owned"
+      else
+        # This invocation attempted a new cluster after checking that none
+        # existed. Remove it if we cannot establish an identity for later use.
+        echo 'Could not identify the new cluster; cleaning up the bootstrap attempt' >&2
+        if kind delete cluster --name "$KUBERNETES_DEV_CLUSTER" --kubeconfig "$KUBECONFIG"; then
+          rm -f "$state/owned" "$KUBECONFIG"
+        else
+          echo "Bootstrap cleanup failed; retained state in $state for manual recovery" >&2
+        fi
+        if (( create_status == 0 )); then create_status=1; fi
+        exit "$create_status"
+      fi
+      if (( create_status != 0 )); then
+        exit "$create_status"
+      fi
     fi
     # Tilt retains the same build/deploy model as the existing local workflow.
     if (( $# == 0 )); then set -- up; fi

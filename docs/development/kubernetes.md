@@ -44,6 +44,13 @@ replacement cluster with a different identity. Repeating `up` reuses the owned
 cluster. Teardown deletes the entire owned development cluster, including any
 additional workloads deliberately deployed there.
 
+If cluster creation fails after the API becomes reachable, the wrapper records
+the cluster identity and returns the creation error. Retry `make dev-k8s` or
+remove it with `make dev-k8s-down`. If the new cluster's identity cannot be read,
+the wrapper attempts to delete that bootstrap attempt instead. A cleanup failure
+is reported and preserves the kubeconfig for manual recovery; existing unowned
+clusters are still refused.
+
 Each test invocation writes a separate `run-*` directory beneath that state
 directory: JUnit output, trace timeline, and pytest artifacts with failure
 diagnostics (workload and Pod state, Events, and logs). Teardown preserves these
