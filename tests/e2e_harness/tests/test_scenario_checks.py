@@ -4,9 +4,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
+import httpx
 import pytest
-from e2e_harness.checks import accounted, restarted
+from e2e_harness import audit
+from e2e_harness.checks import accounted, restarted, task_checkpoint_audit
+from e2e_harness.recovery_client import GatewayApi
 from recovery_libs.testing.launch.jobs import Job, JobState
 from recovery_libs.testing.scenario import Run
 
@@ -74,3 +78,38 @@ def test_accounted_rejects_an_attempt_past_the_limit(latest: Job, held: bool) ->
     run = Run({"job": at_limit}, Accounting(latest), None)
 
     assert accounted(JobState.FAILED, restarts=1)(run).observed is held
+
+
+@pytest.mark.parametrize("defect", (None, "sibling", "wrong-attempt", "duplicate"))
+def test_task_checkpoint_evidence_rejects_cross_task_attempt_and_replay_defects(defect: str | None) -> None:
+    """Qualification must fail even when a service returns HTTP 200 with wrongly associated audit facts."""
+
+    event = {
+        "heimdallJobId": audit.heimdall_job_id("7_0", 1),
+        "eventProducer": "job-manager",
+        "eventType": "checkpoint_associated",
+        "eventLevel": "operational",
+        "eventProducedAt": 1767225600000000,
+        "payload": {"job_id": "7_0", "attempt_index": 1, "checkpoint_kind": "save", "source_event_uuid": "save-1"},
+    }
+    if defect == "sibling":
+        event["payload"]["job_id"] = "7_1"
+    if defect == "wrong-attempt":
+        event["heimdallJobId"] = audit.heimdall_job_id("7_0", 0)
+    items = [event, event] if defect == "duplicate" else [event]
+    queries = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        queries.append(dict(request.url.params))
+        return httpx.Response(200, json={"items": items, "cursor": {"nextCursor": ""}})
+
+    with httpx.Client(base_url="http://gateway", transport=httpx.MockTransport(respond)) as http:
+        services = SimpleNamespace(gateway=GatewayApi(http))
+        job = Job("7_0", "array", JobState.RUNNING, (), None, 1, FIRST_SUBMIT)
+        run = Run({"job": job}, None, services)
+        if defect is not None:
+            with pytest.raises(AssertionError):
+                task_checkpoint_audit(saved_attempt=1)(run)
+        else:
+            assert task_checkpoint_audit(saved_attempt=1)(run).observed
+            assert any(query.get("eventType") == "checkpoint_associated" for query in queries)

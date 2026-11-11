@@ -102,7 +102,10 @@ class SlurmLauncher:
         record = self._client.get(job_id=job_id)
         if record is None:
             raise JobNotFound(job_id)
-        return job_from_record(record)
+        job = job_from_record(record)
+        if "_" in job_id and job.job_id != job_id:
+            raise JobNotFound(job_id)
+        return job
 
     @traced("launcher.history")
     def history(self, *, job_id: str) -> Job:
@@ -111,7 +114,55 @@ class SlurmLauncher:
         record = self._client.accounting(job_id=job_id)
         if record is None:
             raise JobNotFound(job_id)
-        return job_from_accounting(record)
+        job = job_from_accounting(record)
+        if "_" in job_id and job.job_id != job_id:
+            raise JobNotFound(job_id)
+        return job
+
+    @traced("launcher.submit_array")
+    def submit_array(self, spec: JobSpec, *, task_ids: tuple[int, ...], timeout: float = 60) -> tuple[Job, ...]:
+        """Submit one array and return concrete task handles in the requested order.
+
+        Wait for Slurm to materialize every task, never treating an aggregate pending row as a task. Until all
+        handles are returned, this method owns cleanup of the entire submission if observation fails.
+        """
+
+        _validate(spec)
+        if (
+            not task_ids
+            or len(set(task_ids)) != len(task_ids)
+            or any(type(task) is not int or not 0 <= task < 4294967294 for task in task_ids)
+        ):
+            raise ValueError("array task IDs must be distinct nonnegative Slurm integers")
+        if SlurmWorkload.of(spec).hold:
+            raise ValueError("a held array cannot materialize concrete task handles")
+        description = slurm_job_description(spec)
+        description["array"] = ",".join(map(str, task_ids))
+        parent_id = self._client.submit(description)
+        deadline = self._clock() + timeout
+        try:
+            tasks: dict[int, Job] = {}
+            while True:
+                for task_id in task_ids:
+                    if task_id in tasks:
+                        continue
+                    try:
+                        job = self.get(job_id=f"{parent_id}_{task_id}")
+                    except JobNotFound:
+                        continue
+                    if job.submitted_at is not None:
+                        tasks[task_id] = job
+                if len(tasks) == len(task_ids):
+                    return tuple(tasks[task_id] for task_id in task_ids)
+                if self._clock() >= deadline:
+                    raise TimeoutError(f"array {parent_id} did not materialize all requested tasks within {timeout:g}s")
+                self._sleep(self._poll_interval)
+        except BaseException as error:
+            try:
+                self._client.cancel(job_id=parent_id)
+            except Exception as cancel_error:  # noqa: BLE001
+                error.add_note(f"cancelling array {parent_id} also failed: {cancel_error!r}")
+            raise
 
     @traced("launcher.wait")
     def wait(self, *, job_id: str, until: Callable[[Job], bool], timeout: float) -> Job:
@@ -148,7 +199,14 @@ class SlurmLauncher:
 
     @traced("launcher.list")
     def list(self, *, name: str | None = None) -> tuple[Job, ...]:
-        return tuple(job_from_record(record) for record in self._client.list(name=name))
+        jobs = []
+        for record in self._client.list(name=name):
+            try:
+                jobs.append(job_from_record(record))
+            except JobNotFound:
+                # Aggregate pending rows do not yet provide concrete task handles.
+                continue
+        return tuple(jobs)
 
 
 DEFAULT_LAUNCHER = "slurm-kubectl"
@@ -211,7 +269,7 @@ def job_from_record(record: Mapping[str, Any]) -> Job:
     states = record.get("job_state") or ["UNKNOWN"]
     exit_code = record.get("exit_code", {}).get("return_code", {})
     return Job(
-        job_id=str(record["job_id"]),
+        job_id=_job_id(record),
         name=record.get("name", ""),
         state=_STATES.get(states[0], JobState.UNKNOWN),
         nodes=tuple(node for node in record.get("nodes", "").split(",") if node),
@@ -231,7 +289,7 @@ def job_from_accounting(record: Mapping[str, Any]) -> Job:
     exit_code = record.get("exit_code", {}).get("return_code", {})
     times = record.get("time", {})
     return Job(
-        job_id=str(record["job_id"]),
+        job_id=_job_id(record),
         name=record.get("name", ""),
         state=_STATES.get(states[0], JobState.UNKNOWN),
         nodes=tuple(node for node in record.get("nodes", "").split(",") if node),
@@ -242,6 +300,27 @@ def job_from_accounting(record: Mapping[str, Any]) -> Job:
         ended_at=_epoch(times.get("end")),
         metadata=MappingProxyType(dict(record)),
     )
+
+
+def _job_id(record: Mapping[str, Any]) -> str:
+    """Normalize scheduler observations independently of the recovery implementation under test."""
+
+    array = record.get("array", {})
+    parent = _slurm_integer(record.get("array_job_id", array.get("job_id")))
+    if parent is None or parent == 0:
+        return str(record["job_id"])
+    task = _slurm_integer(record.get("array_task_id", array.get("task_id")))
+    if task is None:
+        raise JobNotFound(str(record["job_id"]))
+    return f"{parent}_{task}"
+
+
+def _slurm_integer(value: Any) -> int | None:
+    if isinstance(value, Mapping):
+        if value.get("set") is not True or value.get("infinite"):
+            return None
+        value = value.get("number")
+    return value if type(value) is int and 0 <= value < 4294967294 else None
 
 
 def _epoch(value: int | None) -> datetime | None:

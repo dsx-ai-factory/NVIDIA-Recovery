@@ -94,6 +94,26 @@ def test_later_job_is_built_from_earlier_jobs_and_checked_by_role() -> None:
     assert launcher.specs[result.jobs["child"].job_id].metadata["after"] == result.jobs["parent"].job_id
 
 
+def test_setup_owned_jobs_are_checked_and_cleaned_up_when_a_stage_fails() -> None:
+    """Group submission actions must preserve the runner's ownership even without an initial JobSpec."""
+
+    launcher = FakeLauncher({"task zero": JobState.RUNNING, "task one": JobState.RUNNING})
+
+    def launch_group(run: Run[None]) -> Run[None]:
+        for role in ("task zero", "task one"):
+            run = run.launched(role, launcher.submit(JobSpec(name=role, workload=WORKLOAD)))
+        return run
+
+    scenario = Scenario(
+        name="owned group",
+        setup=(act("submit group", launch_group),),
+        stages=(eventually("fails", on("task zero", in_state(JobState.COMPLETED)), within=0),),
+    )
+    with pytest.raises(StageFailed):
+        run_scenario(scenario, launcher=launcher, services=None)
+    assert launcher.cancelled == ["1", "2"]
+
+
 def test_failing_check_names_the_job_role() -> None:
     launcher = FakeLauncher({"parent": JobState.FAILED})
     scenario = Scenario(

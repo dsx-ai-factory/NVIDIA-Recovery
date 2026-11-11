@@ -776,6 +776,34 @@ def gateway_audit_matches() -> Check[RecoveryClient]:
     return check
 
 
+def task_checkpoint_audit(*, saved_attempt: int | None) -> Check[RecoveryClient]:
+    """Checkpoint audit facts belong only to the selected task and saved attempt, including whole-job reads."""
+
+    def check(run: Run[RecoveryClient]) -> Evidence:
+        events = _gateway_events(run, attempt=None)
+        for event in events:
+            attempt = event.payload.get("attempt_index")
+            assert isinstance(attempt, int), "audit event omitted its attempt identity"
+            assert event.heimdall_job_id == audit.heimdall_job_id(run.job.job_id, attempt), (
+                "audit envelope disagrees with its payload attempt"
+            )
+        checkpoints = tuple(event for event in events if event.event_type == "checkpoint_associated")
+        if saved_attempt is None:
+            assert not checkpoints, "checkpoint from a sibling task leaked into this task's audit"
+            return Evidence(bool(events), "sibling has no checkpoint association audit")
+        for event in checkpoints:
+            assert event.payload.get("attempt_index") == saved_attempt, "checkpoint leaked across task attempts"
+            assert event.payload.get("checkpoint_kind") == "save", "unexpected checkpoint kind"
+        exact = _gateway_events(run, attempt=saved_attempt, event_type="checkpoint_associated")
+        if not checkpoints or any(event not in exact for event in checkpoints):
+            return Evidence(False, "waiting for checkpoint association through whole-job and exact-attempt reads")
+        source_ids = [event.payload["source_event_uuid"] for event in checkpoints]
+        assert len(set(source_ids)) == len(source_ids), "checkpoint replay created duplicate audit facts"
+        return Evidence(True, "checkpoint audit is scoped to the selected task and attempt")
+
+    return check
+
+
 def recovery_trace(*, require_attribution: bool, operation: str = "restart", attempt: int = 0) -> Check[RecoveryClient]:
     """Tempo holds the attempt's backend-started recovery trace, and its release matches the audit trail.
 
