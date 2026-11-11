@@ -29,7 +29,7 @@
     "chartjs-plugin-zoom": "^2.2.0",
     "date-fns": "^4.1.0",
     "hammerjs": "^2.0.8",
-    "iron-session": "^8.0.4",
+    "iron-session": "^9.0.1",
     "js-base64": "^3.7.8",
     "ldapjs": "^3.0.7",
     "lodash": "^4.18.1",
