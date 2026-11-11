@@ -1,6 +1,6 @@
 # ADR 0054: Recover Slurm Array Tasks Independently
 
-Status: proposed
+Status: accepted
 
 Date: 2026-11-03
 
