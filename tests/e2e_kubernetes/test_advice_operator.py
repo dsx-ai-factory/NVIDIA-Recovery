@@ -67,8 +67,25 @@ def test_advice_owner_guard(owner: str) -> Scenario[AdviceOperatorServices]:
         stages=(
             act("publish valid owned advice", lambda run: run.services.publish(run.job, RESTART)),
             eventually("valid Advice exists first", lambda run: run.services.matches(run.job, RESTART), within=45),
+            act("watch every owner write before invalidation", lambda run: run.services.guard_owner(run.job)),
             invalidate,
             eventually("orphan Advice removed after source polls", lambda run: run.services.absent(), within=45),
             consistently("orphan Advice is not recreated", lambda run: run.services.absent(), for_seconds=3),
+        ),
+    )
+
+
+@pytest.mark.parametrize("owner", ["missing", "wrong-uid"])
+@scenario
+def test_advice_initial_invalid_owner(owner: str) -> Scenario[AdviceOperatorServices]:
+    """Reject even short-lived Advice creation for invalid owners before GC can erase it."""
+    return Scenario(
+        name=f"Advice initially invalid owner: {owner}",
+        job=workload(),
+        stages=(
+            act("watch Advice before publishing", lambda run: run.services.guard_owner(run.job)),
+            act("publish invalid owner", lambda run: run.services.publish(run.job, RESTART, owner=owner)),
+            eventually("source polled without Advice creation", lambda run: run.services.absent(), within=45),
+            consistently("no invalid owner writes", lambda run: run.services.absent(), for_seconds=3),
         ),
     )
