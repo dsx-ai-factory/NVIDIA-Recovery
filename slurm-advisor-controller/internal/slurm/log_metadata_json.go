@@ -29,14 +29,14 @@ func (s *slurmCluster) queryJSONLogPaths(
 	if err != nil {
 		return nil, err
 	}
-	discovered, err := logPathsFromSacct(output.stdout)
+	discovered, err := logPathsFromSacct(output.stdout, s.resolveAccountingAttempt)
 	s.logSacctOutput(jobID, source, args, output, err)
 	return discovered, err
 }
 
 // logPathsFromSacct extracts expanded paths using the same allocation
 // ordering as status accounting, keeping parent and step completeness separate.
-func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPaths, error) {
+func logPathsFromSacct(data []byte, resolvers ...sacctAttemptResolver) (map[cluster.JobAttemptRef]sacctAttemptLogPaths, error) {
 	parsed, err := parseSacctOutput(data)
 	if err != nil {
 		return nil, err
@@ -48,8 +48,14 @@ func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPa
 	}
 	discovered := make(map[cluster.JobAttemptRef]sacctAttemptLogPaths)
 
+	var errs []error
 	for jobID, jobs := range grouped {
-		for attemptIndex, attempt := range groupSacctAttempts(jobs) {
+		attempts, err := resolveSacctAttempts(jobs, resolvers, nil)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		for _, resolved := range attempts {
+			attempt := resolved.rows
 			missingParent, missingSteps := false, false
 			var rawParent []string
 			var rawSteps []string
@@ -77,7 +83,7 @@ func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPa
 
 			discovered[cluster.JobAttemptRef{
 				JobID:        jobID,
-				AttemptIndex: int32(attemptIndex),
+				AttemptIndex: resolved.index,
 			}] = sacctAttemptLogPaths{
 				parent:        parent,
 				steps:         steps,
@@ -88,7 +94,7 @@ func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPa
 			}
 		}
 	}
-	return discovered, nil
+	return discovered, errors.Join(errs...)
 }
 
 // sacctJobsByIdentity preserves accounting row order within each canonical job

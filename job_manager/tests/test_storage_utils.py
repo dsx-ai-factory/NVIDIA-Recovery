@@ -5,7 +5,7 @@
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from job_manager.advice_mapping import http_to_storage_advice, storage_to_http_advice
@@ -58,7 +58,7 @@ from recovery_libs.storage.global_events import GlobalEvent as GlobalEventIntern
 from recovery_libs.storage.job_execution_errors import (
     JobExecutionError as JobExecutionErrorInternal,
 )
-from recovery_libs.storage.mysql_storage import AdviceIssueMerge, UpsertAdviceResult
+from recovery_libs.storage.mysql_storage import UpsertAdviceResult
 from recovery_libs.storage.node_events import (
     ErrorAttribution,
     ErrorAttributionOrigin,
@@ -2102,18 +2102,16 @@ def test_maybe_persist_job_released_enforces_requeue_limit(attempt_index, expect
 
 
 @pytest.mark.parametrize("state", [AdviceState.RESTARTED, AdviceState.TERMINATED, AdviceState.RELEASED])
-def test_advice_persists_when_correlation_job_read_fails(state):
-    """Optional tracing must not suppress any actionable Advice transition."""
+def test_advice_rejects_when_identity_job_read_fails(state):
+    """An unavailable counterpart cannot be assumed to have compatible identity."""
     storage = MagicMock()
-    storage.read_job_record.side_effect = RuntimeError("correlation unavailable")
+    storage.read_job_record.side_effect = RuntimeError("identity lookup unavailable")
     advice = create_example_advice_record()
     advice.advice_state = state.value
-    storage.upsert_advice.return_value = UpsertAdviceResult(advice, True, None)
-    result = persist_advice_record(storage, NoOpAuditBuffer(), advice)
-    assert result[0] is advice
-    storage.upsert_advice.assert_called_once_with(
-        advice, issue_merge=AdviceIssueMerge.REPLACE, scheduler_metadata_merge=ANY
-    )
+    with pytest.raises(RuntimeError, match="identity lookup unavailable"):
+        persist_advice_record(storage, NoOpAuditBuffer(), advice)
+    storage.upsert_advice.assert_not_called()
+    storage.begin_or_get_recovery_sequence.assert_not_called()
 
 
 def test_dag_advice_starts_at_dependency_decision_with_its_scheduler_scope():

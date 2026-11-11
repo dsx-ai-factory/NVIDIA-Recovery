@@ -69,7 +69,7 @@ func TestLegacyActiveLogMetadataUsesOneQuery(t *testing.T) {
 		commandKey([]string{"sacct", "--version"}): {{output: []byte("slurm 23.02.7\n"), stderr: []byte("version warning\n")}},
 		commandKey([]string{"squeue", "--json"}): {{output: []byte(`{"jobs":[
 			{"job_id":9002,"array_job_id":{"set":true,"number":9000},
-			 "array_task_id":{"set":true,"number":2},"restart_cnt":1,
+			 "array_task_id":{"set":true,"number":2},"restart_cnt":1,"submit_time":30,"start_time":40,
 			 "job_state":"RUNNING","stdout_expanded":"/logs/parent.out"}
 		]}`)}},
 		commandKey(legacyLogArgs("9000_2")): {{output: []byte(text), stderr: []byte("accounting warning\n")}},

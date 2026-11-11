@@ -55,8 +55,12 @@ case "$package" in
         test_path="notifications/tests/integration"
         report_name="notifications-integration"
         ;;
+    job-manager)
+        test_path="job_manager/tests/integration"
+        report_name="job-manager-integration"
+        ;;
     "")
-        echo "missing required --package (recovery-libs or notifications)" >&2
+        echo "missing required --package (recovery-libs, notifications, or job-manager)" >&2
         exit 2
         ;;
     *)

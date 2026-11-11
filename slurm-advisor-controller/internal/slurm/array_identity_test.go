@@ -123,7 +123,7 @@ func arrayIdentityRow(source, parent, task string) string {
 	}
 	identity := strings.Join(fields, ",")
 	if source == "sacct" {
-		return `{"job_id":9002,"state":{"current":"FAILED"},"array":{` + identity + `}}`
+		return `{"job_id":9002,"restart_cnt":0,"state":{"current":"FAILED"},"array":{` + identity + `}}`
 	}
 	if identity != "" {
 		identity = "," + identity

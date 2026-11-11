@@ -328,6 +328,10 @@ class MySQLStorage(BaseStorage):
         super().__init__()
         self.connection = connection
 
+    def job_attempt_scope(self, job_id: str, attempt_index: int):
+        """Serialize exact-attempt admission across all records and recovery setup."""
+        return self.connection.job_attempt_scope(job_id, attempt_index)
+
     def bootstrap(self, schema_upgrade: bool = True) -> bool:
         return self.connection.bootstrap(schema_upgrade=schema_upgrade) and self.ready()
 

@@ -417,126 +417,129 @@ def post_jobs(
     logger.info(f"Upserting job: job_id={job.job_id}, attempt_index={job.job_attempt_index}")
 
     try:
-        known_identity_record = job_manager.storage.read_job_record(  # type: ignore[union-attr]
-            job_id=job.job_id,
-            job_attempt_index=job.job_attempt_index,
-        )
-        known_identity_advice = job_manager.storage.read_advice_by_job(  # type: ignore[union-attr]
-            job_id=job.job_id,
-            attempt_index=job.job_attempt_index,
-        )
-        job.scheduler_metadata = preserve_job_scheduler_identity(
-            job.job_id,
-            job.scheduler_metadata,
-            known_identity_record.scheduler_metadata
-            if isinstance(known_identity_record, SlurmJobExecutionRecord)
-            else None,
-            known_identity_advice.scheduler_metadata if isinstance(known_identity_advice, AdviceRecord) else None,
-        )
-        (
-            job.cluster,
-            job.partition,
-            job.user,
-            job.command,
-            job.state_reason,
-            job.node_count,
-            job.total_gpu_count,
-            job.total_cpu_count,
-            job.total_memory_mb,
-        ) = project_job_scheduler_fields(
-            scheduler_metadata=job.scheduler_metadata,
-            cluster=job.cluster,
-            partition=job.partition,
-            user=job.user,
-            command=job.command,
-            state_reason=job.state_reason,
-            node_count=job.node_count,
-            total_gpu_count=job.total_gpu_count,
-            total_cpu_count=job.total_cpu_count,
-            total_memory_mb=job.total_memory_mb,
-        )
-
-        # Defaults are for scheduler-neutral operator ingress. A partial Slurm
-        # accounting update must leave absent values unset so storage preserves
-        # richer fields previously learned from squeue.
-        if job.scheduler_metadata.get("scheduler") != "slurm":
-            if not job.user:
-                job.user = "unknown"
-            if not job.cluster:
-                job.cluster = "unknown"
-            if not job.command:
-                job.command = "not_applicable"
-        if not job.aps_spec:
-            job.aps_spec = ApsSlurmJobSpec(auto_resume_mode=AutoResumeModeEnum.REQUEUE)
-        elif not job.aps_spec.auto_resume_mode:
-            job.aps_spec.auto_resume_mode = AutoResumeModeEnum.REQUEUE
-
-        job.submit_time, job.start_time, job.end_time = project_job_lifecycle_times(
-            scheduler_metadata=job.scheduler_metadata,
-            state=job.state or "",
-            submit_time=job.submit_time,
-            start_time=job.start_time,
-            end_time=job.end_time,
-        )
-        populate_heimdall_id_log_path = needs_heimdall_job_id_placeholder(
-            scheduler_metadata=job.scheduler_metadata,
-            log_file_paths=job.log_file_paths,
-        )
-        job.log_file_paths = project_job_log_file_paths(
-            scheduler_metadata=job.scheduler_metadata,
-            log_file_paths=job.log_file_paths,
-        )
-
-        # Convert HTTP model to storage model
-        job_record = http_to_storage_job_status(job)
-
-        # Advisor API upserts are the production scheduler ingress. Resolve the
-        # terminal outcome from Slurm metadata as well as the scheduler-neutral
-        # state so an older Slurm job can be acted on while it is still
-        # COMPLETING, then de-duplicate against the previously stored outcome so
-        # the idempotent polling API cannot emit the CRASH twice.
-        #
-        # Only the state-based CRASH is emitted here. A COMPLETED or TIMEOUT
-        # outcome is a level-based scheduler classification that must not carry
-        # recovery evidence on this path; emitting an END anomaly, terminal
-        # Advice, or requeue notification for it would turn healthy completions
-        # and scheduler timeouts into false-positive recoveries (see the healthy
-        # negative-control and scheduler-timeout e2e contracts). The controller
-        # drives the requeue for a failed job from its own reconcile loop.
-        effective_final_state = resolve_effective_final_state(job_record)
-        known_record = known_identity_record if effective_final_state is not None else None
-        known_effective_final_state = resolve_effective_final_state(known_record) if known_record is not None else None
-
-        anomaly_record = known_record or job_record
-        anomaly_config = job_record.aps_spec.anomaly_detection_config if job_record.aps_spec else None
-        state_based_crash_recovery_enabled = (
-            effective_final_state == SlurmJobFinalStates.FAILED.value
-            and anomaly_config is not None
-            and anomaly_config.log_based_crash_enabled is False
-        )
-        if (
-            effective_final_state == SlurmJobFinalStates.FAILED.value
-            and known_effective_final_state is None
-            and job_manager.should_send_crash_anomaly(  # type: ignore[union-attr]
-                record=anomaly_record, state=effective_final_state
+        with job_manager.storage.job_attempt_scope(job.job_id, job.job_attempt_index):  # type: ignore[union-attr]
+            known_identity_record = job_manager.storage.read_job_record(  # type: ignore[union-attr]
+                job_id=job.job_id,
+                job_attempt_index=job.job_attempt_index,
             )
-        ):
-            job_manager._generate_crash_event(  # type: ignore[union-attr]
-                record=job_record,
-                base_anomalies=known_record.anomalies if known_record is not None else None,
+            known_identity_advice = job_manager.storage.read_advice_by_job(  # type: ignore[union-attr]
+                job_id=job.job_id,
+                attempt_index=job.job_attempt_index,
+            )
+            job.scheduler_metadata = preserve_job_scheduler_identity(
+                job.job_id,
+                job.scheduler_metadata,
+                known_identity_record.scheduler_metadata
+                if isinstance(known_identity_record, SlurmJobExecutionRecord)
+                else None,
+                known_identity_advice.scheduler_metadata if isinstance(known_identity_advice, AdviceRecord) else None,
+            )
+            (
+                job.cluster,
+                job.partition,
+                job.user,
+                job.command,
+                job.state_reason,
+                job.node_count,
+                job.total_gpu_count,
+                job.total_cpu_count,
+                job.total_memory_mb,
+            ) = project_job_scheduler_fields(
+                scheduler_metadata=job.scheduler_metadata,
+                cluster=job.cluster,
+                partition=job.partition,
+                user=job.user,
+                command=job.command,
+                state_reason=job.state_reason,
+                node_count=job.node_count,
+                total_gpu_count=job.total_gpu_count,
+                total_cpu_count=job.total_cpu_count,
+                total_memory_mb=job.total_memory_mb,
             )
 
-        # Slurm can briefly report a previous attempt's path after requeue.
-        # Preserve a reused path only when the workload explicitly declares
-        # that its attempts intentionally share log files.
-        if job.scheduler_metadata.get("scheduler") == "slurm":
-            sanitize_log_file_paths_for_retry(job_record, job_manager.storage)  # type: ignore[union-attr]
+            # Defaults are for scheduler-neutral operator ingress. A partial Slurm
+            # accounting update must leave absent values unset so storage preserves
+            # richer fields previously learned from squeue.
+            if job.scheduler_metadata.get("scheduler") != "slurm":
+                if not job.user:
+                    job.user = "unknown"
+                if not job.cluster:
+                    job.cluster = "unknown"
+                if not job.command:
+                    job.command = "not_applicable"
+            if not job.aps_spec:
+                job.aps_spec = ApsSlurmJobSpec(auto_resume_mode=AutoResumeModeEnum.REQUEUE)
+            elif not job.aps_spec.auto_resume_mode:
+                job.aps_spec.auto_resume_mode = AutoResumeModeEnum.REQUEUE
 
-        # Upsert the job record
-        updated_record, created, _ = job_manager.upsert_job_record(  # type: ignore[union-attr]
-            job_record,
-            populate_heimdall_id_log_path=populate_heimdall_id_log_path,
-        )
+            job.submit_time, job.start_time, job.end_time = project_job_lifecycle_times(
+                scheduler_metadata=job.scheduler_metadata,
+                state=job.state or "",
+                submit_time=job.submit_time,
+                start_time=job.start_time,
+                end_time=job.end_time,
+            )
+            populate_heimdall_id_log_path = needs_heimdall_job_id_placeholder(
+                scheduler_metadata=job.scheduler_metadata,
+                log_file_paths=job.log_file_paths,
+            )
+            job.log_file_paths = project_job_log_file_paths(
+                scheduler_metadata=job.scheduler_metadata,
+                log_file_paths=job.log_file_paths,
+            )
+
+            # Convert HTTP model to storage model
+            job_record = http_to_storage_job_status(job)
+
+            # Advisor API upserts are the production scheduler ingress. Resolve the
+            # terminal outcome from Slurm metadata as well as the scheduler-neutral
+            # state so an older Slurm job can be acted on while it is still
+            # COMPLETING, then de-duplicate against the previously stored outcome so
+            # the idempotent polling API cannot emit the CRASH twice.
+            #
+            # Only the state-based CRASH is emitted here. A COMPLETED or TIMEOUT
+            # outcome is a level-based scheduler classification that must not carry
+            # recovery evidence on this path; emitting an END anomaly, terminal
+            # Advice, or requeue notification for it would turn healthy completions
+            # and scheduler timeouts into false-positive recoveries (see the healthy
+            # negative-control and scheduler-timeout e2e contracts). The controller
+            # drives the requeue for a failed job from its own reconcile loop.
+            effective_final_state = resolve_effective_final_state(job_record)
+            known_record = known_identity_record if effective_final_state is not None else None
+            known_effective_final_state = (
+                resolve_effective_final_state(known_record) if known_record is not None else None
+            )
+
+            anomaly_record = known_record or job_record
+            anomaly_config = job_record.aps_spec.anomaly_detection_config if job_record.aps_spec else None
+            state_based_crash_recovery_enabled = (
+                effective_final_state == SlurmJobFinalStates.FAILED.value
+                and anomaly_config is not None
+                and anomaly_config.log_based_crash_enabled is False
+            )
+            if (
+                effective_final_state == SlurmJobFinalStates.FAILED.value
+                and known_effective_final_state is None
+                and job_manager.should_send_crash_anomaly(  # type: ignore[union-attr]
+                    record=anomaly_record, state=effective_final_state
+                )
+            ):
+                job_manager._generate_crash_event(  # type: ignore[union-attr]
+                    record=job_record,
+                    base_anomalies=known_record.anomalies if known_record is not None else None,
+                )
+
+            # Slurm can briefly report a previous attempt's path after requeue.
+            # Preserve a reused path only when the workload explicitly declares
+            # that its attempts intentionally share log files.
+            if job.scheduler_metadata.get("scheduler") == "slurm":
+                sanitize_log_file_paths_for_retry(job_record, job_manager.storage)  # type: ignore[union-attr]
+
+            # Upsert the job record
+            updated_record, created, _ = job_manager.upsert_job_record(  # type: ignore[union-attr]
+                job_record,
+                populate_heimdall_id_log_path=populate_heimdall_id_log_path,
+            )
         job_manager.reconcile_anomaly_advice(updated_record)  # type: ignore[union-attr]
         # Dependency registration is creation-only: scheduler polling submits
         # the same record repeatedly and must not reset an action that has
@@ -892,63 +895,60 @@ def post_advice(
     """
     logger.info(f"Upserting advice: id={advice.id}, job_id={advice.job_id}")
 
-    # Look up the job record once for both ID validation and scheduler_metadata backfill.
-    job_record = None
     try:
-        job_record = job_manager.storage.read_job_record(  # type: ignore[union-attr]
-            job_id=advice.job_id,
-            job_attempt_index=advice.restart_count,
-        )
-    except RecoveryStorageException:
-        pass  # If job record lookup fails, proceed with caller-supplied ID
-
-    try:
-        known_advice = job_manager.storage.read_advice_by_job(  # type: ignore[union-attr]
-            job_id=advice.job_id,
-            attempt_index=advice.restart_count,
-        )
-        # Keep the historical complete backfill for omitted metadata, and retain
-        # immutable Slurm identity even when the caller supplies a partial map.
-        if not advice.scheduler_metadata and job_record and job_record.scheduler_metadata:
-            advice.scheduler_metadata = dict(job_record.scheduler_metadata)
-        advice.scheduler_metadata = preserve_job_scheduler_identity(
-            advice.job_id,
-            advice.scheduler_metadata,
-            job_record.scheduler_metadata if isinstance(job_record, SlurmJobExecutionRecord) else None,
-            known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
-        )
-        if job_record:
-            if job_record.heimdall_job_id is None:
-                canonical_heimdall_job_id = generate_heimdall_job_id(advice.job_id, advice.restart_count)
-                job_manager.update_job_record(  # type: ignore[union-attr]
-                    job_id=advice.job_id,
-                    job_attempt_index=advice.restart_count,
-                    heimdall_job_id=canonical_heimdall_job_id,
-                )
-                advice.id = str(canonical_heimdall_job_id)
-            elif advice.id != str(job_record.heimdall_job_id):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=(
-                        f"Advice ID mismatch: caller sent {advice.id}, "
-                        f"but job record for {advice.job_id} attempt {advice.restart_count} "
-                        f"has canonical heimdall_job_id {job_record.heimdall_job_id}"
-                    ),
-                )
-        # Only backend storage chooses canonical recovery identity.
-        advice.recovery_context = None
-
-        if job_record is not None:
-            recovery_context = job_manager._begin_sequence_for_advice(  # type: ignore[union-attr]
-                advice,
-                trigger_type=RecoveryTriggerType.OPERATOR,
+        with job_manager.storage.job_attempt_scope(advice.job_id, advice.restart_count):  # type: ignore[union-attr]
+            # Look up the job record once for both ID validation and scheduler_metadata backfill.
+            job_record = job_manager.storage.read_job_record(  # type: ignore[union-attr]
+                job_id=advice.job_id,
+                job_attempt_index=advice.restart_count,
             )
-            advice.recovery_context = recovery_context if isinstance(recovery_context, RecoveryContext) else None
 
-        advice_record = http_to_storage_advice(advice)
+            known_advice = job_manager.storage.read_advice_by_job(  # type: ignore[union-attr]
+                job_id=advice.job_id,
+                attempt_index=advice.restart_count,
+            )
+            # Keep the historical complete backfill for omitted metadata, and retain
+            # immutable Slurm identity even when the caller supplies a partial map.
+            if not advice.scheduler_metadata and job_record and job_record.scheduler_metadata:
+                advice.scheduler_metadata = dict(job_record.scheduler_metadata)
+            advice.scheduler_metadata = preserve_job_scheduler_identity(
+                advice.job_id,
+                advice.scheduler_metadata,
+                job_record.scheduler_metadata if isinstance(job_record, SlurmJobExecutionRecord) else None,
+                known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
+            )
+            if job_record:
+                if job_record.heimdall_job_id is None:
+                    canonical_heimdall_job_id = generate_heimdall_job_id(advice.job_id, advice.restart_count)
+                    job_manager.update_job_record(  # type: ignore[union-attr]
+                        job_id=advice.job_id,
+                        job_attempt_index=advice.restart_count,
+                        heimdall_job_id=canonical_heimdall_job_id,
+                    )
+                    advice.id = str(canonical_heimdall_job_id)
+                elif advice.id != str(job_record.heimdall_job_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"Advice ID mismatch: caller sent {advice.id}, "
+                            f"but job record for {advice.job_id} attempt {advice.restart_count} "
+                            f"has canonical heimdall_job_id {job_record.heimdall_job_id}"
+                        ),
+                    )
+            # Only backend storage chooses canonical recovery identity.
+            advice.recovery_context = None
 
-        # Upsert the advice record
-        updated_record, created, _ = cast(JobManager, job_manager).upsert_advice_record(advice_record)
+            if job_record is not None:
+                recovery_context = job_manager._begin_sequence_for_advice(  # type: ignore[union-attr]
+                    advice,
+                    trigger_type=RecoveryTriggerType.OPERATOR,
+                )
+                advice.recovery_context = recovery_context if isinstance(recovery_context, RecoveryContext) else None
+
+            advice_record = http_to_storage_advice(advice)
+
+            # Upsert the advice record
+            updated_record, created, _ = cast(JobManager, job_manager).upsert_advice_record(advice_record)
         job_manager.propagate_terminated_advice_for_dag_dependents(updated_record)  # type: ignore[union-attr]
 
         action = "created" if created else "updated"

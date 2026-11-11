@@ -22,6 +22,7 @@ from recovery_libs.schema.job_manager.models import (
 )
 from recovery_libs.storage.base import RecoveryStorageInputValidationError
 from recovery_libs.storage.dataclass import (
+    AdviceRecord,
     RecoveryMilestoneRecord,
     RecoverySequenceRecord,
     SlurmJobExecutionRecord,
@@ -29,6 +30,7 @@ from recovery_libs.storage.dataclass import (
 from recovery_libs.storage.mysql_storage import MySQLStorage
 from recovery_libs.tracing.traces import restore_trace_context, serialize_trace_context
 
+from job_manager.job_scheduler_identity import preserve_job_scheduler_identity
 from job_manager.metrics import (
     RECOVERY_END_TO_END_DURATION,
     RECOVERY_MILESTONES_RECORDED_COUNTER,
@@ -194,26 +196,37 @@ class RecoveryService:
         Returns:
             The canonical durable recovery context for the job attempt.
         """
-        metadata = scheduler_metadata if scheduler_metadata is not None else record.scheduler_metadata or {}
-        scheduler_system = metadata.get("scheduler", "slurm")
-        scheduler_scope = metadata.get("environment", "unspecified")
-        if not isinstance(scheduler_system, str) or not scheduler_system:
-            scheduler_system = "slurm"
-        if not isinstance(scheduler_scope, str) or not scheduler_scope:
-            scheduler_scope = "unspecified"
-        response = self.begin_or_get(
-            RecoverySequenceTrigger(
-                scheduler_system=scheduler_system,
-                scheduler_scope=scheduler_scope,
-                job_id=record.job_id,
-                source_attempt_index=record.job_attempt_index,
-                operation=operation,
-                trigger_type=trigger_type,
-                trigger_identifier=trigger_identifier,
-                triggered_at=triggered_at,
+        with self._storage.job_attempt_scope(record.job_id, record.job_attempt_index):
+            known_job = self._storage.read_job_record(record.job_id, record.job_attempt_index)
+            known_advice = self._storage.read_advice_by_job(record.job_id, record.job_attempt_index)
+            metadata = (
+                preserve_job_scheduler_identity(
+                    record.job_id,
+                    scheduler_metadata if scheduler_metadata is not None else record.scheduler_metadata,
+                    known_job.scheduler_metadata if isinstance(known_job, SlurmJobExecutionRecord) else None,
+                    known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
+                )
+                or {}
             )
-        )
-        return response.recovery_context
+            scheduler_system = metadata.get("scheduler", "slurm")
+            scheduler_scope = metadata.get("environment", "unspecified")
+            if not isinstance(scheduler_system, str) or not scheduler_system:
+                scheduler_system = "slurm"
+            if not isinstance(scheduler_scope, str) or not scheduler_scope:
+                scheduler_scope = "unspecified"
+            response = self.begin_or_get(
+                RecoverySequenceTrigger(
+                    scheduler_system=scheduler_system,
+                    scheduler_scope=scheduler_scope,
+                    job_id=record.job_id,
+                    source_attempt_index=record.job_attempt_index,
+                    operation=operation,
+                    trigger_type=trigger_type,
+                    trigger_identifier=trigger_identifier,
+                    triggered_at=triggered_at,
+                )
+            )
+            return response.recovery_context
 
     def record_milestone(
         self,

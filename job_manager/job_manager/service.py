@@ -9,6 +9,7 @@ import threading
 import time as time_module
 import uuid
 from collections.abc import Callable
+from contextlib import ExitStack
 from copy import copy
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
@@ -68,7 +69,7 @@ from recovery_libs.schema.job_manager.models import (
 )
 from recovery_libs.schema.watcher.model import Attributes, Event
 from recovery_libs.storage.attribution_storage import AttributionStorage
-from recovery_libs.storage.base import RecoveryStorageException
+from recovery_libs.storage.base import RecoveryStorageAdmissionError, RecoveryStorageException
 from recovery_libs.storage.dataclass import (
     AdviceRecord,
     DagDependency,
@@ -498,16 +499,29 @@ class JobManager:
         record is persisted; the emitter gates on anomaly eligibility and de-dups via an
         atomic claim, so redundant calls are no-ops.
         """
-        event_bus = self.config["service"].get("event_bus", {})
-        emit_attribution_request_if_needed(
-            record,
-            storage=self.storage,
-            publisher=self.adi_attribution_request_publisher,
-            routing_key=event_bus.get("adi_attribution_request_routing_key", "job.updates.attribution_request"),
-            enabled=self.config["service"].get("adi_attribution_request_emit_enabled", False),
-            straggler_enabled=self.config["service"].get("adi_straggler_emit_enabled", False),
-            recovery_context_provider=lambda: self._recovery_context_for_attribution(record),
-        )
+        if not self.config["service"].get("adi_attribution_request_emit_enabled", False):
+            return
+        # Identity validation must precede the emission claim. The emitter treats
+        # trace-context failures as optional and therefore cannot enforce this.
+        with self.storage.job_attempt_scope(record.job_id, record.job_attempt_index):
+            known_job = self.storage.read_job_record(record.job_id, record.job_attempt_index)
+            known_advice = self.storage.read_advice_by_job(record.job_id, record.job_attempt_index)
+            preserve_job_scheduler_identity(
+                record.job_id,
+                record.scheduler_metadata,
+                known_job.scheduler_metadata if isinstance(known_job, SlurmJobExecutionRecord) else None,
+                known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
+            )
+            event_bus = self.config["service"].get("event_bus", {})
+            emit_attribution_request_if_needed(
+                record,
+                storage=self.storage,
+                publisher=self.adi_attribution_request_publisher,
+                routing_key=event_bus.get("adi_attribution_request_routing_key", "job.updates.attribution_request"),
+                enabled=self.config["service"].get("adi_attribution_request_emit_enabled", False),
+                straggler_enabled=self.config["service"].get("adi_straggler_emit_enabled", False),
+                recovery_context_provider=lambda: self._recovery_context_for_attribution(record),
+            )
 
     def _recovery_context_for_attribution(self, record: SlurmJobExecutionRecord) -> Context | None:
         anomalies = record.anomalies or []
@@ -582,6 +596,8 @@ class JobManager:
                     else record.end_time
                 ),
             )
+        except RecoveryStorageAdmissionError:
+            raise
         except Exception as error:
             logger.exception(
                 "Failed to begin recovery sequence for Advice %s; continuing without correlation",
@@ -1028,6 +1044,7 @@ class JobManager:
             properties: pika.spec.BasicProperties,
             body: bytes,
         ) -> None:
+            admission = ExitStack()
             try:
                 JOB_UPDATE_MESSAGE_RECEIVED_COUNTER.inc(1)
                 # Per contract, the event_data should be the JSON serialization of the
@@ -1035,6 +1052,8 @@ class JobManager:
                 json_dict = json.loads(body.decode())
 
                 record = SlurmJobExecutionRecord.from_json(json_dict)
+                if record.job_attempt_index is not None:
+                    admission.enter_context(self.storage.job_attempt_scope(record.job_id, record.job_attempt_index))
                 observed_metadata = record.scheduler_metadata
                 known_identity_record = self.storage.read_job_record(record.job_id, record.job_attempt_index)
                 known_identity_advice = self.storage.read_advice_by_job(record.job_id, record.job_attempt_index)
@@ -1117,6 +1136,7 @@ class JobManager:
                     )
                     sanitize_log_file_paths_for_retry(record, self.storage)
                     self.storage.create_job_record(job_record=record)
+                    admission.close()
                     self.reconcile_anomaly_advice(record)
                     self._maybe_emit_attribution_request(record)
 
@@ -1142,6 +1162,7 @@ class JobManager:
                         record.last_state_transition_time = record.last_updated_at
                         sanitize_log_file_paths_for_retry(record, self.storage)
                         self.storage.create_job_record(job_record=record)
+                        admission.close()
 
                         if self._is_dag_support_enabled():
                             # Register DAG dependencies if the job has them
@@ -1172,7 +1193,7 @@ class JobManager:
 
                     # Downstream final-state work remains tied to the actual
                     # state transition, not the early COMPLETING observation.
-                    if (
+                    evaluate_completed_dag = (
                         (
                             record.state in SLURM_JOB_FINAL_STATE_SET
                             and known_record.state not in SLURM_JOB_FINAL_STATE_SET
@@ -1180,8 +1201,7 @@ class JobManager:
                         )
                         and self._is_dag_support_enabled()
                         and record.state == SlurmJobFinalStates.COMPLETED.value
-                    ):
-                        self._evaluate_dag_dependencies_for_completed_job(record)
+                    )
 
                     if record.state != known_record.state or record.state_reason != known_record.state_reason:
                         # When either state or state_reason changes, the last_state_transition_time should be
@@ -1277,6 +1297,9 @@ class JobManager:
                     else:
                         self.update_job_record(**updates)
 
+                    admission.close()
+                    if evaluate_completed_dag:
+                        self._evaluate_dag_dependencies_for_completed_job(record)
                     if not record.anomalies:
                         record.anomalies = known_record.anomalies
                     self.reconcile_anomaly_advice(record)
@@ -1290,6 +1313,8 @@ class JobManager:
                     f"Failed to process job update message. Raw message: {body.decode()}",
                     extra={"error": str(e)},
                 )
+            finally:
+                admission.close()
 
         return process_job_updates
 
