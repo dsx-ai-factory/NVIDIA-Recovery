@@ -68,9 +68,35 @@ case "${1:-}" in
     require_owned
     kubectl --context "$LAUNCHER_KUBERNETES_JOBSET_CONTEXT" -n jobset-system \
       rollout status deployment/jobset-controller-manager --timeout=120s
+    kubectl --context "$LAUNCHER_KUBERNETES_JOBSET_CONTEXT" -n recovery-dev \
+      rollout status deployment/mock-advice-gateway --timeout=120s
+    kubectl --context "$LAUNCHER_KUBERNETES_JOBSET_CONTEXT" -n recovery-dev \
+      rollout status deployment/advice-operator --timeout=120s
     report="$(mktemp -d "$state/run-XXXXXXXX")"
+    # Each invocation gets its own loopback port; scoped fixture state permits
+    # simultaneous pytest workers and independent test invocations.
+    kubectl --context "$LAUNCHER_KUBERNETES_JOBSET_CONTEXT" -n recovery-dev \
+      port-forward --address 127.0.0.1 service/mock-advice-gateway :8081 \
+      >"$report/fixture-port-forward.log" 2>&1 &
+    forward_pid=$!
+    trap 'kill "$forward_pid" 2>/dev/null || true; wait "$forward_pid" 2>/dev/null || true' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    port=''
+    for ((attempt = 0; attempt < 30; attempt++)); do
+      port="$(awk '/Forwarding from 127.0.0.1:/ {split($3, address, ":"); print address[2]; exit}' "$report/fixture-port-forward.log")"
+      if [[ -n "$port" ]]; then break; fi
+      if ! kill -0 "$forward_pid" 2>/dev/null; then break; fi
+      sleep 1
+    done
+    if [[ -z "$port" ]]; then
+      cat "$report/fixture-port-forward.log" >&2
+      echo 'Advice fixture port-forward did not become ready' >&2
+      exit 1
+    fi
+    export ADVICE_FIXTURE_URL="http://127.0.0.1:$port"
     cd "$repo_root"
-    exec uv run --locked --group e2e pytest tests/e2e_kubernetes \
+    uv run --locked --group e2e pytest tests/e2e_kubernetes \
       --launcher kubernetes-jobset --basetemp "$report/pytest" \
       --trace-output "$report/trace.json" --junitxml "$report/junit.xml" "$@"
     ;;

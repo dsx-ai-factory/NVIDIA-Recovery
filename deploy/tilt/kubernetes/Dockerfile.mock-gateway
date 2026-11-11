@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+FROM golang:1.27.3-bookworm@sha256:972b4110ba0f47539a975c31e52c64765e1ff19f2d74469ae4a595c6676e80a5 AS builder
+WORKDIR /workspace/slurm-advisor-controller
+COPY api-gateway/go.mod api-gateway/go.sum /workspace/api-gateway/
+COPY slurm-advisor-controller/go.mod slurm-advisor-controller/go.sum ./
+RUN go mod download
+COPY api-gateway/gen/go/heimdall/v1 /workspace/api-gateway/gen/go/heimdall/v1
+COPY slurm-advisor-controller/ .
+RUN CGO_ENABLED=0 go build -trimpath -o /mock-heimdall-gateway ./cmd/mock-heimdall-gateway
+
+FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329
+COPY --from=builder /mock-heimdall-gateway /mock-heimdall-gateway
+USER 65532:65532
+ENTRYPOINT ["/mock-heimdall-gateway"]
