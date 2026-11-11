@@ -573,9 +573,6 @@ if os.environ.get('DEPLOY_STACK', '1') != '':
         'controller.logLinks.sources[0].claimName=slurm-job-logs',
     ]
 
-    # A separate opt-in run exercises eager recovery without toggling it during tests.
-    if os.environ.get('E2E_ENABLE_EAGER_REQUEUE', '') != '':
-        advisor_set_values += ['controller.enableEagerRequeue=true']
 
     advisor_values = [TILT_DIR + '/services/slurm-advisor-controller/values.yaml']
     if kubernetes_service_auth_smoke:

@@ -418,22 +418,6 @@ def watcher_anomaly_detected_event(
     )
 
 
-def automatic_requeue_hold_event(
-    job: SubmittedJob,
-    *,
-    attempt: int = 0,
-) -> EventExpectation:
-    """Return an automatic requeue-hold completion expectation."""
-
-    return EventExpectation(
-        "auto-requeue-hold-completed",
-        event_producer=SAC_PRODUCER,
-        event_type="job_auto_requeue_hold_completed",
-        event_level="recovery",
-        payload_subset={**job_payload(job, attempt), "success": True},
-    )
-
-
 def watchdog_release_completed_event(
     job: SubmittedJob,
     *,

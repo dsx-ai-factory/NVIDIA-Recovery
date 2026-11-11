@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 from e2e_harness.config import E2EConfig
 from e2e_harness.recovery_client import RecoveryClient
-from e2e_harness.retry_policy import eager_requeue_enabled
 from e2e_harness.stages import state_based_recovery, stopped_at_requeue_limit
 from e2e_harness.workloads import JOB_STATE_CRASH_RECOVERY, recovery_metadata, slurm_batch
 from recovery_libs.testing.kubernetes import StackControl
@@ -27,8 +26,6 @@ def test_repeated_failure_stops_at_requeue_limit(
 ) -> Scenario[RecoveryClient]:
     if e2e_config.profile != "advisor-act":
         pytest.skip("job retry-limit enforcement requires the action-enabled advisor profile")
-    if eager_requeue_enabled(slurm_stack):
-        pytest.skip("retry-policy enforcement requires eager requeue to be disabled")
     return Scenario(
         name="32-requeue-limit-guardrail",
         job=JobSpec(

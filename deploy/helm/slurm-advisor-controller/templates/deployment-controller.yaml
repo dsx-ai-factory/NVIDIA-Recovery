@@ -79,18 +79,12 @@ spec:
               value: {{ .Values.controller.accountingWorkerPoolSize | quote }}
             - name: SLURM_ADVISOR_ACCOUNTING_TIMEOUT
               value: {{ .Values.controller.accountingTimeout | quote }}
-            - name: SLURM_ADVISOR_FAILED_JOB_RECOVERY_TIMEOUT
-              value: {{ .Values.controller.failedJobRecoveryTimeout | quote }}
             - name: SLURM_ADVISOR_ADVICE_LOOP_TIMEOUT
               value: {{ .Values.controller.adviceLoopTimeout | quote }}
             - name: SLURM_ADVISOR_ADVICE_ITEM_TIMEOUT
               value: {{ .Values.controller.adviceItemTimeout | quote }}
             - name: SLURM_ADVISOR_ADVICE_MAX_AGE
               value: {{ .Values.controller.adviceMaxAge | quote }}
-            - name: SLURM_ADVISOR_ENABLE_EAGER_REQUEUE
-              value: {{ .Values.controller.enableEagerRequeue | quote }}
-            - name: SLURM_ADVISOR_BOOTSTRAP_FAILURE_LOOKBACK
-              value: {{ .Values.controller.bootstrapFailureLookback | quote }}
             - name: SLURM_ADVISOR_REQUEUE_HOLD_DELAY
               value: {{ .Values.controller.requeueHoldDelay | quote }}
             - name: SLURM_ADVISOR_ENVIRONMENT

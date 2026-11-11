@@ -23,25 +23,10 @@ unresolved Advice are discovered independently through
 non-final in the backend remains discoverable even if it finished in Slurm
 during controller downtime.
 
-When eager requeue is enabled, SAC also paginates
-`GetJobs(reconciliation_eligible_jobs=true, end_time_from=cutoff)`. Job Manager
-applies its existing eligibility predicate and `end_time >= cutoff` in SQL
-before count and pagination. This preserves recent failure candidates without
-reading lifetime failure history. The cutoff is fixed for all pages of that
-bootstrap read and uses the persisted job end time, not submission or last
-update time. Final attempts with unknown end time do not match this read;
-unresolved Advice and fresh Slurm observations remain independent sources.
-
-`SLURM_ADVISOR_BOOTSTRAP_FAILURE_LOOKBACK` (Helm:
-`controller.bootstrapFailureLookback`) defaults to `30m` and must be positive.
-It affects only eager bootstrap failure discovery, not active attempts,
-unresolved Advice, or already-seen work. Change it with a controller restart.
-Both job queries must succeed before bootstrap completes.
-
-All gateway replicas must support `completed_jobs` and `end_time_from` before
-the updated SAC is deployed; older gateways can ignore the new protobuf fields
-and return unbounded history. Roll back SAC before rolling back the gateway.
-See [ADR 0047](../decisions/0047-bound-sac-bootstrap-discovery.md).
+All gateway replicas must support `completed_jobs` before the updated SAC is
+deployed; older gateways can ignore the field and return unbounded history.
+Roll back SAC before rolling back the gateway. See
+[ADR 0047](../decisions/0047-bound-sac-bootstrap-discovery.md).
 
 Job Manager discovery runs once at startup. Before retaining a returned attempt
 or scheduling accounting, SAC matches its stored `recovery_config.environment`
@@ -222,13 +207,11 @@ decoded responses remain available for job publication even if another command
 or response fails or the accounting phase reaches its deadline. The tick still
 reports the joined errors. Missing results do not establish that a job is gone:
 unresolved seen attempts remain eligible for the next tick, while successfully
-published completed attempts leave the seen set normally. With eager recovery
-enabled, failed attempts that still need a recovery decision remain retained;
-otherwise Advice provides
+published final attempts leave the seen set normally. Advice provides
 subsequent recovery discovery.
 
 An incomplete accounting snapshot permits publication of fresh observations,
-but failed-job recovery and Advice reconciliation wait for a complete tick.
+but Advice reconciliation waits for a complete tick.
 This preserves the existing scheduler-action safety boundary. Cancellation of
 the overall tick stops further work. See
 [ADR 0046](../decisions/0046-preserve-successful-slurm-accounting-results.md).
@@ -289,7 +272,7 @@ flowchart LR
 
 ### Wait for recovery Advice
 
-With eager recovery disabled, a failure observation is published to Job Manager
+A failure observation is published to Job Manager
 without creating another Slurm attempt. SAC waits for applicable `RESTARTED` Advice before
 issuing `requeuehold`. Job Manager evaluates retry limits and checkpoint
 progress stopping through the existing Advice model. `TERMINATED` Advice for
@@ -301,48 +284,7 @@ attempt from its local seen set. Failed publications remain discoverable for
 retry; later Advice independently rediscovers the source for accounting and
 reconciliation. Active COMPLETING attempts remain seen until final accounting
 has been published. Recovery can be lost if Advice arrives after Slurm purges
-the scheduler record; there is no automatic eager-requeue fallback.
-
-For rollout or rollback, `SLURM_ADVISOR_ENABLE_EAGER_REQUEUE=true` (Helm:
-`controller.enableEagerRequeue: true`) restores direct failed-job requeue before
-Advice. The standalone process and Helm chart both default to false for
-Advice-only recovery. Changes take effect on process restart. The eager path
-retains its mutation-retry bookkeeping and telemetry, and all
-existing action-mode, acknowledgement, environment, and partition gates.
-Enabling it also restores the race with Job Manager's retry/checkpoint stop
-decisions; it does not add policy evaluation to SAC. The watchdog's release
-rules are unchanged. See
-[ADR 0045](../decisions/0045-require-advice-before-slurm-requeue.md).
-
-### Bound eager recovery retries
-
-These bounds apply when eager recovery is enabled.
-
-Known permanent command rejections, including a job ID already purged by
-Slurm, end this attempt's recovery immediately. Transient and unknown failures
-receive three total command attempts, with 250 ms and 500 ms local waits while
-the failed-job phase has time. `SLURM_ADVISOR_FAILED_JOB_RECOVERY_TIMEOUT`
-(default `30s`) bounds that phase. When the budget expires, unfinished attempts
-stay seen and keep their consumed retry counts for the next tick. A command
-interrupted by this deadline consumes one attempt; interruption during backoff
-does not consume an additional attempt. The next tick rotates past the last
-attempted job so later jobs get a turn, using fresh scheduler observations.
-After exhaustion SAC marks the attempt processed and removes its terminal
-accounting work from `SeenJobs`. Active `COMPLETING` jobs remain seen until
-their final accounting read, without repeating recovery. Caller cancellation
-interrupts retries without marking recovery processed. Each command result is
-audited, and final failure is returned once at the tick boundary.
-
-Give-up is process-local: restart/bootstrap can retry the same failed attempt.
-Durable Job Manager status and recovery-aborted audit reporting are deferred
-until recovery converges on Advice. See [ADR 0043](../decisions/0043-bound-failed-job-requeue-retries.md)
-and [ADR 0044](../decisions/0044-budget-failed-job-recovery-phase.md).
-
-```mermaid
-flowchart LR
-    SNAPSHOT_JOB["Snapshot job"] -->|Requeue hold| SCONTROL["Slurm"]
-```
-
+the scheduler record.
 
 ### Reconcile each job and advice pair
 

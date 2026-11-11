@@ -4,6 +4,8 @@ Status: accepted
 
 Date: 2026-10-06
 
+> **Implementation note (2026-11-11):** The eager recovery path has been removed; the remaining rules stay in force.
+
 Partially supersedes
 [ADR 0020](0020-bound-slurm-controller-publication-and-accounting-concurrency.md):
 its all-or-nothing accounting publication rule. Bounded concurrency, request

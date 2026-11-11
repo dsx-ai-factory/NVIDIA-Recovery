@@ -55,12 +55,6 @@ func TestDefaultConfigUsesObserveMode(t *testing.T) {
 	if cfg.AccountingTimeout != 5*time.Minute {
 		t.Fatalf("AccountingTimeout = %s, want 5m", cfg.AccountingTimeout)
 	}
-	if cfg.FailedJobRecoveryTimeout != 30*time.Second {
-		t.Fatalf("FailedJobRecoveryTimeout = %s, want 30s", cfg.FailedJobRecoveryTimeout)
-	}
-	if cfg.BootstrapFailureLookback != 30*time.Minute {
-		t.Fatalf("BootstrapFailureLookback = %s, want 30m", cfg.BootstrapFailureLookback)
-	}
 	if cfg.AdviceLoopTimeout <= 0 {
 		t.Fatalf("AdviceLoopTimeout = %s, want positive duration", cfg.AdviceLoopTimeout)
 	}
@@ -115,87 +109,6 @@ func TestDefaultConfigUsesObserveMode(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cfg.LogLinks, wantLogLinks) {
 		t.Fatalf("LogLinks = %#v, want %#v", cfg.LogLinks, wantLogLinks)
-	}
-}
-
-func TestFromEnvEagerRequeueRequiresExplicitOptIn(t *testing.T) {
-	for _, tt := range []struct {
-		name    string
-		value   string
-		set     bool
-		want    bool
-		wantErr bool
-	}{
-		{name: "absent"},
-		{name: "disabled", value: "false", set: true},
-		{name: "enabled", value: "true", set: true, want: true},
-		{name: "invalid", value: "sometimes", set: true, wantErr: true},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			values := map[string]string{"HEIMDALL_ENDPOINT": "127.0.0.1:8080"}
-			if tt.set {
-				values["SLURM_ADVISOR_ENABLE_EAGER_REQUEUE"] = tt.value
-			}
-			setConfigEnv(t, values)
-			cfg, err := FromEnv()
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("FromEnv() succeeded for an invalid recovery flag")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("FromEnv(): %v", err)
-			}
-			if cfg.EnableEagerRequeue != tt.want {
-				t.Fatalf("EnableEagerRequeue = %t, want %t", cfg.EnableEagerRequeue, tt.want)
-			}
-		})
-	}
-}
-
-// Bootstrap must have a bounded recovery window, including after defaults are
-// reapplied; explicitly invalid operator settings must fail startup.
-func TestFromEnvBootstrapFailureLookback(t *testing.T) {
-	for _, tt := range []struct {
-		name          string
-		value         string
-		set           bool
-		want          time.Duration
-		decodeError   bool
-		validateError bool
-	}{
-		{name: "absent", want: 30 * time.Minute},
-		{name: "custom", value: "45m", set: true, want: 45 * time.Minute},
-		{name: "zero", value: "0s", set: true, validateError: true},
-		{name: "negative", value: "-1m", set: true, want: -time.Minute, validateError: true},
-		{name: "empty", set: true, decodeError: true},
-		{name: "malformed", value: "recent", set: true, decodeError: true},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			values := map[string]string{"HEIMDALL_ENDPOINT": "127.0.0.1:8080"}
-			if tt.set {
-				values["SLURM_ADVISOR_BOOTSTRAP_FAILURE_LOOKBACK"] = tt.value
-			}
-			setConfigEnv(t, values)
-			cfg, err := FromEnv()
-			if tt.decodeError {
-				if err == nil {
-					t.Fatal("FromEnv() accepted an invalid bootstrap failure lookback")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("FromEnv(): %v", err)
-			}
-			cfg = WithDefaults(cfg)
-			if cfg.BootstrapFailureLookback != tt.want {
-				t.Fatalf("BootstrapFailureLookback = %s, want %s", cfg.BootstrapFailureLookback, tt.want)
-			}
-			if err := cfg.Validate(); (err != nil) != tt.validateError {
-				t.Fatalf("Validate() = %v, want error: %t", err, tt.validateError)
-			}
-		})
 	}
 }
 
@@ -578,7 +491,6 @@ func TestFromEnvLoadsEndpointAndDurations(t *testing.T) {
 		"SLURM_ADVISOR_JOB_UPSERT_WORKER_POOL_SIZE":        "7",
 		"SLURM_ADVISOR_ACCOUNTING_WORKER_POOL_SIZE":        "6",
 		"SLURM_ADVISOR_ACCOUNTING_TIMEOUT":                 "4m",
-		"SLURM_ADVISOR_FAILED_JOB_RECOVERY_TIMEOUT":        "18s",
 		"SLURM_ADVISOR_ADVICE_LOOP_TIMEOUT":                "12s",
 		"SLURM_ADVISOR_ADVICE_ITEM_TIMEOUT":                "3s",
 		"SLURM_ADVISOR_ADVICE_MAX_AGE":                     "7m",
@@ -625,9 +537,6 @@ func TestFromEnvLoadsEndpointAndDurations(t *testing.T) {
 	}
 	if cfg.AccountingTimeout != 4*time.Minute {
 		t.Fatalf("AccountingTimeout = %s, want 4m", cfg.AccountingTimeout)
-	}
-	if cfg.FailedJobRecoveryTimeout != 18*time.Second {
-		t.Fatalf("FailedJobRecoveryTimeout = %s, want 18s", cfg.FailedJobRecoveryTimeout)
 	}
 	if cfg.AdviceLoopTimeout != 12*time.Second {
 		t.Fatalf("AdviceLoopTimeout = %s, want 12s", cfg.AdviceLoopTimeout)
@@ -1052,26 +961,6 @@ func TestFromEnvPreservesNegativeAccountingTimeoutForValidation(t *testing.T) {
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() succeeded for negative accounting timeout, want error")
-	}
-}
-
-// Invalid explicit budgets must fail startup instead of silently disabling or
-// replacing the limit that keeps failed-job recovery from starving Advice.
-func TestFromEnvRejectsInvalidFailedJobRecoveryTimeout(t *testing.T) {
-	for _, value := range []string{"0s", "-1s", "", "invalid"} {
-		t.Run(value, func(t *testing.T) {
-			setConfigEnv(t, map[string]string{
-				"HEIMDALL_ENDPOINT":                         "127.0.0.1:8080",
-				"SLURM_ADVISOR_FAILED_JOB_RECOVERY_TIMEOUT": value,
-			})
-			cfg, err := FromEnv()
-			if err == nil {
-				err = cfg.Validate()
-			}
-			if err == nil {
-				t.Fatalf("configuration accepted failed-job recovery timeout %q", value)
-			}
-		})
 	}
 }
 
