@@ -59,8 +59,12 @@ published version and completing the module release workflow described by
 The inherited `test/e2e` suite is not a supported test target: it still assumes
 source-repository deployment targets and an implicit Kubernetes context. The
 supported checks above cover compilation, generated assets, reconciliation with
-a local API server, and image startup; they do not qualify a live installation
-against a running backend.
+a local API server, and image startup. The [direct Kubernetes development
+profile](../docs/development/kubernetes.md) additionally deploys the production
+image and standalone chart in Kind. Run `make dev-k8s-ci` followed by
+`make dev-k8s-test` to exercise create, update, withdrawal, and owner-validation
+behavior through a scoped mock gRPC gateway. Real backend integration and full
+workload recovery remain separate qualification work.
 
 ## Deployment
 
