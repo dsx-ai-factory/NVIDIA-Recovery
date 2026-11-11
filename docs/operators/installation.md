@@ -231,7 +231,8 @@ docker login "$(printf '%s' "$IMAGE_PREFIX" | cut -d/ -f1)"
 
 Build and publish the ten services required by this walkthrough, including
 Attribution Adapter and Attribution Service. The default selection includes all
-ten; Advice Operator remains excluded:
+ten; build Advice Operator separately with
+`make build-local SERVICES=advice-operator`:
 
 ```bash
 make build-publish \

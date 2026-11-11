@@ -9,7 +9,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -50,16 +49,14 @@ var _ = BeforeSuite(func() {
 	err = heimdallv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	// Never let USE_EXISTING_CLUSTER redirect these tests to a real cluster.
+	useExistingCluster := false
 	testEnv = &envtest.Environment{
+		UseExistingCluster: &useExistingCluster,
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"), // Advice CRDs
 		},
-		ErrorIfCRDPathMissing: false,
-	}
-
-	// Retrieve the first found binary directory to allow running tests from IDEs
-	if getFirstFoundEnvTestBinaryDir() != "" {
-		testEnv.BinaryAssetsDirectory = getFirstFoundEnvTestBinaryDir()
+		ErrorIfCRDPathMissing: true,
 	}
 
 	cfg, err = testEnv.Start()
@@ -76,19 +73,3 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
-
-// getFirstFoundEnvTestBinaryDir locates the first binary in the specified path.
-func getFirstFoundEnvTestBinaryDir() string {
-	basePath := filepath.Join("..", "..", "bin", "k8s")
-	entries, err := os.ReadDir(basePath)
-	if err != nil {
-		logf.Log.Error(err, "Failed to read directory", "path", basePath)
-		return ""
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			return filepath.Join(basePath, entry.Name())
-		}
-	}
-	return ""
-}

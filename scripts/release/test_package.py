@@ -57,11 +57,8 @@ class PackageTests(unittest.TestCase):
             inspect_archive(archive, "chart", ["Chart.yaml", "LICENSE"])
 
     def test_excluded_source_and_nested_chart_payloads_are_rejected(self):
-        """Disabled components must not be shipped as archive payloads."""
+        """Private provider sources and unsafe paths must not be shipped."""
         for name in (
-            "chart/advice-operator/main.go",
-            "chart/charts/advice-operator/Chart.yaml",
-            "chart/deploy/helm/advice-operator/Chart.yaml",
             "chart/attribution-source/client.py",
             "chart/attribution-service/main.py",
             "chart/attribution-client/client.py",
@@ -73,30 +70,29 @@ class PackageTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     inspect_archive(archive, "chart", [])
 
-    def test_source_archive_omits_vendored_operator_and_retains_supported_components(self):
-        """Vendored source stays out of releases without dropping supported payloads."""
+    def test_source_archive_retains_operator_and_standalone_chart(self):
+        """Consumers receive operator sources and deployment assets together."""
         files = {
-            "source/advice-operator": b"",
             "source/advice-operator/go.mod": b"module example/advice-operator",
             "source/deploy/helm/advice-operator/Chart.yaml": b"name: advice-operator",
             "source/api-gateway/go.mod": b"module example/api-gateway",
             "source/deploy/helm/nvidia-recovery/Chart.yaml": b"name: nvidia-recovery",
         }
         archive = self.root / "source.tgz"
-        normalize(
-            archive_bytes(files),
-            archive,
-            excluded_roots=("advice-operator", "deploy/helm/advice-operator"),
-        )
+        normalize(archive_bytes(files), archive)
         with tarfile.open(archive) as result:
             self.assertEqual(
                 set(result.getnames()),
                 {
+                    "source/advice-operator/go.mod",
+                    "source/deploy/helm/advice-operator/Chart.yaml",
                     "source/api-gateway/go.mod",
                     "source/deploy/helm/nvidia-recovery/Chart.yaml",
                 },
             )
-        inspect_archive(archive, "source", ["api-gateway/go.mod"])
+            for name, content in files.items():
+                self.assertEqual(result.extractfile(name).read(), content)
+        inspect_archive(archive, "source", ["advice-operator/go.mod", "deploy/helm/advice-operator/Chart.yaml"])
 
     def test_attribution_helm_chart_is_distributed(self):
         """The default-on provider chart belongs in source and packaged charts."""
@@ -114,6 +110,8 @@ class PackageTests(unittest.TestCase):
     def make_release(self):
         """Build a complete handoff fixture using real tar/gzip assets."""
         source_files = [
+            "advice-operator/go.mod",
+            "deploy/helm/advice-operator/Chart.yaml",
             "LICENSE",
             "THIRD_PARTY_NOTICES.md",
             "RELEASE.md",
@@ -174,6 +172,23 @@ class PackageTests(unittest.TestCase):
             archive.write(b"changed")
         with self.assertRaisesRegex(ValueError, "checksum mismatch"):
             verify(self.root)
+
+    def test_missing_operator_payload_is_rejected_even_with_updated_checksums(self):
+        """A source release cannot silently omit operator source or its chart."""
+        for missing in ("advice-operator/go.mod", "deploy/helm/advice-operator/Chart.yaml"):
+            with self.subTest(missing=missing):
+                self.make_release()
+                path = self.root / "nvidia-recovery-0.2.2-source.tar.gz"
+                with tarfile.open(path) as archive:
+                    files = {
+                        member.name: archive.extractfile(member).read()
+                        for member in archive.getmembers()
+                        if member.name != f"nvidia-recovery-0.2.2/{missing}"
+                    }
+                normalize(archive_bytes(files), path)
+                self.write_checksums()
+                with self.assertRaisesRegex(ValueError, "missing " + missing):
+                    verify(self.root)
 
     def test_wrong_commit_or_tag_is_rejected(self):
         """Assets from another commit or version cannot satisfy this release."""

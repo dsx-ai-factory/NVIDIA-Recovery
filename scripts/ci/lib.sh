@@ -98,12 +98,14 @@ ci_go_packages() {
     # Return all supported Go modules for the default verification set.
     printf '%s\n' \
         "api-gateway" \
+        "advice-operator" \
         "slurm-advisor-controller"
 }
 
 ci_go_package_dir() {
     case "$1" in
         api-gateway) echo "api-gateway" ;;
+        advice-operator) echo "advice-operator" ;;
         slurm-advisor-controller) echo "slurm-advisor-controller" ;;
         *)
             echo "unsupported Go package: $1" >&2
