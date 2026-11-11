@@ -199,7 +199,7 @@ the queue and its binding through the approved broker change process. Removing
 configuration does not delete existing broker objects. Do not delete a shared
 exchange or the active Watcher and attribution queues.
 
-See [ADR 0054](../decisions/0054-retire-job-status-event-consumer.md).
+See [ADR 0055](../decisions/0055-retire-job-status-event-consumer.md).
 
 ### Retired ARM attribution result queue
 

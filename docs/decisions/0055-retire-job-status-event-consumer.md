@@ -1,4 +1,4 @@
-# ADR 0054: Retire Job Status Event Consumer
+# ADR 0055: Retire Job Status Event Consumer
 
 Status: accepted
 

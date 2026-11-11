@@ -61,9 +61,15 @@ externalService:
   enabled: true
   # Annotations for the Service exposing the public REST and gRPC listeners.
   annotations: {}
+  targetPorts:
+    rest: ""
+    grpc: ""
 internalService:
   # Annotations for the always-present Service exposing the internal listeners.
   annotations: {}
+  targetPorts:
+    rest: ""
+    grpc: ""
 # Applies to both Services. For LoadBalancer, configure private networking
 # annotations for both externalService and internalService.
 service_type: ClusterIP
