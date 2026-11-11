@@ -101,21 +101,6 @@ class BaseStorage(ABC):
         """
 
     @abstractmethod
-    def create_job_record(self, job_record: SlurmJobExecutionRecord) -> bool:
-        """
-        Method to create a job record in the storage.
-
-        Parameters:
-            job_record: SlurmJobExecutionRecord object.
-
-        Returns:
-            True if the creation succeeded.
-
-        Raises:
-            RecoveryStorageException when new job record can't be created.
-        """
-
-    @abstractmethod
     def read_job_record(self, job_id: str, job_attempt_index: int | None = None) -> SlurmJobExecutionRecord | None:
         """
         Method to read a job record from the storage.

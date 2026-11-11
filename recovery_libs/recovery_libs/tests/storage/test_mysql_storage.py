@@ -1059,21 +1059,6 @@ def test_read_job_groups_returns_results(session, mysql_storage):
     }
 
 
-def test_create_job_record(mysql_storage, session):
-    job_record = create_example_slurm_job_record(
-        job_id="10000",
-        submit_time=datetime.now(UTC) - timedelta(minutes=10),
-        last_updated_at=datetime.now(UTC),
-        attempt_index=0,
-    )
-
-    mysql_storage.create_job_record(job_record)
-
-    session.add.assert_called_once_with(job_record)
-    session.commit.assert_called_once()
-    assert job_record.heimdall_job_id == generate_heimdall_job_id("10000", 0)
-
-
 @pytest.mark.parametrize("job_id, job_group_id", [("10000", None), ("10000_0", "10000")])
 def test_update_job_record(mysql_storage, session, job_id, job_group_id):
     job_attempt_index = 0

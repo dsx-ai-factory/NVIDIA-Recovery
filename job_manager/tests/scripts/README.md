@@ -2,10 +2,8 @@
 This directory contains scripts that publish artificial events bus messages for job manager to consume to faciliate e2e
 testing.
 
-`job_update_event_bus_publish.py` publishes synthetic job updates to exercise the
-legacy event-bus consumer. The Slurm Advisor Controller (SAC), which replaces the
-former workflow controller, sends production job updates through API Gateway;
-this script does not exercise that API path.
+The Slurm Advisor Controller (SAC) sends job updates through API Gateway.
+Job Manager does not accept job status updates from the event bus.
 `anomaly_event_bus_publish.py` simulates the case where anomaly watcher sends job anomalies.
 
 The event bus deployment can be the one running on local machine (e.g. with docker compose) or a remote deployment in a
@@ -22,9 +20,7 @@ uv sync
 ```
 2. Execute the script in the virtual env
 ```bash
-uv run --locked python3 tests/scripts/job_update_event_bus_publish.py <job-id> <job-attempt-index>
-
 uv run --locked python3 tests/scripts/anomaly_event_bus_publish.py <job-id>
 ```
 
-If details of the job event or anomaly event need to be changed, just change the file, save it and re-run the script.
+If details of the anomaly event need to be changed, change the file and re-run the script.

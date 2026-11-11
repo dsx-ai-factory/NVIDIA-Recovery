@@ -62,6 +62,7 @@ onward. Earlier decisions are not included.
 | [0052](0052-run-e2e-tests-as-isolated-staged-scenarios.md) | accepted | Run each E2E test as a staged scenario that launches its own jobs through a scheduler-neutral launcher and verifies evidence over HTTP, isolated from other tests; narrows ADR 0005's service-proxy transport allowance. |
 | [0053](0053-fanout-audit-and-recovery-trace.md) | superseded | Fan out overlapping recovery activity to trace spans and audit events without making recovery-sequence data the audit source of truth; superseded by ADR 0048. |
 | [0054](0054-recover-slurm-array-tasks-independently.md) | accepted | Recover Slurm array tasks with independent retry allowances, task-level checkpoint association and audit history, and scheduler metadata for Slurm-specific identity. |
+| [0055](0055-retire-job-status-event-consumer.md) | accepted | Retire RabbitMQ job-status ingestion and its exclusive configuration and storage helpers; job status arrives through the HTTP API. |
 
 ADR numbers 0018, 0019, 0023, and 0024 are retired; their external-service
 decisions were removed with maintainer approval. Do not reuse these numbers.
