@@ -3,11 +3,13 @@
 
 """Ensure deployed evidence cannot pass for another owner or an unpolled backend."""
 
+import json
 from datetime import UTC, datetime
 from unittest.mock import Mock
 
 import pytest
 from e2e_harness.advice_operator import AdviceOperatorServices
+from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_id
 from recovery_libs.testing.launch.jobs import Job, JobState
 
 
@@ -31,6 +33,7 @@ def services(tmp_path):
     client = Mock(namespace="recovery-dev")
     service = AdviceOperatorServices(client, "http://fixture.invalid", tmp_path)
     service._request = Mock(return_value={"reads": 2})
+    service.advice_id = str(generate_heimdall_job_id("owner", 0))
     return service
 
 
@@ -57,7 +60,7 @@ def test_evidence_requires_exact_workload_incarnation(services, job):
         },
         "spec": {
             "job": {
-                "heimdallId": services.scope,
+                "heimdallId": services.advice_id,
                 "apiVersion": "jobset.x-k8s.io/v1alpha2",
                 "kind": "JobSet",
                 "name": "owner",
@@ -81,7 +84,8 @@ def test_publish_preserves_workload_identity_and_scope(services, job):
     assert records[0]["job_id"] == "owner"
     assert records[0]["scheduler_metadata"]["owner_uid"] == "uid-original"
     assert records[0]["scheduler_metadata"]["namespace"] == "recovery-dev"
-    assert services.endpoint.endswith("/advice/" + records[0]["advice_id"])
+    assert services.endpoint.endswith("/advice/" + services.scope)
+    assert records[0]["advice_id"] == "7bd71cdb-0aac-59b4-851d-ee3a94aaba2c"
 
 
 def test_publish_rejects_cross_namespace_handle(services, job):
@@ -91,19 +95,91 @@ def test_publish_rejects_cross_namespace_handle(services, job):
     services._request.assert_not_called()
 
 
-def test_deleted_owner_is_republished_after_deletion(services, job):
-    from e2e_kubernetes.test_advice_operator import delete_owner_and_republish
-    from recovery_libs.testing.scenario import Run
+def watch_event(services, kind, *, owner_uid="uid-original", version="11"):
+    """Represent a Kubernetes watch event, including writes later removed by GC."""
+    return {
+        "type": kind,
+        "object": {
+            "metadata": {
+                "name": services.advice_id,
+                "resourceVersion": version,
+                "ownerReferences": [
+                    {"apiVersion": "jobset.x-k8s.io/v1alpha2", "kind": "JobSet", "name": "owner", "uid": owner_uid}
+                ],
+            }
+        },
+    }
 
-    launcher = Mock()
-    operations = Mock()
-    operations.attach_mock(launcher.cancel, "cancel")
-    operations.attach_mock(services._request, "request")
-    delete_owner_and_republish(Run({"job": job}, launcher, services))
-    assert operations.mock_calls[0][0] == "cancel"
-    assert operations.mock_calls[0].args == ()
-    assert operations.mock_calls[0].kwargs == {"job_id": job.job_id}
-    assert operations.mock_calls[1][0] == "request"
-    assert operations.mock_calls[1].args[0] == "PUT"
-    fixture = operations.mock_calls[1].args[1][0]
-    assert fixture["scheduler_metadata"]["owner_uid"] == "uid-original"
+
+@pytest.mark.parametrize("kind", ["ADDED", "MODIFIED"])
+def test_watch_catches_invalid_write_even_if_garbage_collected(services, kind):
+    services.watch_version = "10"
+    services.allowed_owner = ("jobset.x-k8s.io/v1alpha2", "JobSet", "owner", "uid-original")
+    events = [
+        watch_event(services, kind, owner_uid="wrong-uid"),
+        watch_event(services, "DELETED", owner_uid="wrong-uid", version="12"),
+    ]
+    services.client.command.return_value = "\n".join(json.dumps(event) for event in events)
+    services.client.get.return_value = None  # A periodic absence check would incorrectly pass.
+    with pytest.raises(AssertionError, match="invalid owner"):
+        services.absent()
+    assert services.watch_error
+    assert services.watch_events[0] == events[0]
+
+
+def test_watch_allows_deletion_of_preexisting_valid_advice(services):
+    services.watch_version = "10"
+    services.allowed_owner = ("jobset.x-k8s.io/v1alpha2", "JobSet", "owner", "uid-original")
+    services.client.command.return_value = json.dumps(watch_event(services, "DELETED"))
+    services.client.get.return_value = None
+    assert services.absent().observed
+    assert services.watch_version == "11"
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        '{"type":"ERROR","object":{"code":410,"reason":"Expired"}}',
+        '{"type":"unexpected","object":{}}',
+        "truncated json",
+    ],
+)
+def test_watch_gaps_fail_closed_and_remain_failed(services, output):
+    services.watch_version = "10"
+    services.client.command.return_value = output
+    services.client.get.return_value = None
+    with pytest.raises(AssertionError, match="watch failed"):
+        services.absent()
+    services.client.command.return_value = ""
+    with pytest.raises(AssertionError, match="watch failed"):
+        services.absent()
+
+
+def test_watch_uses_pre_mutation_list_cursor_for_empty_resource(services, job):
+    services.client.command.side_effect = [
+        json.dumps(
+            {
+                "apiVersion": "heimdall.nvidia.com/v1alpha1",
+                "kind": "AdviceList",
+                "metadata": {"resourceVersion": "42"},
+                "items": [],
+            }
+        ),
+        "",
+    ]
+    services.guard_owner(job)
+    list_request = services.client.command.call_args_list[0].args
+    assert list_request[:2] == ("get", "--raw")
+    assert "/namespaces/recovery-dev/advices?fieldSelector=" in list_request[2]
+    path = services.client.command.call_args.args[2]
+    assert "resourceVersion=42" in path
+    assert "watch=true" in path
+    assert services.advice_id in path
+
+
+def test_watch_transport_failure_is_retained(services):
+    services.watch_version = "10"
+    services.client.command.side_effect = RuntimeError("connection lost")
+    with pytest.raises(AssertionError, match="connection lost"):
+        services.absent()
+    assert "connection lost" in services.watch_error

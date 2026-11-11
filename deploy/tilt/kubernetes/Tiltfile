@@ -23,15 +23,11 @@ operator_yaml = helm(
     values=['advice-operator-values.yaml'],
 )
 k8s_yaml(operator_yaml)
-# The production chart retains its existing owner permissions. This profile
-# adds only the read needed to validate its JobSet owners.
-owner_rbac = read_file('jobset-owner-rbac.yaml')
-k8s_yaml(owner_rbac)
 # Associate support objects explicitly so namespace-scoped RBAC and the service
 # account wait for the namespace created by the JobSet bootstrap resource.
 operator_objects = [
     obj['metadata']['name'] + ':' + obj['kind']
-    for obj in decode_yaml_stream(str(operator_yaml) + '\n---\n' + str(owner_rbac))
+    for obj in decode_yaml_stream(operator_yaml)
     if obj['kind'] not in ['Deployment', 'Service']
 ]
 k8s_resource(

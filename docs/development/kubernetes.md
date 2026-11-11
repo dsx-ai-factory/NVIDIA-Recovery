@@ -74,15 +74,17 @@ as diagnostic errors, rather than hiding the original scenario failure.
 The workload smoke scenario submits a small CPU JobSet, observes its expected
 Pods running, then removes only its own resources. Advice scenarios supply
 scoped fixture records to the mock gateway and observe the operator's Advice
-resources for creation, updates, removal, and owner validation. The operator
+resources for creation, updates, removal, and owner validation. Owner-guard
+scenarios replay Kubernetes watch events from before source changes, detecting
+invalid writes even when garbage collection immediately removes them. The operator
 consumes the unchanged public gRPC `ListAdvice` API; fixture control belongs to
 the mock, not to a production service. Each scenario has its own fixture scope
 and workload identity so concurrent runs cannot replace each other's advice.
 
 Tilt builds the production Advice Operator image and renders its standalone
 Helm chart. It separately builds the existing mock gateway executable without
-Slurm. The profile grants the operator `get` on JobSets so it can validate their
-owner UIDs; this supplementary permission is local to this profile. The
+Slurm. The standalone chart grants the operator `get` on JobSets so it can validate
+their owner UIDs; no additional development-only RBAC is needed. The
 operator polls the mock every second across namespaces. Both services live in
 `recovery-dev`, and the fixture API is exposed only through a cluster-internal
 Service and the test wrapper's temporary loopback port-forward.
@@ -94,3 +96,12 @@ components can add ordinary Tilt builds and resources as dependencies arrive. Se
 `KUBERNETES_DEV_KIND_CONFIG` to a Kind config with additional worker nodes
 before creating a new cluster for placement experiments; PyTorchJob and KAI
 installation and qualification remain subsequent work.
+
+JobSet ownership is the current integration contract. The backend supplies the
+owner API version, kind, name, and UID in Advice scheduler metadata; the
+operator validates that identity before writing the owner reference. Kubernetes
+garbage collection removes Advice when the JobSet is deleted, while owner
+validation rejects missing, mismatched, or terminating owners so stale backend
+advice cannot recreate it during deletion. Advice routing may
+require revisiting this ownership and lifecycle relationship; this integration
+does not establish a general routing policy.
