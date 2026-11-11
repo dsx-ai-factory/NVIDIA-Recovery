@@ -57,7 +57,8 @@ class Job:
     """A job as the scheduler reports it.
 
     `metadata` is the scheduler's own record, read-only, for details the typed
-    fields do not cover.
+    fields do not cover. `restart_count` is absent when a scheduler does not
+    provide the Slurm attempt semantics represented by this field.
     """
 
     job_id: str
@@ -65,7 +66,7 @@ class Job:
     state: JobState
     nodes: tuple[str, ...]
     exit_code: int | None
-    restart_count: int
+    restart_count: int | None
     submitted_at: datetime | None
     started_at: datetime | None = None
     ended_at: datetime | None = None
