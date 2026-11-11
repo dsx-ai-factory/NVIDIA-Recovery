@@ -137,6 +137,12 @@ class AdviceOperatorServices:
         self.watch_events.append({"type": "BASELINE", "object": listing})
         self._drain_watch()
 
+    @traced("advice.watch.end")
+    def finish_owner_guard(self) -> None:
+        """Check remaining invalid-owner events before allowing the positive control."""
+        self._drain_watch()
+        self.watch_version = None
+
     @staticmethod
     def _owner(record: dict[str, Any]) -> tuple[str, str, str, str] | None:
         owners = record.get("metadata", {}).get("ownerReferences", [])

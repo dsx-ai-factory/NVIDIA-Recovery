@@ -348,7 +348,7 @@ var _ = Describe("AdviceReconciler", func() {
 					_, err := reconciler.Reconcile(ctx, request)
 					Expect(err).NotTo(HaveOccurred())
 					Eventually(func() bool {
-						err := k8sClient.Get(ctx, typeNamespacedName, &heimdallv1alpha1.Advice{})
+						err := mgr.GetAPIReader().Get(ctx, typeNamespacedName, &heimdallv1alpha1.Advice{})
 						return apierrors.IsNotFound(err)
 					}, timeout, interval).Should(BeTrue())
 				}

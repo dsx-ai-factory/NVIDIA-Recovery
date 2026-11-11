@@ -101,7 +101,8 @@ JobSet ownership is the current integration contract. The backend supplies the
 owner API version, kind, name, and UID in Advice scheduler metadata; the
 operator validates that identity before writing the owner reference. Kubernetes
 garbage collection removes Advice when the JobSet is deleted, while owner
-validation rejects missing, mismatched, or terminating owners so stale backend
-advice cannot recreate it during deletion. Advice routing may
+validation skips creation when its lookup finds a missing, mismatched, or
+terminating owner. The lookup and Advice write are not atomic, so deletion
+starting between them can still race an in-flight write. Advice routing may
 require revisiting this ownership and lifecycle relationship; this integration
 does not establish a general routing policy.

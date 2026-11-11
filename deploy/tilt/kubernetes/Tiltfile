@@ -11,8 +11,18 @@ local_resource(
     labels=['infra'],
 )
 
-docker_build('advice-operator', '../../..', dockerfile='../../../advice-operator/Dockerfile')
-docker_build('mock-advice-gateway', '../../..', dockerfile='Dockerfile.mock-gateway')
+# Keep Kubernetes scenario edits from rebuilding images and resetting fixture state.
+gateway_inputs = ['api-gateway/go.mod', 'api-gateway/go.sum', 'api-gateway/gen/go/heimdall/v1']
+docker_build(
+    'advice-operator', '../../..',
+    dockerfile='../../../advice-operator/Dockerfile',
+    only=['advice-operator'] + gateway_inputs,
+)
+docker_build(
+    'mock-advice-gateway', '../../..',
+    dockerfile='Dockerfile.mock-gateway',
+    only=['slurm-advisor-controller', 'deploy/tilt/kubernetes/Dockerfile.mock-gateway'] + gateway_inputs,
+)
 k8s_yaml('mock-gateway.yaml')
 k8s_resource('mock-advice-gateway', resource_deps=['jobset'], labels=['advice'])
 
