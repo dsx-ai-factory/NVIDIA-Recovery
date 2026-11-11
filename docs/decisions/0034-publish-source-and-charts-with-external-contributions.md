@@ -5,8 +5,11 @@ Status: accepted
 Date: 2026-09-09
 
 The default-off Attribution rule below is superseded by
-[ADR 0049](0049-enable-attribution-by-default.md). The remaining release and
-contribution decisions continue to apply.
+[ADR 0049](0049-enable-attribution-by-default.md), and the Advice Operator
+distribution exclusion is superseded by
+[ADR 0057](0057-publish-all-go-modules.md), which also
+extends public API scope to exported Go packages in all repository modules.
+The remaining release and contribution decisions continue to apply.
 
 ## Context
 
