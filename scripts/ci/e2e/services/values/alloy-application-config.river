@@ -21,8 +21,17 @@ local.file_match "slurm_logs" {
 loki.process "slurm_logs" {
 	forward_to = [loki.write.default.receiver]
 
+	// Legacy standalone names allow a nonnumeric prefix and an optional _date_ suffix.
+	// Multiple numeric tokens before that suffix require an explicit identity rule.
 	stage.regex {
-		expression = "(?:.*)[_-](?P<job_id>\\d+)(?:_date_.*|\\.(?:out|log))$"
+		expression = "(?:^|/)[^0-9/]*[_-](?P<job_id>\\d+)(?:_date_[^/]*|\\.(?:out|log))$"
+		source     = "filename"
+	}
+
+	// Preserve the complete job ID from Slurm's standard array log filename.
+	// Other numeric-pair filenames need an explicit site-specific identity rule.
+	stage.regex {
+		expression = "(?:^|/)slurm-(?P<job_id>\\d+_\\d+)\\.(?:out|log)$"
 		source     = "filename"
 	}
 

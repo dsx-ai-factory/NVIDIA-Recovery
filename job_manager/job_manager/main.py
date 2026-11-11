@@ -1059,6 +1059,11 @@ def get_jobs(
         ),
     ),
     job_id: str | None = Query(default=None, description="The job_id filter."),
+    scheduler_metadata: str | None = Query(
+        default=None,
+        max_length=4096,
+        description="JSON object of exact scheduler metadata string filters, combined with AND (at most 8 keys).",
+    ),
     job_attempt_index: str | None = Query(
         default=None,
         description="The job_attempt_index filter. (Cannot be used by itself)",
@@ -1194,6 +1199,27 @@ def get_jobs(
     Returns:
     A JobExecutionStatuses object containing the list of job execution records that match the filter criteria.
     """
+    metadata_filter = None
+    if scheduler_metadata is not None:
+        if not 1 <= limit <= 100 or offset < 0:
+            raise HTTPException(status_code=400, detail="Metadata lookup requires limit 1..100 and nonnegative offset")
+        try:
+            metadata_filter = json.loads(scheduler_metadata)
+            if (
+                not isinstance(metadata_filter, dict)
+                or not 1 <= len(metadata_filter) <= 8
+                or any(
+                    not isinstance(key, str)
+                    or not 1 <= len(key) <= 128
+                    or not isinstance(value, str)
+                    or not 1 <= len(value) <= 255
+                    for key, value in metadata_filter.items()
+                )
+            ):
+                raise ValueError("Expected one to eight nonempty string metadata filters")
+        except (ValueError, TypeError) as error:
+            raise HTTPException(status_code=400, detail="Invalid scheduler_metadata filter") from error
+
     # Parse and validate heimdall_job_id if provided
     heimdall_job_uuid: uuid.UUID | None = None
     if heimdall_job_id:
@@ -1241,6 +1267,7 @@ def get_jobs(
 
         records, count = job_manager.storage.read_job_records(  # type: ignore[union-attr]
             complete_data=complete_data,
+            **({"scheduler_metadata": metadata_filter} if metadata_filter else {}),
             job_id=job_id,
             job_attempt_index=job_attempt_index,  # type: ignore[arg-type]
             heimdall_job_id=heimdall_job_uuid,

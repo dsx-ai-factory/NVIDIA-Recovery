@@ -394,6 +394,17 @@ paths:
           nullable: true
           type: string
         style: form
+      - description: "JSON object of exact scheduler metadata string filters, combined\
+          \ with AND (at most 8 keys)."
+        explode: true
+        in: query
+        name: scheduler_metadata
+        required: false
+        schema:
+          maxLength: 4096
+          nullable: true
+          type: string
+        style: form
       - description: The job_attempt_index filter. (Cannot be used by itself)
         explode: true
         in: query

@@ -820,6 +820,7 @@ class MySQLStorage(BaseStorage):
         job_group_id: str | None = None,
         include_job_group_attempts: bool = True,
         workflow_id: str | None = None,
+        scheduler_metadata: dict[str, str] | None = None,
     ) -> tuple[list[SlurmJobExecutionRecord], int]:
         """
         Reads job execution records from the database based on provided filters, with support for pagination and sorting.
@@ -831,6 +832,7 @@ class MySQLStorage(BaseStorage):
             job_name (Optional[str]): Filter by job name; see job_name_match for exact vs prefix.
             job_name_match (Optional[str]): "prefix" (default), "exact", or "fuzzy" (case-insensitive substring match) for job_name filter.
             workflow_id (Optional[str]): Filter by exact workflow ID, independently of job_name.
+            scheduler_metadata: Exact string matches on scheduler-owned JSON keys, combined with AND.
             user (Optional[str]): Filter by user.
             states (list[str]): Filter by job states.
             limit (int): Maximum number of records to return. Default is 50.
@@ -880,6 +882,11 @@ class MySQLStorage(BaseStorage):
                         select_count_query = select_count_query.where(
                             SlurmJobExecutionRecord.job_attempt_index == job_attempt_index
                         )
+                for key, value in (scheduler_metadata or {}).items():
+                    metadata_value = SlurmJobExecutionRecord.scheduler_metadata[key]
+                    criterion = and_(func.json_type(metadata_value) == "STRING", metadata_value.as_string() == value)
+                    select_query = select_query.where(criterion)
+                    select_count_query = select_count_query.where(criterion)
                 if job_name:
                     if job_name_match == "prefix":
                         select_query = select_query.where(SlurmJobExecutionRecord.job_name.ilike(f"{job_name}%"))

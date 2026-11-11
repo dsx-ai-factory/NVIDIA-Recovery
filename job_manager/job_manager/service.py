@@ -88,10 +88,12 @@ from recovery_libs.tracing.traces import (
     extract_trace_id_from_span,
     restore_trace_context,
 )
+from recovery_libs.utils.slurm_event_identity import normalize_slurm_event_identity
 from recovery_libs.utils.time import parse_event_timestamp, source_timestamp_in_attempt
 
 from job_manager import periodic_tasks, storage_utils
 from job_manager.attribution_request import emit_attribution_request_if_needed
+from job_manager.audit.checkpoints import audit_checkpoint_association
 from job_manager.config import (
     KubernetesLeaderElectionSettings,
     MySQLConnectionSettings,
@@ -1318,6 +1320,23 @@ class JobManager:
 
         return process_job_updates
 
+    def _lookup_event_scheduler_metadata(self, metadata: dict[str, str]) -> list[SlurmJobExecutionRecord] | None:
+        """Read a complete bounded identity candidate set; never resolve from a partial page."""
+        records = []
+        page_size = 1 if "slurm_array_job_id" in metadata else 50
+        for offset in range(0, 5000, page_size):
+            page, _ = self.storage.read_job_records(
+                scheduler_metadata=metadata,
+                sort_by=[("id", "asc")],
+                limit=page_size,
+                offset=offset,
+            )
+            records.extend(page)
+            if page_size == 1 or len(page) < page_size:
+                return records
+        logger.warning("Scheduler event identity lookup exceeded its page budget")
+        return None
+
     def _find_matching_job_attempt_for_event(self, job_id: str, event: Event) -> SlurmJobExecutionRecord | None:
         """
         Find the matching job attempt for the given event using a three-tier strategy:
@@ -1336,9 +1355,16 @@ class JobManager:
             return None
 
         try:
+            if not normalize_slurm_event_identity(event, self._lookup_event_scheduler_metadata):
+                logger.warning("Unresolved or conflicting scheduler event identity for %s", job_id)
+                return None
+            job_id = event.job_id
             # Explicit identity is authoritative, including while registration is pending.
             if (event.attributes.model_extra or {}).get("slurm_job_attempt") is not None:
                 return self._match_by_slurm_job_attempt(job_id, event)
+
+            if "_" in job_id and job_id.split("_", 1)[0].isdigit():
+                return self._match_array_task_by_time(job_id, event)
 
             # --- Tier 2: log file name matching ---
             attempt = self._match_by_log_file_name(job_id, event)
@@ -1362,6 +1388,39 @@ class JobManager:
                 extra={"job_id": job_id, "error": str(e)},
             )
             return None
+
+    def _match_array_task_by_time(self, job_id: str, event: Event) -> SlurmJobExecutionRecord | None:
+        """Select a unique task attempt by source time; shared filenames cannot break ties.
+
+        Complete pagination precedes selection so overlapping historical execution
+        windows remain ambiguous. Missing ends are bounded by a newer start, and
+        older attempts with an unstarted successor cannot remain open-ended.
+        """
+        attempts = []
+        for offset in range(0, 5000, 50):
+            page, _ = self.storage.read_job_records(
+                job_id=job_id,
+                sort_by=[("job_attempt_index", "desc")],
+                offset=offset,
+                limit=50,
+            )
+            attempts.extend(page)
+            if len(page) < 50:
+                break
+        else:
+            return None
+        newer_start = None
+        matches = []
+        for position, attempt in enumerate(attempts):
+            end = attempt.end_time or newer_start
+            if (position == 0 or end is not None) and source_timestamp_in_attempt(
+                event.timestamp,
+                attempt.start_time,
+                end,
+            ):
+                matches.append(attempt)
+            newer_start = attempt.start_time or newer_start
+        return matches[0] if len(matches) == 1 else None
 
     def _match_by_log_file_name(self, job_id: str, event: Event) -> SlurmJobExecutionRecord | None:
         """Tier 2: Match by filename, or bypass filename identity for shared logs."""
@@ -1521,6 +1580,41 @@ class JobManager:
         else:
             ANOMALY_MESSAGE_REDELIVERY_COUNTER.inc(1)
 
+    def _associate_checkpoint_event(self, matched: SlurmJobExecutionRecord, event: Event) -> bool:
+        """Associate under the attempt lock so concurrent saves cannot lose progress.
+
+        Matching occurs before the scope; re-read after locking to preserve saves
+        from concurrent deliveries. Persistence precedes best-effort audit. Loads
+        only record association and never modify checkpoint progress.
+        """
+        with self.storage.job_attempt_scope(matched.job_id, matched.job_attempt_index):
+            record = self.storage.read_job_record(
+                job_id=matched.job_id,
+                job_attempt_index=matched.job_attempt_index,
+            )
+            if record is None:
+                return False
+            if event.type == EventType.CHECKPOINTSAVE:
+                CHECKPOINT_MESSAGE_RECEIVED_COUNTER.inc(1)
+                checkpoint = JobCheckpointInfo(
+                    timestamp=datetime.fromtimestamp(int(event.timestamp) / 1e9, UTC)
+                    if event.timestamp
+                    else datetime.now(UTC),
+                    uuid=event.attributes.uuid,
+                )
+                checkpoints = list(record.checkpoints or [])
+                if not any(existing.uuid == checkpoint.uuid for existing in checkpoints):
+                    checkpoints.append(checkpoint)
+                self.update_job_record(
+                    job_id=record.job_id,
+                    job_attempt_index=record.job_attempt_index,
+                    checkpoints=checkpoints,
+                    last_updated_at=datetime.now(UTC),
+                )
+                matched.checkpoints = checkpoints
+            audit_checkpoint_association(record, event, self.audit_buffer)
+            return True
+
     def get_watcher_job_event_message_callback(
         self,
     ) -> Callable[
@@ -1571,40 +1665,17 @@ class JobManager:
                         span.set_status(Status(StatusCode.ERROR, "Matching job attempt is not registered."))
                         return
 
+                    watcher_event.attributes.job_id = matching_job_record.job_id
                     span.set_attribute("job_id", matching_job_record.job_id)
                     span.set_attribute("job_attempt_index", matching_job_record.job_attempt_index)
 
                     # Currently checkpoint event is sharing the same schema as the anomaly, we need to differentiate
                     # them by the anomaly_type field and store them at different locations.
                     match watcher_event.type:
-                        case EventType.CHECKPOINTSAVE:
-                            CHECKPOINT_MESSAGE_RECEIVED_COUNTER.inc(1)
-                            checkpoint = JobCheckpointInfo(
-                                timestamp=(
-                                    datetime.fromtimestamp(int(watcher_event.timestamp) / 1e9, UTC)
-                                    if watcher_event.timestamp
-                                    else datetime.now(tz=UTC)
-                                ),
-                                uuid=watcher_event.attributes.uuid,
-                            )
-                            matching_job_record.checkpoints = matching_job_record.checkpoints or []
-                            if not any(
-                                existing.uuid == checkpoint.uuid for existing in matching_job_record.checkpoints
-                            ):
-                                matching_job_record.checkpoints.append(checkpoint)
-
-                            logger.info("Persisting a job checkpoint event in storage.")
-                            self.update_job_record(
-                                job_id=watcher_event.attributes.job_id,
-                                job_attempt_index=matching_job_record.job_attempt_index,
-                                checkpoints=matching_job_record.checkpoints,
-                                last_updated_at=datetime.now(tz=UTC),
-                            )
-
-                        case EventType.CHECKPOINTLOAD:
-                            logger.info(
-                                f"Received checkpoint load event {watcher_event.type}, logging it only and not persisting it in the storage"
-                            )
+                        case EventType.CHECKPOINTSAVE | EventType.CHECKPOINTLOAD:
+                            if not self._associate_checkpoint_event(matching_job_record, watcher_event):
+                                self._redeliver_watcher_event(channel, method, properties, body, watcher_event)
+                                return
 
                         case _:
                             ANOMALY_MESSAGE_RECEIVED_COUNTER.inc(1)

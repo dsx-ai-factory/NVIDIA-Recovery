@@ -40,6 +40,7 @@ def test_first_events_preserve_unlabeled_shared_log_retries(crash_events_workflo
 def test_first_events_dedup_only_within_explicit_attempt(crash_events_workflow_items_format):
     for item in crash_events_workflow_items_format:
         item.record.attributes.slurm_job_attempt = 0
+        item.record.attributes.scheduler_metadata = {"scheduler": "other"}
     result = first_events_by_job_id_and_logfile_name(crash_events_workflow_items_format)
     assert len(result) == 3
     crash_events_workflow_items_format[2].record.attributes.slurm_job_attempt = 1
@@ -620,3 +621,45 @@ def test_otlp_record_attempt_overrides_resource_attempt():
     )
     item = parse_log_record_to_workflow_item(deserialize_protobuf_logs(data.SerializeToString())[0])
     assert item.record.attributes.model_extra["slurm_job_attempt"] == "5"
+
+
+def test_prefilter_keeps_array_siblings_with_shared_label_and_path():
+    from recovery_libs.schema.watcher.model import Attributes
+    from watcher.models.workflow import LogRecord, WorkflowItem
+
+    items = [
+        WorkflowItem(
+            record=LogRecord(
+                attributes=Attributes(
+                    job_id="4200",
+                    uuid=f"source-{index}",
+                    log_file_name="shared.log",
+                    slurm_job_attempt=0,
+                    scheduler_metadata={"slurm_array_job_id": "4200", "slurm_array_task_id": str(index)},
+                )
+            )
+        )
+        for index in (0, 1)
+    ]
+    result = first_events_by_job_id_and_logfile_name(items)
+    assert [item.record.attributes.job_id for item in result] == ["4200_0", "4200_1"]
+
+
+def test_prefilter_retains_unresolved_numeric_labels_until_registration():
+    from recovery_libs.schema.watcher.model import Attributes
+    from watcher.models.workflow import LogRecord, WorkflowItem
+
+    items = [
+        WorkflowItem(
+            record=LogRecord(
+                attributes=Attributes(
+                    job_id="4200",
+                    uuid=f"source-{index}",
+                    log_file_name="shared.log",
+                    slurm_job_attempt=0,
+                )
+            )
+        )
+        for index in (0, 1)
+    ]
+    assert first_events_by_job_id_and_logfile_name(items) == items
