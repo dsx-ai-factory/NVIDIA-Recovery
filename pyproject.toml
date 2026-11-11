@@ -7,14 +7,14 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-    "pre-commit==4.6.2",
-    "ruff==0.17.0",
+    "pre-commit==4.7.0",
+    "ruff==0.17.4",
 ]
 e2e = [
     "httpx==0.28.1",
     "opentelemetry-api==1.40.0",
     "opentelemetry-sdk==1.40.0",
-    "pytest==9.1.1",
+    "pytest==9.2.0",
     "pytest-instafail==0.5.0",
     "pytest-xdist==3.8.0",
     "recovery-libs[testing]",
