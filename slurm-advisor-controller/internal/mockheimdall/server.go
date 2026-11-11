@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -23,10 +24,11 @@ type Server struct {
 	mu      sync.Mutex
 	upserts []*pb.CreateOrUpdateJobRequest
 	advice  []*pb.Advice
+	scopes  map[string]*adviceScope
 }
 
 func NewServer(advice []*pb.Advice) *Server {
-	return &Server{advice: append([]*pb.Advice(nil), advice...)}
+	return &Server{advice: append([]*pb.Advice(nil), advice...), scopes: make(map[string]*adviceScope)}
 }
 
 func (s *Server) CreateOrUpdateJob(_ context.Context, req *pb.CreateOrUpdateJobRequest) (*pb.CreateOrUpdateJobResponse, error) {
@@ -89,6 +91,21 @@ func (s *Server) ListAdvice(_ context.Context, req *pb.ListAdviceRequest) (*pb.L
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	advice := append([]*pb.Advice(nil), s.advice...)
+	// Stable scope ordering keeps pagination deterministic across requests.
+	names := make([]string, 0, len(s.scopes))
+	for name := range s.scopes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		scope := s.scopes[name]
+		advice = append(advice, scope.advice...)
+		if req.GetPage() == "" {
+			scope.reads++
+		}
+	}
+
 	offset, err := strconv.Atoi(req.GetPage())
 	if err != nil || offset < 0 {
 		offset = 0
@@ -97,16 +114,16 @@ func (s *Server) ListAdvice(_ context.Context, req *pb.ListAdviceRequest) (*pb.L
 	if limit <= 0 || limit > 100 {
 		limit = 100
 	}
-	if offset >= len(s.advice) {
+	if offset >= len(advice) {
 		return &pb.ListAdviceResponse{}, nil
 	}
 
-	end := min(offset+limit, len(s.advice))
+	end := min(offset+limit, len(advice))
 	resp := &pb.ListAdviceResponse{
-		Advice: append([]*pb.Advice(nil), s.advice[offset:end]...),
+		Advice: append([]*pb.Advice(nil), advice[offset:end]...),
 		Count:  int32(end - offset),
 	}
-	if end < len(s.advice) {
+	if end < len(advice) {
 		next := strconv.Itoa(end)
 		resp.NextPageToken = &next
 	}
@@ -144,6 +161,7 @@ func (s *Server) SetAdvice(advice []*pb.Advice) {
 }
 
 func (s *Server) RegisterDebugHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("/advice/{scope}", s.scopedAdvice)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
@@ -300,4 +318,57 @@ func buildAdviceItem(fixture DebugAdvice) (*pb.Advice, error) {
 			NodeConstraints: constraints,
 		},
 	}, nil
+}
+
+// adviceScope holds one scenario's independent backend input. Reads count first
+// pages served since replacement, not completed operator reconciliations.
+type adviceScope struct {
+	advice []*pb.Advice
+	reads  uint64
+}
+
+// scopedAdvice controls only fixture state; the deployed operator still reads
+// advice exclusively through the public HeimdallService gRPC interface.
+func (s *Server) scopedAdvice(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("scope")
+	switch r.Method {
+	case http.MethodPut:
+		var fixtures []DebugAdvice
+		if err := json.NewDecoder(r.Body).Decode(&fixtures); err != nil {
+			http.Error(w, fmt.Sprintf("decode advice fixtures: %v", err), http.StatusBadRequest)
+			return
+		}
+		advice, err := buildAdvice(fixtures)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		s.mu.Lock()
+		s.scopes[name] = &adviceScope{advice: advice}
+		s.mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodGet:
+		s.mu.Lock()
+		scope, ok := s.scopes[name]
+		var reads uint64
+		if ok {
+			reads = scope.reads
+		}
+		s.mu.Unlock()
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]uint64{"reads": reads}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	case http.MethodDelete:
+		s.mu.Lock()
+		delete(s.scopes, name)
+		s.mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
