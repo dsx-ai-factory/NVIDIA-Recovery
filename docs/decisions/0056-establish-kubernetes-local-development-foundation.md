@@ -4,7 +4,7 @@ Status: accepted
 
 Date: 2026-11-02
 
-> **Implementation note (2026-11-11):** The [direct Kubernetes profile](../development/kubernetes.md) now includes Advice Operator and scoped mock-gateway scenarios; real backend integration and full workload recovery qualification remain subsequent work.
+> **Implementation note (2026-11-11):** The [direct Kubernetes profile](../development/kubernetes.md) now includes Advice Operator and scoped mock-gateway scenarios; the standalone chart supports JobSet owner validation, with ownership and lifecycle to be revisited alongside Advice routing. Real backend integration and full workload recovery qualification remain subsequent work.
 
 ## Context
 

@@ -72,3 +72,16 @@ The standalone Helm chart is in
 `deploy/helm/advice-operator`. It installs the Advice CRD, controller,
 RBAC, health probes, and optional metrics service. Override the image and API
 Gateway values for the target environment.
+
+The chart includes read-only (`get`) access to JobSets for owner validation,
+alongside the existing Run:ai DistributedWorkload permission. For a JobSet
+owner, the backend must supply `namespace`, `owner_api_version`
+(`jobset.x-k8s.io/v1alpha2`), `owner_kind` (`JobSet`), `owner_name`, and the
+actual Kubernetes `owner_uid` in scheduler metadata. The operator rejects
+missing, mismatched, or terminating owners. These fields determine
+the Advice owner reference and its garbage-collection lifecycle. Incomplete
+owner metadata currently produces Advice without an owner reference.
+
+JobSet ownership is supported for now; revisit owner selection and Advice
+lifetime when Advice routing is defined. This does not grant the operator
+permission to modify JobSets or implement workload recovery.
