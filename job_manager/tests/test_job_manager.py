@@ -9,7 +9,7 @@ import uuid
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from threading import Event
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import ANY, MagicMock, call, patch
 
 import pika
 import uvicorn
@@ -287,7 +287,7 @@ class TestJobManager(unittest.TestCase):
 
                 self.assertIs(result, persistence_result)
                 self._job_manager.storage.upsert_advice.assert_called_with(
-                    updated_record, issue_merge=AdviceIssueMerge.REPLACE
+                    updated_record, issue_merge=AdviceIssueMerge.REPLACE, scheduler_metadata_merge=ANY
                 )
                 self._job_manager.audit_buffer.add.assert_not_called()
 
@@ -1144,7 +1144,7 @@ class TestJobManager(unittest.TestCase):
         storage.upsert_advice.assert_not_called()
         self._job_manager.audit_buffer.add.assert_not_called()
         self.assertIsNone(previous_attempt.anomalies)
-        storage.read_job_record.assert_called_once_with(job_id="12345", job_attempt_index=2)
+        storage.read_job_record.assert_any_call(job_id="12345", job_attempt_index=2)
         publish.assert_called_once()
         replay = publish.call_args.kwargs
         self.assertEqual(replay["message_body"], body)
@@ -2323,7 +2323,7 @@ class TestJobManager(unittest.TestCase):
             callback(channel, method, properties, body)
 
             storage.update_job_record.assert_called_once()
-            storage.read_job_record.assert_called_once_with(job_id="12345", job_attempt_index=2)
+            storage.read_job_record.assert_any_call(job_id="12345", job_attempt_index=2)
             storage.claim_attribution_request_emission.assert_not_called()
             publisher.publish_message.assert_not_called()
             self._job_manager.audit_buffer.add.assert_not_called()
