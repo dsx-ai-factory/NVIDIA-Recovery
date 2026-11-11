@@ -183,3 +183,18 @@ def test_watch_transport_failure_is_retained(services):
     with pytest.raises(AssertionError, match="connection lost"):
         services.absent()
     assert "connection lost" in services.watch_error
+
+
+@pytest.mark.parametrize("invalid_write", [False, True])
+def test_finishing_guard_checks_pending_events_before_positive_control(services, invalid_write):
+    services.watch_version = "10"
+    services.client.command.return_value = (
+        json.dumps(watch_event(services, "ADDED", owner_uid="wrong-uid")) if invalid_write else ""
+    )
+    if invalid_write:
+        with pytest.raises(AssertionError, match="invalid owner"):
+            services.finish_owner_guard()
+        assert services.watch_error
+    else:
+        services.finish_owner_guard()
+        assert services.watch_version is None

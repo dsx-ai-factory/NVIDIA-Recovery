@@ -87,5 +87,10 @@ def test_advice_initial_invalid_owner(owner: str) -> Scenario[AdviceOperatorServ
             act("publish invalid owner", lambda run: run.services.publish(run.job, RESTART, owner=owner)),
             eventually("source polled without Advice creation", lambda run: run.services.absent(), within=45),
             consistently("no invalid owner writes", lambda run: run.services.absent(), for_seconds=3),
+            act("finish invalid-owner observation", lambda run: run.services.finish_owner_guard()),
+            act("publish valid owner as positive control", lambda run: run.services.publish(run.job, RESTART)),
+            eventually(
+                "same scope creates valid Advice", lambda run: run.services.matches(run.job, RESTART), within=45
+            ),
         ),
     )

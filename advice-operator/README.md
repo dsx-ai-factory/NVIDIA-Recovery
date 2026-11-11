@@ -82,6 +82,13 @@ missing, mismatched, or terminating owners. These fields determine
 the Advice owner reference and its garbage-collection lifecycle. Incomplete
 owner metadata currently produces Advice without an owner reference.
 
+The chart does not grant access to PyTorchJob owners. The Run:ai adapter's
+opt-in `OWNER_REF_FALLBACK_MODE=pytorchjob` requires the PyTorchJob CRD and
+additional `get` permission on `kubeflow.org/pytorchjobs`; it is not qualified
+by this profile. With insufficient permissions or an unavailable owner kind,
+owner lookup returns an error and reconciliation retries. The default adapter
+fallback mode is `none`.
+
 JobSet ownership is supported for now; revisit owner selection and Advice
 lifetime when Advice routing is defined. This does not grant the operator
 permission to modify JobSets or implement workload recovery.
