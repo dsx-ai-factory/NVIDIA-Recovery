@@ -254,7 +254,7 @@ Automatic recovery may requeue a failed job into a held state, apply node
 exclusions, and release it when the controller is authorized to act. A retry
 still waits for Slurm scheduling and available resources. Recovery does not guarantee
 completion or diagnose every failure. Private NVIDIA Attribution is optional
-and disabled by default; its absence does not disable the public recovery path.
+but enabled by default; disabling it does not disable the public recovery path.
 
 The effective retry limit is bounded by the site's policy and the job's
 requested limit. Site policy can also stop retries after qualifying failures

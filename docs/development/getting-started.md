@@ -102,9 +102,11 @@ locally; no project-published application images are required:
 make build-local SERVICES="job-manager watcher" IMAGE_TAG=dev
 ```
 
-Omit `SERVICES` to build all eight public services. This loads native-architecture
-images into the local Docker image store. The defaults exclude Attribution and
-Advice Operator. List accepted service names with:
+Omit `SERVICES` to build all ten stack services, including Attribution. This
+loads images into the local Docker image store (native architecture, except
+Attribution, which uses amd64). Attribution is optional but enabled by default;
+set `ATTRIBUTION_ENABLED=false` for a degraded build without it. The defaults
+exclude Advice Operator. List accepted service names with:
 
 ```bash
 scripts/build-images.sh --list
