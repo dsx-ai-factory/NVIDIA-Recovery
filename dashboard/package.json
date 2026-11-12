@@ -63,12 +63,13 @@
     "dotenv": "^18.0.6",
     "fs": "^0.0.2",
     "husky": "^9.1.7",
+    "jsdom": "^31.0.0",
     "kubb": "^5.3.8",
     "lint-staged": "^16.4.0",
     "postcss": "^8.4.39",
     "tailwindcss": "^4.1.17",
     "typescript": "^5",
-    "vite": "^8.1.5"
+    "vite": "^8.3.5"
   },
   "ct3aMetadata": {
     "initVersion": "7.37.0"
@@ -83,7 +84,8 @@
     "cross-spawn": "^7.0.5",
     "dompurify": "^3.4.12",
     "esbuild": "^0.28.1",
-    "fast-uri": "^4.1.1",
+    "fast-uri": "^4.2.3",
+    "follow-redirects": "^1.16.2",
     "glob": "^10.5.0",
     "jose": "^6.1.0",
     "js-yaml": "^5.4.2",
@@ -95,6 +97,7 @@
     "rollup": "^4.59.0",
     "shell-quote": "^1.10.0",
     "tmp": "^0.2.5",
-    "vite": "^8.1.5"
+    "undici": "^8.12.3",
+    "vite": "^8.3.5"
   }
 }

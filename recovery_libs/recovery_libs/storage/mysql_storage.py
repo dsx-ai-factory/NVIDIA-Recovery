@@ -361,20 +361,6 @@ class MySQLStorage(BaseStorage):
             )
             raise RecoveryStorageException(f"Failed to get latest attempt index for job: {job_id}, error: {e}") from e
 
-    def create_job_record(self, job_record: SlurmJobExecutionRecord) -> bool:
-        try:
-            self._fill_heimdall_job_id(job_record)
-            with self.connection.session() as session:
-                session.add(job_record)
-                session.commit()
-                logger.debug(
-                    f"Succesfully created a job record for job {job_record.job_id}, attempt index {job_record.job_attempt_index}."
-                )
-                return True
-        except Exception as e:
-            logger.exception("Failed to create job record", extra={"error": str(e)})
-            raise RecoveryStorageException(f"Failed to create job record: {e}") from e
-
     def upsert_job_record(
         self,
         job_record: SlurmJobExecutionRecord,

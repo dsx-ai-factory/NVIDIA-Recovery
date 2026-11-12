@@ -114,10 +114,6 @@ data:
       # Message bus configuration
       event_bus:
         host: "{{ .Values.event_bus.host }}"
-        workflow_controller_exchange: "{{ .Values.event_bus.workflow_controller_exchange }}"
-        workflow_controller_exchange_type: "{{ .Values.event_bus.workflow_controller_exchange_type | default "direct" }}"
-        job_queue: "{{ .Values.event_bus.job_queue }}"
-        job_routing_key: "{{ .Values.event_bus.job_routing_key }}"
         anomaly_exchange: "{{ .Values.event_bus.anomaly_exchange }}"
         anomaly_queue: "{{ .Values.event_bus.anomaly_queue }}"
         anomaly_routing_key: "{{ .Values.event_bus.anomaly_routing_key }}"

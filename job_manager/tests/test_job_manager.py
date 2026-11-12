@@ -15,10 +15,9 @@ import pika
 import uvicorn
 from job_manager.advice_mapping import storage_to_http_advice
 from job_manager.audit.events import AdviceCreatedEvent, AdviceUpdatedEvent, JobAttemptUpdatedEvent
-from job_manager.constants import DEFAULT_SYSTEM_MAX_REQUEUE_TIMES, WORKFLOW_CONTROLLER
+from job_manager.constants import ANOMALY_ISOLATOR, DEFAULT_SYSTEM_MAX_REQUEUE_TIMES, WATCHER
 from job_manager.main import app, start_http_server
 from job_manager.metrics import LEADER_STATUS_GAUGE
-from job_manager.notification_utils import invalid_job_config_messages
 from job_manager.periodic_tasks import reconcile_timed_out_dag_actions
 from job_manager.service import (
     MESSAGE_MAX_DELIVERY_TIMES,
@@ -26,21 +25,15 @@ from job_manager.service import (
     StorageMode,
     resolve_effective_final_state,
 )
-from opentelemetry.trace import SpanKind, StatusCode
+from opentelemetry.trace import StatusCode
 from recovery_libs.audit import AuditEventLevel
 from recovery_libs.notifications_client import (
-    InvalidJobConfig,
-    NotificationCreate,
     NotificationsApi,
-    TemplateData,
 )
 from recovery_libs.schema.aps_spec.spec import (
     AnomalyDetectionConfig,
     ApsSlurmJobSpec,
     AutoResumeModeEnum,
-    DagActionEnum,
-    DagDependencyStep,
-    JobReferenceByName,
 )
 from recovery_libs.schema.event_type import EventType
 from recovery_libs.schema.job_manager.models import (
@@ -57,8 +50,6 @@ from recovery_libs.storage.base import RecoveryStorageException, UpdateJobResult
 from recovery_libs.storage.dataclass import (
     DagDependency,
     DagDependencyActionStatus,
-    DagDependencyReasonCode,
-    JobConfigValidationFailureTypes,
     SlurmJobNonFinalStates,
 )
 from recovery_libs.storage.mysql_storage import AdviceIssueMerge, MySQLStorage
@@ -107,6 +98,27 @@ class TestJobManager(unittest.TestCase):
         self._job_manager.storage = MagicMock(spec=MySQLStorage)
         self._job_manager.attribution_storage = MagicMock(spec=AttributionStorage)
         self._job_manager.notifications_client = MagicMock(spec=NotificationsApi)
+
+    def test_consumers_initialize_with_only_active_event_routes(self):
+        """Startup requires only Watcher and attribution routes and creates no job queue."""
+        with patch("job_manager.service.RabbitMQConsumer") as consumer:
+            self._job_manager.initialize_event_bus_consumers()
+
+        self.assertEqual(set(self._job_manager.event_bus_consumers), {WATCHER, ANOMALY_ISOLATOR})
+        self.assertEqual(consumer.call_count, 2)
+        configs = [call.kwargs["consumer_config"] for call in consumer.call_args_list]
+        event_bus = self._config["service"]["event_bus"]
+        self.assertCountEqual(
+            [(config.exchange_name, config.queue_name, config.routing_keys) for config in configs],
+            [
+                (event_bus["anomaly_exchange"], event_bus["anomaly_queue"], [event_bus["anomaly_routing_key"]]),
+                (
+                    event_bus["anomaly_isolator_exchange"],
+                    event_bus["anomaly_attribution_queue"],
+                    [event_bus["anomaly_attribution_routing_key"]],
+                ),
+            ],
+        )
 
     def test_adi_publisher_initializes_without_legacy_exchange(self):
         """Direct attribution needs only its own event-bus exchange."""
@@ -516,180 +528,6 @@ class TestJobManager(unittest.TestCase):
             # Verify the password used for MySQL connection is read from the config file.
             self.assertEqual(storage_connection_mock.call_args.kwargs["password"], "aps_test")
 
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_process_job_updates_record_create(self, mock_sanitize_log_file_paths):
-        now = datetime.now(UTC)
-        submit_time = now - timedelta(minutes=10)
-        record = create_example_slurm_job_record(submit_time=submit_time, last_updated_at=now, attempt_index=0)
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = -1
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER") as job_update_counter_mock:
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-            self._job_manager.storage.get_job_latest_attempt_index.assert_called_once_with(record.job_id)
-            self._job_manager.storage.create_job_record.assert_called_once()
-            call_args = self._job_manager.storage.create_job_record.call_args.kwargs
-            self.assertEqual(call_args["job_record"].last_state_transition_time, record.last_updated_at)
-            self.assertEqual(call_args["job_record"].namespace, record.namespace)
-            job_update_counter_mock.inc.assert_called_once()
-            mock_sanitize_log_file_paths.assert_called_once()
-
-    @patch("job_manager.service.populate_sticky_exclusion_node_list", MagicMock(return_value=None))
-    def test_process_job_updates_record_update(self):
-        now = datetime.now(UTC)
-        submit_time = now - timedelta(minutes=10)
-        record = create_example_slurm_job_record(
-            submit_time=submit_time, state="RUNNING", last_updated_at=now, attempt_index=0
-        )
-        record.config_validation_failure_types = [JobConfigValidationFailureTypes.LOG_FILE_PATH_NOT_FOUND]
-        known_record = create_example_slurm_job_record(
-            submit_time=submit_time, last_updated_at=now - timedelta(minutes=3), attempt_index=0
-        )
-        known_record.last_state_transition_time = known_record.last_updated_at
-
-        # Return value of get_job_latest_attempt_index is the same as the actual attmept index
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = 0
-        self._job_manager.storage.read_job_record.return_value = known_record
-
-        with (
-            patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER") as job_update_counter_mock,
-            patch("job_manager.service.JOB_WITH_INVALID_CONFIG_COUNTER") as invalid_job_counter_mock,
-        ):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-            self._job_manager.storage.get_job_latest_attempt_index.assert_called_once_with(record.job_id)
-            self._job_manager.storage.update_job_record.assert_called_once()
-            self._job_manager.notifications_client.notification_create.assert_called_once_with(
-                NotificationCreate(
-                    template_data=TemplateData(
-                        InvalidJobConfig(
-                            job_id=record.job_id,
-                            job_attempt_index=record.job_attempt_index,
-                            job_name=record.job_name,
-                            reason=f"{JobConfigValidationFailureTypes.LOG_FILE_PATH_NOT_FOUND.name}: {invalid_job_config_messages[JobConfigValidationFailureTypes.LOG_FILE_PATH_NOT_FOUND]}",
-                            user=record.user,
-                        )
-                    ),
-                    recipient=record.user,
-                    job_id=record.job_id,
-                )
-            )
-
-            job_update_counter_mock.inc.assert_called_once()
-            invalid_job_counter_mock.labels(failure_type="LOG_FILE_PATH_NOT_FOUND").inc.assert_called_once()
-
-            call_args = self._job_manager.storage.update_job_record.call_args.kwargs
-            self.assertEqual(call_args["last_state_transition_time"], record.last_updated_at)
-            self.assertEqual(call_args["state_reason"], "None")
-
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_process_job_updates_record_not_found_creates_new(self, mock_sanitize_log_file_paths):
-        """When update path finds no existing record (gap in attempt indices), it should create a new record."""
-        now = datetime.now(UTC)
-        record = create_example_slurm_job_record(
-            submit_time=now - timedelta(minutes=10), state="REQUEUED", last_updated_at=now, attempt_index=1
-        )
-
-        # Latest attempt is 2 (higher), so attempt 1 routes to the update path, but read returns None
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = 2
-        self._job_manager.storage.read_job_record.return_value = None
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER") as job_update_counter_mock:
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-            self._job_manager.storage.read_job_record.assert_called_once_with(record.job_id, record.job_attempt_index)
-            self._job_manager.storage.create_job_record.assert_called_once()
-            self._job_manager.storage.update_job_record.assert_not_called()
-            mock_sanitize_log_file_paths.assert_called_once()
-            job_update_counter_mock.inc.assert_called_once()
-
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_process_job_updates_with_final_state(self, mock_sanitize_log_file_paths):
-        now = datetime.now(UTC)
-        submit_time = now - timedelta(minutes=10)
-        end_time = now - timedelta(minutes=1)
-        record = create_example_slurm_job_record(
-            submit_time=submit_time,
-            end_time=end_time,
-            state="COMPLETED",
-            last_updated_at=now,
-            attempt_index=0,
-            log_file_paths=["/var/log/heimdall/prod/job_12345.log"],
-        )
-        known_record = create_example_slurm_job_record(
-            submit_time=submit_time, state="RUNNING", last_updated_at=now - timedelta(minutes=3), attempt_index=0
-        )
-        known_record.sticky_exclusion_node_list = []
-
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = 0
-        self._job_manager.storage.read_job_record.return_value = known_record
-        self._job_manager.storage.update_job_record.return_value = UpdateJobResult(
-            updated_record=record,
-            old_record=known_record,
-        )
-        self._job_manager.audit_buffer = MagicMock()
-
-        with (
-            patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER") as job_update_counter_mock,
-            patch("job_manager.service.END_ANOMALY_GENERATED_COUNTER") as end_anomaly_generated_counter_mock,
-            patch("job_manager.service.tracer") as mock_tracer,
-        ):
-            mock_detection_span = MagicMock()
-            mock_tracer.start_span.return_value = mock_detection_span
-            mock_persistence_span = MagicMock()
-            mock_tracer.start_as_current_span.return_value.__enter__.return_value = mock_persistence_span
-
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-            self._job_manager.storage.get_job_latest_attempt_index.assert_called_once_with(record.job_id)
-            self._job_manager.storage.update_job_record.assert_called_once()
-
-            mock_sanitize_log_file_paths.assert_called_once()
-
-            job_update_counter_mock.inc.assert_called_once()
-            end_anomaly_generated_counter_mock.inc.assert_called_once()
-
-            job_update_call_args = self._job_manager.storage.update_job_record.call_args.kwargs
-            self.assertEqual(len(job_update_call_args["anomalies"]), 1)
-            self.assertEqual(job_update_call_args["anomalies"][0].anomaly_type, EventType.END)
-
-            mock_tracer.start_span.assert_called_once_with(
-                name="job_anomaly.detection",
-                kind=SpanKind.PRODUCER,
-                attributes={
-                    "job_id": record.job_id,
-                    "job_attempt_index": record.job_attempt_index,
-                    "job_anomaly.type": EventType.END,
-                    "job_anomaly.uuid": job_update_call_args["anomalies"][0].uuid,
-                },
-                start_time=end_time.timestamp() * 1_000_000_000,
-            )
-            mock_detection_span.end.assert_called_once()
-
-            mock_tracer.start_as_current_span.assert_called_once_with(
-                name="job_anomaly.persistence",
-                kind=SpanKind.INTERNAL,
-                attributes={
-                    "job_id": record.job_id,
-                    "job_attempt_index": record.job_attempt_index,
-                    "job_anomaly.type": EventType.END,
-                    "job_anomaly.uuid": job_update_call_args["anomalies"][0].uuid,
-                },
-            )
-            mock_persistence_span.set_status.assert_called_once_with(StatusCode.OK)
-            audit_event = self._job_manager.audit_buffer.add.call_args.args[0]
-            self.assertIsInstance(audit_event, JobAttemptUpdatedEvent)
-            self.assertEqual(audit_event.payload.old_job["state"], "RUNNING")
-            self.assertEqual(audit_event.payload.new_job["state"], "COMPLETED")
-
     def test_job_end_event_not_generated_for_non_completed_state(self):
         now = datetime.now(UTC)
         record = create_example_slurm_job_record(
@@ -697,166 +535,6 @@ class TestJobManager(unittest.TestCase):
         )
 
         self.assertFalse(self._job_manager.should_send_end_event(record, record.state))
-
-    def test_generated_bus_advice_follows_successful_job_persistence(self):
-        """Both bus write paths commit CRASH/END causes before Advice and attribution."""
-        self._config["service"]["advice_enabled"] = True
-        detection_time = datetime(2026, 10, 6, 10, 0, tzinfo=UTC)
-        for new_attempt, state, storage_fails in (
-            (True, "FAILED", False),
-            (True, "FAILED", True),
-            (False, "FAILED", False),
-            (False, "FAILED", True),
-            (True, "COMPLETED", False),
-            (True, "COMPLETED", True),
-            (False, "COMPLETED", False),
-            (False, "COMPLETED", True),
-        ):
-            with self.subTest(new_attempt=new_attempt, state=state, storage_fails=storage_fails):
-                storage = self._job_manager.storage = MagicMock(spec=MySQLStorage)
-                self._job_manager.audit_buffer = MagicMock()
-                record = create_example_slurm_job_record(
-                    state=state,
-                    submit_time=detection_time - timedelta(minutes=10),
-                    end_time=detection_time - timedelta(seconds=5),
-                    last_updated_at=detection_time,
-                )
-                record.aps_spec.anomaly_detection_config.log_based_crash_enabled = False
-                known_record = deepcopy(record)
-                known_record.state = "RUNNING"
-                known_record.heimdall_job_id = uuid.uuid4()
-                known_record.sticky_exclusion_node_list = []
-                storage.get_job_latest_attempt_index.return_value = -1 if new_attempt else 0
-                storage.read_job_record.return_value = known_record
-                storage.read_advice.return_value = None
-                lifecycle = []
-
-                def persist_job(
-                    *,
-                    _lifecycle=lifecycle,
-                    _storage_fails=storage_fails,
-                    _new_attempt=new_attempt,
-                    _known_record=known_record,
-                    _record=record,
-                    **kwargs,
-                ):
-                    _lifecycle.append("job")
-                    if _storage_fails:
-                        raise RecoveryStorageException("storage unavailable")
-                    if _new_attempt:
-                        kwargs["job_record"].heimdall_job_id = _known_record.heimdall_job_id
-                        return True
-                    return UpdateJobResult(updated_record=_record, old_record=_known_record)
-
-                storage.create_job_record.side_effect = persist_job
-                storage.update_job_record.side_effect = persist_job
-
-                def persist_advice(advice, _lifecycle=lifecycle, **_):
-                    _lifecycle.append("advice")
-                    return advice, True, None
-
-                storage.upsert_advice.side_effect = persist_advice
-                with (
-                    patch(
-                        "job_manager.service.time_module.time_ns", return_value=int(detection_time.timestamp()) * 10**9
-                    ),
-                    patch.object(
-                        self._job_manager,
-                        "_maybe_emit_attribution_request",
-                        side_effect=lambda _record, _lifecycle=lifecycle: _lifecycle.append("attribution"),
-                    ),
-                ):
-                    self._job_manager.get_job_update_message_callback()(
-                        MagicMock(), MagicMock(), pika.BasicProperties(), record.to_json().encode()
-                    )
-
-                if storage_fails:
-                    self.assertEqual(lifecycle, ["job"])
-                    storage.upsert_advice.assert_not_called()
-                    self._job_manager.audit_buffer.add.assert_not_called()
-                    continue
-
-                self.assertEqual(lifecycle, ["job", "advice", "attribution"])
-                advice = storage.upsert_advice.call_args.args[0]
-                self.assertEqual(advice.heimdall_id, known_record.heimdall_job_id)
-                self.assertEqual(advice.issues[0].timestamp, detection_time)
-                self.assertEqual(advice.issues[0].detected_by, "Heimdall Job Manager")
-                expected_type = "CRASH" if state == "FAILED" else "END"
-                self.assertEqual(advice.issues[0].issue_type, expected_type)
-                advice_events = [
-                    call.args[0]
-                    for call in self._job_manager.audit_buffer.add.call_args_list
-                    if isinstance(call.args[0], AdviceCreatedEvent)
-                ]
-                self.assertEqual(len(advice_events), 1)
-                self.assertEqual(advice_events[0].payload.creation_reasons, [expected_type])
-
-    def test_bus_update_repairs_advice_from_committed_anomaly(self):
-        """A repeated scheduler update repairs Advice even though it carries no anomaly itself."""
-        self._config["service"]["advice_enabled"] = True
-        self._config["service"]["adi_attribution_request_emit_enabled"] = True
-        self._job_manager.audit_buffer = MagicMock()
-        storage = self._job_manager.storage
-        now = datetime.now(UTC)
-        incoming = create_example_slurm_job_record(state="FAILED", submit_time=now - timedelta(minutes=10))
-        incoming.aps_spec.anomaly_detection_config.log_based_crash_enabled = False
-        durable_job = deepcopy(incoming)
-        durable_job.state = "RUNNING"
-        durable_job.heimdall_job_id = uuid.uuid4()
-        durable_job.sticky_exclusion_node_list = []
-        storage.get_job_latest_attempt_index.return_value = 0
-        storage.read_job_record.side_effect = lambda *args, **kwargs: deepcopy(durable_job)
-        storage.read_advice.return_value = None
-        storage.claim_attribution_request_emission.side_effect = [True, False]
-
-        def persist_job(**updates):
-            nonlocal durable_job
-            old_record = deepcopy(durable_job)
-            durable_job = deepcopy(incoming)
-            durable_job.heimdall_job_id = old_record.heimdall_job_id
-            durable_job.sticky_exclusion_node_list = old_record.sticky_exclusion_node_list
-            durable_job.anomalies = deepcopy(updates["anomalies"] or old_record.anomalies)
-            return UpdateJobResult(updated_record=deepcopy(durable_job), old_record=old_record)
-
-        storage.update_job_record.side_effect = persist_job
-        storage.upsert_advice.side_effect = RecoveryStorageException("Advice storage unavailable")
-        callback = self._job_manager.get_job_update_message_callback()
-        body = incoming.to_json().encode()
-        # Keep this retry/persistence test independent of nanosecond-to-microsecond rounding.
-        with patch("job_manager.service.time_module.time_ns", return_value=int(now.timestamp()) * 10**9):
-            callback(MagicMock(), MagicMock(), pika.BasicProperties(), body)
-
-        original = deepcopy(durable_job.anomalies[0])
-        self._job_manager.adi_attribution_request_publisher.publish_message.assert_not_called()
-        self.assertFalse(
-            any(
-                isinstance(call.args[0], AdviceCreatedEvent)
-                for call in self._job_manager.audit_buffer.add.call_args_list
-            )
-        )
-
-        def persist_advice(advice, **_):
-            storage.read_advice.return_value = deepcopy(advice)
-            return advice, True, None
-
-        storage.upsert_advice.side_effect = persist_advice
-        callback(MagicMock(), MagicMock(), pika.BasicProperties(), body)
-        callback(MagicMock(), MagicMock(), pika.BasicProperties(), body)
-
-        self.assertEqual(durable_job.anomalies, [original])
-        self.assertEqual(storage.upsert_advice.call_count, 2)
-        issue = storage.read_advice.return_value.issues[0]
-        self.assertEqual(issue.timestamp, original.timestamp)
-        self.assertEqual(issue.detected_by, "Heimdall Job Manager")
-        self.assertEqual(issue.relevant_log_lines, ["State-based CRASH event for failed job"])
-        self._job_manager.adi_attribution_request_publisher.publish_message.assert_called_once()
-        advice_events = [
-            call.args[0]
-            for call in self._job_manager.audit_buffer.add.call_args_list
-            if isinstance(call.args[0], AdviceCreatedEvent)
-        ]
-        self.assertEqual(len(advice_events), 1)
-        self.assertEqual(advice_events[0].payload.creation_reasons, ["CRASH"])
 
     def test_job_end_event_generation_with_env_matching(self):
         now = datetime.now(UTC)
@@ -1605,7 +1283,6 @@ class TestJobManager(unittest.TestCase):
             )
 
             self._job_manager.adi_attribution_request_publisher.publish_message.assert_not_called()
-            self._job_manager.event_bus_consumers[WORKFLOW_CONTROLLER].get_queue_length.assert_not_called()
             storage_mock.update_job_record.assert_not_called()
 
     def test_find_stale_jobs_not_found(self):
@@ -2077,116 +1754,6 @@ class TestJobManager(unittest.TestCase):
         record.anomalies = [JobAnomaly(anomaly_type=EventType.STRAGGLER, timestamp=now, uuid=str(uuid.uuid4()))]
         self.assertTrue(self._job_manager.should_send_crash_anomaly(record, "FAILED"))
 
-    def test_job_update_emits_end_during_completing_time_limit(self):
-        now = datetime.now(UTC)
-        submit_time = now - timedelta(minutes=10)
-        record = create_example_slurm_job_record(
-            state="COMPLETING",
-            state_reason="TimeLimit",
-            submit_time=submit_time,
-            end_time=now,
-            last_updated_at=now,
-        )
-        known_record = create_example_slurm_job_record(
-            state="RUNNING",
-            state_reason="None",
-            submit_time=submit_time,
-            last_updated_at=now - timedelta(minutes=1),
-        )
-        known_record.sticky_exclusion_node_list = []
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = 0
-        self._job_manager.storage.read_job_record.return_value = known_record
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-        updated_anomalies = self._job_manager.storage.update_job_record.call_args.kwargs["anomalies"]
-        self.assertEqual(len(updated_anomalies), 1)
-        self.assertEqual(updated_anomalies[0].anomaly_type, EventType.END)
-        self.assertEqual(self._job_manager.storage.update_job_record.call_args.kwargs["state"], "COMPLETING")
-
-    def test_job_update_completing_crash_has_persistence_span(self):
-        now = datetime.now(UTC)
-        submit_time = now - timedelta(minutes=10)
-        record = create_example_slurm_job_record(
-            state="COMPLETING",
-            state_reason="NonZeroExitCode",
-            submit_time=submit_time,
-            end_time=now,
-            last_updated_at=now,
-        )
-        known_record = create_example_slurm_job_record(
-            state="RUNNING",
-            state_reason="None",
-            submit_time=submit_time,
-            last_updated_at=now - timedelta(minutes=1),
-        )
-        for job_record in (record, known_record):
-            job_record.aps_spec = ApsSlurmJobSpec(
-                anomaly_detection_config=AnomalyDetectionConfig(log_based_crash_enabled=False)
-            )
-        known_record.sticky_exclusion_node_list = []
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = 0
-        self._job_manager.storage.read_job_record.return_value = known_record
-
-        with (
-            patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"),
-            patch("job_manager.service.tracer") as mock_tracer,
-        ):
-            persistence_span = MagicMock()
-            mock_tracer.start_as_current_span.return_value.__enter__.return_value = persistence_span
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-        updated_anomalies = self._job_manager.storage.update_job_record.call_args.kwargs["anomalies"]
-        mock_tracer.start_as_current_span.assert_called_once_with(
-            name="job_anomaly.persistence",
-            kind=SpanKind.INTERNAL,
-            attributes={
-                "job_id": record.job_id,
-                "job_attempt_index": record.job_attempt_index,
-                "job_anomaly.type": EventType.CRASH,
-                "job_anomaly.uuid": updated_anomalies[0].uuid,
-            },
-        )
-        persistence_span.set_status.assert_called_once_with(StatusCode.OK)
-
-    def test_job_update_does_not_duplicate_end_after_completing(self):
-        now = datetime.now(UTC)
-        submit_time = now - timedelta(minutes=10)
-        record = create_example_slurm_job_record(
-            state="TIMEOUT",
-            state_reason="TimeLimit",
-            submit_time=submit_time,
-            end_time=now,
-            last_updated_at=now,
-        )
-        known_record = create_example_slurm_job_record(
-            state="COMPLETING",
-            state_reason="TimeLimit",
-            submit_time=submit_time,
-            last_updated_at=now - timedelta(minutes=1),
-        )
-        known_record.sticky_exclusion_node_list = []
-        known_record.anomalies = [
-            JobAnomaly(anomaly_type=EventType.END, timestamp=now - timedelta(seconds=30), uuid=str(uuid.uuid4()))
-        ]
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = 0
-        self._job_manager.storage.read_job_record.return_value = known_record
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-        self._job_manager.adi_attribution_request_publisher.publish_message.assert_not_called()
-        anomalies = self._job_manager.storage.update_job_record.call_args.kwargs["anomalies"]
-        # None leaves the stored anomaly collection untouched instead of appending another END.
-        self.assertIsNone(anomalies)
-
     def test_generate_state_based_crash_anomaly_when_disabled(self):
         """Test that CRASH anomaly is generated immediately when anomaly_detection_config.log_based_crash_enabled is False"""
         # Create a job record in FAILED state with anomaly_detection_config.log_based_crash_enabled=False
@@ -2591,7 +2158,7 @@ class TestLeaderElectionRetry(unittest.TestCase):
 
 
 class TestDagDependencyManagement(unittest.TestCase):
-    """Tests for DAG dependency registration and evaluation in the job update callback."""
+    """Tests for DAG dependency evaluation and release Advice."""
 
     @patch("kubernetes.config.load_kube_config")
     @patch("kubernetes.client.ApiClient")
@@ -2617,302 +2184,6 @@ class TestDagDependencyManagement(unittest.TestCase):
         self._job_manager.storage.upsert_advice.side_effect = lambda advice, **_: (advice, True, None)
         # Default return for read_job_record: a real initial attempt for DAG release advice.
         self._job_manager.storage.read_job_record.return_value = create_example_slurm_job_record()
-
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_dag_dependencies_registered_on_job_creation(self, mock_sanitize):
-        """When a new job with dag_dependencies is created, dependency records should be registered."""
-
-        now = datetime.now(UTC)
-        record = create_example_slurm_job_record(submit_time=now, last_updated_at=now, attempt_index=0)
-        record.aps_spec.dag_dependencies = [
-            DagDependencyStep(target=JobReferenceByName(name="preprocess")),
-            DagDependencyStep(target=JobReferenceByName(name="training")),
-        ]
-        record.aps_spec.dag_action = DagActionEnum.RELEASE
-
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = -1
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-        self._job_manager.storage.create_job_record.assert_called_once()
-        # Should have 2 calls to upsert_dag_dependency, one per dependency step
-        self.assertEqual(self._job_manager.storage.upsert_dag_dependency.call_count, 2)
-
-        first_call = self._job_manager.storage.upsert_dag_dependency.call_args_list[0]
-        dep_record = first_call.args[0]
-        self.assertEqual(dep_record.dependent_job_id, record.job_id)
-        self.assertEqual(dep_record.dependent_job_action, "release")
-        self.assertEqual(dep_record.dependency_job_identifier, "preprocess")
-        self.assertEqual(dep_record.dependency_job_identifier_type, "name")
-        self.assertEqual(dep_record.dependency_trigger_condition, "completed")
-
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_no_dag_registration_without_dependencies(self, mock_sanitize):
-        """When a job without dag_dependencies is created, no dependency records should be registered."""
-        now = datetime.now(UTC)
-        record = create_example_slurm_job_record(submit_time=now, last_updated_at=now, attempt_index=0)
-
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = -1
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-        self._job_manager.storage.create_job_record.assert_called_once()
-        self._job_manager.storage.upsert_dag_dependency.assert_not_called()
-
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_dag_evaluation_on_job_completion_all_deps_met(self, mock_sanitize):
-        """When a parent job completes and all deps for a child are met, the action should be triggered."""
-
-        now = datetime.now(UTC)
-        # Create a completed job record
-        record = create_example_slurm_job_record(
-            submit_time=now, state="COMPLETED", end_time=now, last_updated_at=now, attempt_index=0
-        )
-
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = -1
-
-        # Set up a single dependency that references this completed job by name
-        dep = DagDependency(
-            dependent_job_id="99999",
-            dependent_job_action="release",
-            dependency_job_identifier="Test Job",
-            dependency_job_identifier_type="name",
-            dependency_trigger_condition="completed",
-            action_status=DagDependencyActionStatus.NOT_ELIGIBLE.value,
-        )
-        dep.id = 1
-
-        # read_dag_dependencies: by parent name returns the dep, by dependent_job_id returns all deps
-        def _read_dag_deps_side_effect(**kwargs):
-            if (
-                kwargs.get("dependency_job_identifier") == "Test Job"
-                and kwargs.get("dependency_job_identifier_type") == "name"
-            ):
-                return ([dep], 1)
-            if kwargs.get("dependent_job_id") == "99999":
-                return ([dep], 1)
-            return ([], 0)
-
-        self._job_manager.storage.read_dag_dependencies.side_effect = _read_dag_deps_side_effect
-        # The parent job is found and is COMPLETED
-        self._job_manager.storage.read_job_records.return_value = ([record], 1)
-        # The dependent job record (for building spec_update)
-        dependent_record = create_example_slurm_job_record(job_id="99999")
-        self._job_manager.storage.read_job_record.return_value = dependent_record
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-        advice_record = self._job_manager.storage.upsert_advice.call_args.args[0]
-        self.assertEqual(advice_record.job_id, "99999")
-        self.assertEqual(advice_record.attempt_index, 0)
-        self.assertEqual(advice_record.advice_state, AdviceState.RELEASED.value)
-        self.assertEqual(
-            [
-                call.kwargs["action_status"]
-                for call in self._job_manager.storage.update_dag_dependency_status.call_args_list
-            ],
-            [
-                DagDependencyActionStatus.NOT_ELIGIBLE.value,
-                DagDependencyActionStatus.IN_PROGRESS.value,
-                DagDependencyActionStatus.SUCCESSFUL.value,
-            ],
-        )
-
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_dag_evaluation_on_job_completion_not_all_deps_met(self, mock_sanitize):
-        """When a parent job completes but not all deps for a child are met, no action should be triggered."""
-
-        now = datetime.now(UTC)
-        record = create_example_slurm_job_record(
-            submit_time=now, state="COMPLETED", end_time=now, last_updated_at=now, attempt_index=0
-        )
-
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = -1
-
-        # Two dependencies for the child job — only one parent is completed
-        dep_met = DagDependency(
-            dependent_job_id="99999",
-            dependent_job_action="release",
-            dependency_job_identifier="Test Job",
-            dependency_job_identifier_type="name",
-            dependency_trigger_condition="completed",
-            action_status=DagDependencyActionStatus.NOT_ELIGIBLE.value,
-        )
-        dep_met.id = 1
-
-        dep_not_met = DagDependency(
-            dependent_job_id="99999",
-            dependent_job_action="release",
-            dependency_job_identifier="other_parent",
-            dependency_job_identifier_type="name",
-            dependency_trigger_condition="completed",
-            action_status=DagDependencyActionStatus.NOT_ELIGIBLE.value,
-        )
-        dep_not_met.id = 2
-
-        def _read_dag_deps_side_effect(**kwargs):
-            if (
-                kwargs.get("dependency_job_identifier") == "Test Job"
-                and kwargs.get("dependency_job_identifier_type") == "name"
-            ):
-                return ([dep_met], 1)
-            if kwargs.get("dependent_job_id") == "99999":
-                return ([dep_met, dep_not_met], 2)
-            return ([], 0)
-
-        self._job_manager.storage.read_dag_dependencies.side_effect = _read_dag_deps_side_effect
-        # Parent lookup: "Test Job" found and COMPLETED, "other_parent" not found
-        self._job_manager.storage.read_job_records.side_effect = lambda **kwargs: (
-            ([record], 1) if kwargs.get("job_name") == "Test Job" else ([], 0)
-        )
-        # The dependent job is still PENDING
-        self._job_manager.storage.read_job_record.return_value = create_example_slurm_job_record(job_id="99999")
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-        # No release action is triggered, but both held gates receive a durable explanation.
-        update_calls = self._job_manager.storage.update_dag_dependency_status.call_args_list
-        self.assertEqual(
-            [call.kwargs["reason_code"] for call in update_calls],
-            [
-                DagDependencyReasonCode.DEPENDENCY_SATISFIED_WAITING_FOR_OTHERS.value,
-                DagDependencyReasonCode.WAITING_FOR_PARENT_REGISTRATION.value,
-            ],
-        )
-        self._job_manager.storage.upsert_advice.assert_not_called()
-
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_dag_evaluation_no_dependents(self, mock_sanitize):
-        """When a job completes but no other jobs depend on it, nothing should happen."""
-        now = datetime.now(UTC)
-        record = create_example_slurm_job_record(
-            submit_time=now, state="COMPLETED", end_time=now, last_updated_at=now, attempt_index=0
-        )
-
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = -1
-
-        # No deps reference this job
-        self._job_manager.storage.read_dag_dependencies.return_value = ([], 0)
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-        self._job_manager.storage.update_dag_dependency_status.assert_not_called()
-
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_dag_evaluation_skips_non_pending_dependent_job(self, mock_sanitize):
-        """When a dependent job is no longer in PENDING state, dependency evaluation should be skipped."""
-
-        now = datetime.now(UTC)
-        record = create_example_slurm_job_record(
-            submit_time=now, state="COMPLETED", end_time=now, last_updated_at=now, attempt_index=0
-        )
-
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = -1
-
-        dep = DagDependency(
-            dependent_job_id="99999",
-            dependent_job_action="release",
-            dependency_job_identifier="Test Job",
-            dependency_job_identifier_type="name",
-            dependency_trigger_condition="completed",
-            action_status=DagDependencyActionStatus.NOT_ELIGIBLE.value,
-        )
-        dep.id = 1
-
-        def _read_dag_deps_side_effect(**kwargs):
-            if (
-                kwargs.get("dependency_job_identifier") == "Test Job"
-                and kwargs.get("dependency_job_identifier_type") == "name"
-            ):
-                return ([dep], 1)
-            return ([], 0)
-
-        self._job_manager.storage.read_dag_dependencies.side_effect = _read_dag_deps_side_effect
-
-        # The dependent job is already RUNNING — no longer pending
-        self._job_manager.storage.read_job_record.return_value = create_example_slurm_job_record(
-            job_id="99999", state="RUNNING"
-        )
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), record.to_json().encode()
-            )
-
-        # Should skip — never read deps for a specific dependent job (only read by parent)
-        for mock_call in self._job_manager.storage.read_dag_dependencies.call_args_list:
-            self.assertIsNone(
-                mock_call.kwargs.get("dependent_job_id"),
-                f"Expected dependent_job_id=None but got {mock_call.kwargs.get('dependent_job_id')}",
-            )
-        self._job_manager.storage.update_dag_dependency_status.assert_not_called()
-
-    @patch("job_manager.service.sanitize_log_file_paths_for_retry")
-    def test_dag_evaluation_uses_in_flight_state_not_db_state(self, mock_sanitize):
-        """The completed_record's state should be used instead of the DB state, since the DB
-        hasn't been updated yet when dependency evaluation runs."""
-
-        now = datetime.now(UTC)
-        # The job that just completed (state=COMPLETED), but not yet persisted
-        completed_record = create_example_slurm_job_record(
-            submit_time=now, state="COMPLETED", end_time=now, last_updated_at=now, attempt_index=0
-        )
-
-        self._job_manager.storage.get_job_latest_attempt_index.return_value = -1
-
-        dep = DagDependency(
-            dependent_job_id="99999",
-            dependent_job_action="release",
-            dependency_job_identifier="Test Job",
-            dependency_job_identifier_type="name",
-            dependency_trigger_condition="completed",
-            action_status=DagDependencyActionStatus.NOT_ELIGIBLE.value,
-        )
-        dep.id = 1
-
-        def _read_dag_deps_side_effect(**kwargs):
-            if (
-                kwargs.get("dependency_job_identifier") == "Test Job"
-                and kwargs.get("dependency_job_identifier_type") == "name"
-            ):
-                return ([dep], 1)
-            if kwargs.get("dependent_job_id") == "99999":
-                return ([dep], 1)
-            return ([], 0)
-
-        self._job_manager.storage.read_dag_dependencies.side_effect = _read_dag_deps_side_effect
-
-        # Simulate the DB still having the old state (RUNNING) — the record hasn't been persisted yet
-        stale_db_record = create_example_slurm_job_record(
-            submit_time=now, state="RUNNING", last_updated_at=now, attempt_index=0
-        )
-        self._job_manager.storage.read_job_records.return_value = ([stale_db_record], 1)
-
-        # read_job_record returns the exact dependency-blocked child attempt.
-        dependent_record = create_example_slurm_job_record(job_id="99999")
-        self._job_manager.storage.read_job_record.return_value = dependent_record
-
-        with patch("job_manager.service.JOB_UPDATE_MESSAGE_RECEIVED_COUNTER"):
-            self._job_manager.get_job_update_message_callback()(
-                MagicMock(), MagicMock(), MagicMock(), completed_record.to_json().encode()
-            )
-
-        self._job_manager.storage.upsert_advice.assert_called_once()
 
     def test_dag_action_uses_existing_advice_scope_and_decision_time(self):
         from recovery_libs.schema.job_manager.models import RecoveryContext, RecoveryOperation
