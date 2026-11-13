@@ -27,6 +27,7 @@ def profile(tmp_path):
         f"#!{sys.executable}\n"
         """import os
 import sys
+import time
 from pathlib import Path
 
 root = Path(os.environ["FAKE_CLUSTER_DIR"])
@@ -48,14 +49,21 @@ if command == "kind":
         if status == 0:
             cluster.unlink(missing_ok=True)
         sys.exit(status)
+elif command == "uv":
+    (root / "fixture-url").write_text(os.environ["ADVICE_FIXTURE_URL"])
+    sys.exit(int(os.environ.get("TEST_STATUS", "0")))
 elif command == "kubectl":
+    if "port-forward" in args:
+        (root / "forward-pid").write_text(str(os.getpid()))
+        print("Forwarding from 127.0.0.1:32123 -> 8081", flush=True)
+        time.sleep(60)
     if cluster.exists():
         print(os.environ.get("CLUSTER_UID", "original-uid"), end="")
     sys.exit(int(os.environ.get("UID_STATUS", "0")))
 """
     )
     fake.chmod(0o755)
-    for name in ("kind", "kubectl", "tilt"):
+    for name in ("kind", "kubectl", "tilt", "uv"):
         (commands / name).symlink_to(fake)
     state = tmp_path / "deploy/tilt/tmp/test-cluster"
     env = {
@@ -67,7 +75,12 @@ elif command == "kubectl":
 
     def run(action, **overrides):
         return subprocess.run(
-            ["bash", str(script), action], env={**env, **overrides}, capture_output=True, text=True, check=False
+            ["bash", str(script), action],
+            env={**env, **overrides},
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
         )
 
     return run, state, tmp_path
@@ -128,3 +141,17 @@ def test_existing_unowned_or_replaced_cluster_is_never_deleted(profile, action, 
     assert "kind delete" not in calls
     assert "kind create" not in calls
     assert "tilt " not in calls
+
+
+@pytest.mark.parametrize("test_status", ["0", "7"])
+def test_fixture_forward_is_scoped_to_test_process_and_preserves_exit_status(profile, test_status):
+    """Tests receive their own local endpoint and reap the forward on success or failure."""
+    run, _, root = profile
+    assert run("up").returncode == 0
+    result = run("test", TEST_STATUS=test_status)
+    assert result.returncode == int(test_status)
+    assert (root / "fixture-url").read_text() == "http://127.0.0.1:32123"
+    with pytest.raises(ProcessLookupError):
+        os.kill(int((root / "forward-pid").read_text()), 0)
+    calls = (root / "calls").read_text()
+    assert "--context kind-test-cluster -n recovery-dev port-forward --address 127.0.0.1" in calls

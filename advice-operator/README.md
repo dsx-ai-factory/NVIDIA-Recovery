@@ -59,8 +59,12 @@ published version and completing the module release workflow described by
 The inherited `test/e2e` suite is not a supported test target: it still assumes
 source-repository deployment targets and an implicit Kubernetes context. The
 supported checks above cover compilation, generated assets, reconciliation with
-a local API server, and image startup; they do not qualify a live installation
-against a running backend.
+a local API server, and image startup. The [direct Kubernetes development
+profile](../docs/development/kubernetes.md) additionally deploys the production
+image and standalone chart in Kind. Run `make dev-k8s-ci` followed by
+`make dev-k8s-test` to exercise create, update, withdrawal, and owner-validation
+behavior through a scoped mock gRPC gateway. Real backend integration and full
+workload recovery remain separate qualification work.
 
 ## Deployment
 
@@ -68,3 +72,23 @@ The standalone Helm chart is in
 `deploy/helm/advice-operator`. It installs the Advice CRD, controller,
 RBAC, health probes, and optional metrics service. Override the image and API
 Gateway values for the target environment.
+
+The chart includes read-only (`get`) access to JobSets for owner validation,
+alongside the existing Run:ai DistributedWorkload permission. For a JobSet
+owner, the backend must supply `namespace`, `owner_api_version`
+(`jobset.x-k8s.io/v1alpha2`), `owner_kind` (`JobSet`), `owner_name`, and the
+actual Kubernetes `owner_uid` in scheduler metadata. The operator rejects
+missing, mismatched, or terminating owners. These fields determine
+the Advice owner reference and its garbage-collection lifecycle. Incomplete
+owner metadata currently produces Advice without an owner reference.
+
+The chart does not grant access to PyTorchJob owners. The Run:ai adapter's
+opt-in `OWNER_REF_FALLBACK_MODE=pytorchjob` requires the PyTorchJob CRD and
+additional `get` permission on `kubeflow.org/pytorchjobs`; it is not qualified
+by this profile. With insufficient permissions or an unavailable owner kind,
+owner lookup returns an error and reconciliation retries. The default adapter
+fallback mode is `none`.
+
+JobSet ownership is supported for now; revisit owner selection and Advice
+lifetime when Advice routing is defined. This does not grant the operator
+permission to modify JobSets or implement workload recovery.

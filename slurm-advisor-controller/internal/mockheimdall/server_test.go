@@ -157,3 +157,77 @@ func TestDebugUpsertsEndpointIncludesSchedulerMetadata(t *testing.T) {
 		t.Fatalf("scheduler metadata log paths = %#v, want %#v", got, wantPaths)
 	}
 }
+
+// Independent fixture writers must not erase another scenario's advice. The
+// read counter establishes that an operator actually polled newly supplied data.
+func TestScopedAdviceIsolationAndObservation(t *testing.T) {
+	server := mockheimdall.NewServer([]*pb.Advice{{HeimdallJobId: "legacy"}})
+	mux := http.NewServeMux()
+	server.RegisterDebugHandlers(mux)
+	request := func(method, path, body string, status int) *httptest.ResponseRecorder {
+		t.Helper()
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(method, path, strings.NewReader(body)))
+		if response.Code != status {
+			t.Fatalf("%s %s: status %d, body %s", method, path, response.Code, response.Body.String())
+		}
+		return response
+	}
+	reads := func(scope string) uint64 {
+		t.Helper()
+		response := request(http.MethodGet, "/advice/"+scope, "", http.StatusOK)
+		var state struct {
+			Reads uint64 `json:"reads"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &state); err != nil {
+			t.Fatal(err)
+		}
+		return state.Reads
+	}
+	list := func() []string {
+		t.Helper()
+		var ids []string
+		page := ""
+		for {
+			response, err := server.ListAdvice(context.Background(), &pb.ListAdviceRequest{Page: &page, Limit: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, advice := range response.GetAdvice() {
+				ids = append(ids, advice.GetHeimdallJobId())
+			}
+			page = response.GetNextPageToken()
+			if page == "" {
+				return ids
+			}
+		}
+	}
+	request(http.MethodPut, "/advice/run-b", `[{"advice_id":"b","job_id":"job-b"}]`, http.StatusNoContent)
+	request(http.MethodPut, "/advice/run-a", `[{"advice_id":"a","job_id":"job-a"}]`, http.StatusNoContent)
+	if got := reads("run-a"); got != 0 {
+		t.Fatalf("new scope reads = %d", got)
+	}
+	if got := list(); !reflect.DeepEqual(got, []string{"legacy", "a", "b"}) {
+		t.Fatalf("advice = %v", got)
+	}
+	if got := reads("run-a"); got != 1 {
+		t.Fatalf("paginated poll counted %d times, want 1", got)
+	}
+	request(http.MethodPut, "/advice/run-a", `[]`, http.StatusNoContent)
+	if reads("run-a") != 0 || reads("run-b") != 1 {
+		t.Fatal("replacement reset another scope's evidence")
+	}
+	if got := list(); !reflect.DeepEqual(got, []string{"legacy", "b"}) {
+		t.Fatalf("replacement removed other scopes: %v", got)
+	}
+	request(http.MethodDelete, "/advice/run-a", "", http.StatusNoContent)
+	request(http.MethodGet, "/advice/run-a", "", http.StatusNotFound)
+	if got := list(); !reflect.DeepEqual(got, []string{"legacy", "b"}) {
+		t.Fatalf("cleanup removed other scopes: %v", got)
+	}
+	// Invalid replacement must leave the previous fixture intact.
+	request(http.MethodPut, "/advice/run-b", `[{"job_id":"invalid"}]`, http.StatusBadRequest)
+	if got := list(); !reflect.DeepEqual(got, []string{"legacy", "b"}) {
+		t.Fatalf("invalid replacement mutated state: %v", got)
+	}
+}

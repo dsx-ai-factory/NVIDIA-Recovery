@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# Keep this foundation independent of the Slurm/Slinky root Tiltfile.
+# Keep this profile independent of the Slurm/Slinky root Tiltfile.
 cluster = os.environ.get('KUBERNETES_DEV_CLUSTER', 'nvr-kubernetes-dev')
 allow_k8s_contexts('kind-' + cluster)
 local_resource(
@@ -9,4 +9,40 @@ local_resource(
     cmd=['bash', './install-jobset.sh'],
     deps=['install-jobset.sh'],
     labels=['infra'],
+)
+
+# Keep Kubernetes scenario edits from rebuilding images and resetting fixture state.
+gateway_inputs = ['api-gateway/go.mod', 'api-gateway/go.sum', 'api-gateway/gen/go/heimdall/v1']
+docker_build(
+    'advice-operator', '../../..',
+    dockerfile='../../../advice-operator/Dockerfile',
+    only=['advice-operator'] + gateway_inputs,
+)
+docker_build(
+    'mock-advice-gateway', '../../..',
+    dockerfile='Dockerfile.mock-gateway',
+    only=['slurm-advisor-controller', 'deploy/tilt/kubernetes/Dockerfile.mock-gateway'] + gateway_inputs,
+)
+k8s_yaml('mock-gateway.yaml')
+k8s_resource('mock-advice-gateway', resource_deps=['jobset'], labels=['advice'])
+
+operator_yaml = helm(
+    '../../helm/advice-operator',
+    name='advice-operator',
+    namespace='recovery-dev',
+    values=['advice-operator-values.yaml'],
+)
+k8s_yaml(operator_yaml)
+# Associate support objects explicitly so namespace-scoped RBAC and the service
+# account wait for the namespace created by the JobSet bootstrap resource.
+operator_objects = [
+    obj['metadata']['name'] + ':' + obj['kind']
+    for obj in decode_yaml_stream(operator_yaml)
+    if obj['kind'] not in ['Deployment', 'Service']
+]
+k8s_resource(
+    'advice-operator',
+    objects=operator_objects,
+    resource_deps=['jobset', 'mock-advice-gateway'],
+    labels=['advice'],
 )
