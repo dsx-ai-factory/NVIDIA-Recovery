@@ -64,6 +64,7 @@ onward. Earlier decisions are not included.
 | [0054](0054-recover-slurm-array-tasks-independently.md) | accepted | Recover Slurm array tasks with independent retry allowances, task-level checkpoint association and audit history, and scheduler metadata for Slurm-specific identity. |
 | [0055](0055-retire-job-status-event-consumer.md) | accepted | Retire RabbitMQ job-status ingestion and its exclusive configuration and storage helpers; job status arrives through the HTTP API. |
 | [0056](0056-establish-kubernetes-local-development-foundation.md) | accepted | Establish a minimal Tilt-based direct Kubernetes development environment and extend the staged E2E harness before adding Recovery components. |
+| [0057](0057-support-loopback-header-identity.md) | accepted | Add default-off trusted header identity on loopback API listeners while retaining normal authentication fallback. |
 
 ADR numbers 0018, 0019, 0023, and 0024 are retired; their external-service
 decisions were removed with maintainer approval. Do not reuse these numbers.
