@@ -134,11 +134,53 @@ This setting standardizes environment injection only. A service still needs
 OTLP-aware runtime logic, and any service-specific SDK enablement flag remains
 independent (for example, `api-gateway.otel.enabled`).
 
+Applications may export directly to an operator-managed trace backend or use
+the optional bundled collector as a relay. For the relay topology, point
+`global.otelcollector.endpoint` at the collector Service, enable its OTLP
+receiver, and configure the backend endpoint separately:
+
+```yaml
+global:
+  otelcollector:
+    enabled: true
+    endpoint: "http://<collector-service>.<namespace>.svc.cluster.local:4317"
+    protocol: grpc
+
+opentelemetry-collector:
+  enabled: true
+  config:
+    receivers:
+      otlp:
+        enabled: true
+    exporters:
+      traces:
+        enabled: true
+        endpoint: tempo.telemetry.svc.cluster.local:4317
+        tls:
+          insecure: true
+```
+
+The trace backend remains operator-owned. The generic chart has no fixed
+backend hostname, credentials, sampling policy, or retention policy. Keep TLS
+enabled for network endpoints; `insecure: true` is intended only for a trusted
+cluster-internal receiver. If the backend requires a header, map a Secret key
+to an environment variable with `opentelemetry-collector.extraEnvs` and set
+`config.exporters.traces.auth.environmentVariable` to that variable's name.
+Set the non-secret header name in `config.exporters.traces.auth.header`. The
+generated collector configuration expands the environment variable at runtime;
+never commit the header value in a values file. Authenticated OTLP receivers
+use the same pattern with
+`config.receivers.otlp.auth_token_environment_variable`.
+
 The shared settings cover job-manager, anomaly-detection-isolator,
 attribution-adapter, dashboard, watcher, notifications, api-gateway, both
 Slurm advisor controller workloads, and the optional dependency checker. They
 do not configure third-party infrastructure containers such as databases,
 node-exporter, sackd, or the collector itself.
+
+Audit-to-trace navigation is configured independently with
+`dashboard.app.AUDIT_TRACE_URL_TEMPLATE`; see the
+[recovery dashboard guidance](../dashboards/grafana/README.md#recovery-measurement-and-audit-links).
 
 ## Bundled Loki (optional centralized log backend)
 

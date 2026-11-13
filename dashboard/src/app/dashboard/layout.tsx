@@ -10,6 +10,7 @@ import {
   isJobGroupsEnabled,
   isJobNodeAnalysisEnabled,
 } from "~/utils/config";
+import { TraceViewerProvider } from "./audit-events/components/AuditTraceLink";
 import { DashboardContainer } from "./components/DashboardContainer";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,9 @@ export default async function DashboardLayout({
       isJobGroupsEnabled={isJobGroupsEnabled()}
       isAuditEventsEnabled={isAuditEventsEnabled()}
     >
-      {children}
+      <TraceViewerProvider template={env.AUDIT_TRACE_URL_TEMPLATE}>
+        {children}
+      </TraceViewerProvider>
     </DashboardContainer>
   );
 }

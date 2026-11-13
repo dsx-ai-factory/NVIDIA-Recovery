@@ -14,6 +14,7 @@ vi.mock("~/env", () => ({
   env: {
     AGENT_WEB_URL: "https://agent.example.test/base",
     COCKPIT_NAME: "NVIDIA Recovery",
+    AUDIT_TRACE_URL_TEMPLATE: "https://traces.example.test/{trace_id}",
   },
 }));
 vi.mock("@nvidia/react-gui-icons/icons", () => ({
@@ -35,6 +36,7 @@ vi.mock("./components/UserDropdown", () => ({
   UserDropdown: () => null,
 }));
 
+import { AuditTraceLink } from "./audit-events/components/AuditTraceLink";
 import DashboardLayout from "./layout";
 
 describe("Dashboard layout Agent navigation", () => {
@@ -47,4 +49,14 @@ describe("Dashboard layout Agent navigation", () => {
     expect(html).toContain('href="https://agent.example.test/base"');
     expect(html).toContain('target="_blank"');
   });
+});
+
+it("propagates runtime trace navigation configuration to audit content", async () => {
+  const trace_id = "0123456789abcdef0123456789abcdef";
+  const html = renderToStaticMarkup(
+    await DashboardLayout({
+      children: <AuditTraceLink payload={{ trace_id }} />,
+    }),
+  );
+  expect(html).toContain(`href="https://traces.example.test/${trace_id}"`);
 });

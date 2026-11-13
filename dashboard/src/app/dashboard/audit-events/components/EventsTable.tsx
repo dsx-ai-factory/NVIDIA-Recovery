@@ -26,6 +26,7 @@ import { Datetime, epochMicrosecondsToIso } from "~/components/utils/Datetime";
 import type { AuditEvent } from "~/gen/notifications/types";
 import type { AuditEventSort } from "../sort";
 import { AUDIT_EVENT_SORT } from "../sort";
+import { AuditTraceLink } from "./AuditTraceLink";
 import { EventColumnsMenu } from "./EventColumnsMenu";
 import {
   getAuditEventDescription,
@@ -122,7 +123,10 @@ const EVENT_COLUMNS: EventColumn[] = [
     header: "Event",
     render: getAuditEventTitle,
     renderForCell: (event) => (
-      <TruncatedCellText text={getAuditEventTitle(event)} />
+      <>
+        <TruncatedCellText text={getAuditEventTitle(event)} />
+        <AuditTraceLink payload={event.payload} />
+      </>
     ),
   },
   {
@@ -354,6 +358,7 @@ export function EventsTable({
       >
         {selectedEvent && (
           <Flex direction="col" gap="4">
+            <AuditTraceLink payload={selectedEvent.payload} />
             {eventDetailFields.map((col) => (
               <div key={col.id} className="flex flex-col gap-1">
                 <Text kind="body/bold/sm" className="text-muted">

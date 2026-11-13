@@ -18,11 +18,19 @@ import yaml
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = SCRIPT_DIR / "config.yaml"
 TOKEN_ENV_VAR = "GRAFANA_TOKEN"
+URL_ENV_VAR = "GRAFANA_URL"
+ORG_ID_ENV_VAR = "GRAFANA_ORG_ID"
+FOLDER_UID_ENV_VAR = "GRAFANA_FOLDER_UID"
 
 
 def load_config(config_path: Path) -> Dict[str, Any]:
     with open(config_path) as f:
-        return yaml.safe_load(f)
+        config = yaml.safe_load(f)
+    if config is None:
+        return {}
+    if not isinstance(config, dict):
+        raise ValueError("dashboard configuration must be a YAML mapping")
+    return config
 
 
 def get_token() -> str:
@@ -161,6 +169,18 @@ def main() -> None:
         help="Override the target folder UID from config.",
     )
     parser.add_argument(
+        "--grafana-url",
+        type=str,
+        default=None,
+        help=f"Grafana base URL (overrides ${URL_ENV_VAR} and config).",
+    )
+    parser.add_argument(
+        "--org-id",
+        type=int,
+        default=None,
+        help=f"Grafana organization ID (overrides ${ORG_ID_ENV_VAR} and config).",
+    )
+    parser.add_argument(
         "--no-overwrite",
         action="store_true",
         help="Fail instead of overwriting if a dashboard with the same uid/title exists.",
@@ -177,18 +197,20 @@ def main() -> None:
     grafana_cfg = cfg.get("grafana", {})
     defaults = cfg.get("defaults", {})
 
-    grafana_url = grafana_cfg.get("url", "")
-    if not grafana_url:
-        print("Error: grafana.url is not set in config.", file=sys.stderr)
+    grafana_url = args.grafana_url or os.environ.get(URL_ENV_VAR) or grafana_cfg.get("url", "")
+    raw_org_id = args.org_id or os.environ.get(ORG_ID_ENV_VAR) or grafana_cfg.get("org_id")
+    try:
+        org_id = int(raw_org_id) if raw_org_id not in (None, "") else None
+    except (TypeError, ValueError):
+        print(f"Error: {ORG_ID_ENV_VAR} or grafana.org_id must be an integer.", file=sys.stderr)
         sys.exit(1)
-
-    org_id = grafana_cfg.get("org_id")
-    folder_uid = args.folder_uid or grafana_cfg.get("folder_uid", "")
+    folder_uid = (
+        args.folder_uid
+        if args.folder_uid is not None
+        else os.environ.get(FOLDER_UID_ENV_VAR, grafana_cfg.get("folder_uid", ""))
+    )
     overwrite = not args.no_overwrite and defaults.get("overwrite", True)
     message = args.message or defaults.get("message", "Dashboard update")
-
-    token = get_token()
-    headers = build_headers(token, org_id)
 
     if args.file:
         if not args.file.is_file():
@@ -201,7 +223,16 @@ def main() -> None:
             sys.exit(1)
         files = collect_dashboard_files(args.dir)
 
-    print(f"Grafana:   {grafana_url}")
+    if not args.dry_run and not grafana_url:
+        print(
+            f"Error: set --grafana-url, ${URL_ENV_VAR}, or grafana.url in config.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    headers = build_headers(get_token(), org_id) if not args.dry_run else {}
+
+    print(f"Grafana:   {grafana_url or '<not required for dry run>'}")
     print(f"Org ID:    {org_id or 'default'}")
     print(f"Folder:    {folder_uid or 'General'}")
     print(f"Overwrite: {overwrite}")

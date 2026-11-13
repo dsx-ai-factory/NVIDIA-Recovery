@@ -129,6 +129,7 @@
         "JOB_NODE_ANALYSIS_ENABLED": { "type": "boolean" },
         "JOB_GROUPS_ENABLED": { "type": "boolean" },
         "AUDIT_EVENTS_ENABLED": { "type": "boolean" },
+        "AUDIT_TRACE_URL_TEMPLATE": { "type": "string", "pattern": "^$|^https?://[^\\s{}/?#@]+[/?#][^\\s]*\\{trace_id\\}[^\\s]*$" },
         "GRAFANA_TRACE_URL_ENABLED": { "type": "boolean" },
         "GRAFANA_DATA_SOURCE_ID": { "type": "string" },
         "GRAFANA_URL": { "type": "string" },

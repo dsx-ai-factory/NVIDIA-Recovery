@@ -1,5 +1,7 @@
 grafana:
-  url: "" # Required: operator-provided Grafana URL
+  # Set these here, pass CLI flags, or use GRAFANA_URL,
+  # GRAFANA_ORG_ID, and GRAFANA_FOLDER_UID.
+  url: "" # Required unless --dry-run: operator-provided Grafana URL
   org_id: null # Optional: use the authenticated organization when unset
   folder_uid: "" # Optional: destination folder UID
 

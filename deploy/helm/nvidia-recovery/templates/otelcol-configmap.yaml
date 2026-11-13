@@ -1,17 +1,22 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-{{ if (index .Values "opentelemetry-collector").enabled }}
-{{- $image := (index .Values "opentelemetry-collector").image -}}
+{{- $collector := index .Values "opentelemetry-collector" -}}
+{{- $traceExporter := $collector.config.exporters.traces -}}
+{{- if and $collector.enabled $traceExporter.enabled (not $collector.config.receivers.otlp.enabled) -}}
+{{- fail "opentelemetry-collector.config.receivers.otlp.enabled must be true when trace forwarding is enabled" -}}
+{{- end -}}
+{{ if $collector.enabled }}
+{{- $image := $collector.image -}}
 {{- $_ := required "opentelemetry-collector.image.repository is required when the bundled collector is enabled" $image.repository -}}
 {{- $_ := required "opentelemetry-collector.image.tag is required when the bundled collector is enabled" $image.tag -}}
 
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name:  heimdall-otelcol-config
+  name: nvidia-recovery-otelcol-config
 data:
-  heimdall-otelcol-config.yaml: |
+  nvidia-recovery-otelcol-config.yaml: |
     receivers:
       {{ if (index .Values "opentelemetry-collector").config.receivers.filelog.enabled }}
       filelog:
@@ -30,13 +35,15 @@ data:
           {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.grpc}}
           grpc:
             endpoint: {{ (index .Values "opentelemetry-collector").config.receivers.otlp.grpc.endpoint }}
+            {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.auth }}
             auth:
               authenticator: bearertokenauth
+            {{ end }}
           {{ end }}
           {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.http }}
           http:
             endpoint: {{ (index .Values "opentelemetry-collector").config.receivers.otlp.http.endpoint }}
-            {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.http.auth }}
+            {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.auth }}
             auth:
               authenticator: bearertokenauth
             {{ end }}
@@ -119,6 +126,17 @@ data:
       debug:
         verbosity: detailed
 
+      {{ if $traceExporter.enabled }}
+      otlp/recovery_traces:
+        endpoint: {{ required "opentelemetry-collector.config.exporters.traces.endpoint is required when trace forwarding is enabled" $traceExporter.endpoint | quote }}
+        {{ if $traceExporter.auth.enabled }}
+        headers:
+          {{ required "opentelemetry-collector.config.exporters.traces.auth.header is required when trace exporter authentication is enabled" $traceExporter.auth.header | quote }}: {{ printf "${env:%s}" (required "opentelemetry-collector.config.exporters.traces.auth.environmentVariable is required when trace exporter authentication is enabled" $traceExporter.auth.environmentVariable) | quote }}
+        {{ end }}
+        tls:
+          insecure: {{ $traceExporter.tls.insecure }}
+      {{ end }}
+
       {{ if (index .Values "opentelemetry-collector").config.event_bus.watcher.enabled }}
       rabbitmq/watcher:
         connection:
@@ -148,31 +166,30 @@ data:
 
       {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.auth }}
       bearertokenauth:
-        token: ${env:BASIC_AUTH_TOKEN}
+        token: {{ printf "${env:%s}" (required "opentelemetry-collector.config.receivers.otlp.auth_token_environment_variable is required when receiver authentication is enabled" (index .Values "opentelemetry-collector").config.receivers.otlp.auth_token_environment_variable) | quote }}
       {{ end }}
 
     service:
-      {{ if (index .Values "opentelemetry-collector").config.receivers.filelog.enabled }}
-      extensions: [file_storage/filelogreceiver, health_check]
+      extensions: [{{ if (index .Values "opentelemetry-collector").config.receivers.filelog.enabled }}file_storage/filelogreceiver, {{ end }}health_check{{ if (index .Values "opentelemetry-collector").config.receivers.otlp.auth }}, bearertokenauth{{ end }}]
       pipelines:
-        {{ if (index .Values "opentelemetry-collector").config.event_bus.watcher.enabled }}
-        otlp/watcher:
+        {{ if and (index .Values "opentelemetry-collector").config.receivers.filelog.enabled (index .Values "opentelemetry-collector").config.event_bus.watcher.enabled }}
+        logs/filelog-watcher:
           receivers: [filelog]
           processors: [filter/training_telemetry_errors_file_log, transform/extract_job_attributes, batch]
           exporters: [rabbitmq/watcher]
         {{ end }}
-      {{ end }}
-
-      {{ if (index .Values "opentelemetry-collector").config.receivers.otlp.enabled }}
-      extensions: [health_check{{ if (index .Values "opentelemetry-collector").config.receivers.otlp.auth }},bearertokenauth{{ end }}]
-      pipelines:
-        {{ if (index .Values "opentelemetry-collector").config.event_bus.watcher.enabled }}
+        {{ if and (index .Values "opentelemetry-collector").config.receivers.otlp.enabled $traceExporter.enabled }}
+        traces/recovery:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp/recovery_traces]
+        {{ end }}
+        {{ if and (index .Values "opentelemetry-collector").config.receivers.otlp.enabled (index .Values "opentelemetry-collector").config.event_bus.watcher.enabled }}
         logs/otlp-watcher:
           receivers: [otlp]
           processors: [filter/rank_0_events, filter/environment_events, batch]
           exporters: [rabbitmq/watcher]
         {{ end }}
-      {{ end }}
       telemetry:
         logs:
           level: "info"
