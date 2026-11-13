@@ -31,11 +31,8 @@ ORIGINAL = """service:
 class FakeStack:
     """ConfigMaps and deployments in memory; restarting Job Manager loads its current ConfigMap."""
 
-    def __init__(
-        self, *, eager: bool = False, failing_patches: tuple[int, ...] = (), refused_reads_after_restart: int = 0
-    ) -> None:
+    def __init__(self, *, failing_patches: tuple[int, ...] = (), refused_reads_after_restart: int = 0) -> None:
         self.config_maps = {CONFIG: {KEY: ORIGINAL}}
-        self.eager = eager
         self.failing_patches = failing_patches
         self.patches = 0
         self.loaded = yaml.safe_load(ORIGINAL)["service"]
@@ -45,8 +42,7 @@ class FakeStack:
     def get(self, kind: str, name: str) -> dict[str, Any]:
         if kind == "configmap":
             return {"data": dict(self.config_maps[name])}
-        env = [{"name": "SLURM_ADVISOR_ENABLE_EAGER_REQUEUE", "value": "true" if self.eager else "false"}]
-        return {"spec": {"template": {"spec": {"containers": [{"name": name, "env": env}]}}}}
+        raise AssertionError(f"unexpected resource: {kind}/{name}")
 
     def patch(self, kind: str, name: str, patch: dict[str, Any]) -> None:
         self.patches += 1
@@ -84,7 +80,6 @@ def test_policy_applies_during_the_scenario_and_restores_the_exact_original(scen
         system_retry_limit(
             stack,
             recovery_reading(stack),
-            slurm_stack=stack,
             job_manager=JOB_MANAGER,
             limit=1,
             checkpoint_threshold=3,
@@ -106,7 +101,7 @@ def test_policy_is_read_once_the_restarted_job_manager_is_reachable(monkeypatch:
     monkeypatch.setattr("e2e_harness.retry_policy.time.sleep", lambda _seconds: None)
     stack = FakeStack(refused_reads_after_restart=8)
 
-    with system_retry_limit(stack, recovery_reading(stack), slurm_stack=stack, job_manager=JOB_MANAGER, limit=1):
+    with system_retry_limit(stack, recovery_reading(stack), job_manager=JOB_MANAGER, limit=1):
         assert stack.loaded["system_max_requeue_times"] == 1
 
     assert stack.config_maps[CONFIG][KEY] == ORIGINAL
@@ -121,7 +116,6 @@ def test_a_policy_job_manager_did_not_load_is_rejected_and_restored() -> None:
         system_retry_limit(
             stack,
             recovery_reading(stack, ignores_threshold=True),
-            slurm_stack=stack,
             job_manager=JOB_MANAGER,
             checkpoint_threshold=3,
         ),
@@ -132,26 +126,12 @@ def test_a_policy_job_manager_did_not_load_is_rejected_and_restored() -> None:
     assert stack.config_maps[CONFIG][KEY] == ORIGINAL
 
 
-def test_eager_requeue_is_refused_before_anything_changes() -> None:
-    """SAC runs in the Slurm namespace, which can differ from the Job Manager's."""
-
-    stack, slurm_stack = FakeStack(), FakeStack(eager=True)
-
-    with (
-        pytest.raises(AssertionError, match="eager requeue"),
-        system_retry_limit(stack, recovery_reading(stack), slurm_stack=slurm_stack, job_manager=JOB_MANAGER),
-    ):
-        pass
-
-    assert stack.patches == 0
-
-
 def test_a_failed_restore_does_not_hide_the_scenario_failure() -> None:
     stack = FakeStack(failing_patches=(2,))
 
     with (
         pytest.raises(BaseExceptionGroup) as raised,
-        system_retry_limit(stack, recovery_reading(stack), slurm_stack=stack, job_manager=JOB_MANAGER),
+        system_retry_limit(stack, recovery_reading(stack), job_manager=JOB_MANAGER),
     ):
         raise AssertionError("scenario failed")
 

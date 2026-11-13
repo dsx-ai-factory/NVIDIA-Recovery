@@ -5,7 +5,6 @@ package heimdall
 
 import (
 	"context"
-	"time"
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 )
@@ -25,9 +24,6 @@ type HeimdallClient interface {
 type PaginationOptions struct {
 	PageLimit  int32
 	OnlyActive bool
-	// RecentFailuresSince adds eligible attempts whose end time is at or after
-	// this cutoff to the non-final bootstrap read. Nil excludes finished history.
-	RecentFailuresSince *time.Time
 }
 
 type PaginationOption func(*PaginationOptions)
@@ -42,13 +38,6 @@ func WithPageLimit(limit int32) PaginationOption {
 func WithOnlyActiveAdvice() PaginationOption {
 	return func(opts *PaginationOptions) {
 		opts.OnlyActive = true
-	}
-}
-
-// WithRecentFailuresSince preserves bounded eager recovery after restart.
-func WithRecentFailuresSince(since time.Time) PaginationOption {
-	return func(opts *PaginationOptions) {
-		opts.RecentFailuresSince = &since
 	}
 }
 

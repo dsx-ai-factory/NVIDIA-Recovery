@@ -104,11 +104,6 @@ KEEP_CLUSTER="${KEEP_CLUSTER:-}"
 # '-' not ':-' so an explicit empty value (RUN_TESTS=) stays empty (off).
 RUN_TESTS="${RUN_TESTS-true}"
 
-# Advice-only recovery is the default for the whole test deployment. Non-empty
-# enables eager recovery for its dedicated opt-in scenario; do not toggle mid-suite.
-E2E_ENABLE_EAGER_REQUEUE="${E2E_ENABLE_EAGER_REQUEUE:-}"
-export E2E_ENABLE_EAGER_REQUEUE
-
 # --- Architecture -----------------------------------------------------------
 
 # Target architecture for tool downloads. Detected from uname -m unless the

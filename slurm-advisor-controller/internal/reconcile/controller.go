@@ -27,18 +27,6 @@ type ControllerOptions struct {
 	Environment                    string
 	PartitionAllowlist             []string
 	UpdateEligibleTimeAfterRequeue bool
-	// FailedJobRecoveryTimeout bounds direct failed-job recovery within a tick.
-	// Zero keeps the caller's deadline; production configuration requires a
-	// positive duration and owns the default.
-	FailedJobRecoveryTimeout time.Duration
-
-	// EnableEagerRequeue permits recovery before Advice. Disabled by default so
-	// Job Manager can apply retry and checkpoint policies before requeue.
-	EnableEagerRequeue bool
-	// BootstrapFailureLookback bounds finished failure discovery when eager
-	// requeue is enabled. Production configuration supplies a positive duration.
-	BootstrapFailureLookback time.Duration
-
 	// UserAllowlist temporarily selects act for listed users and observe for others.
 	// Explicit job mode wins. Empty uses the default; removable without notice.
 	UserAllowlist []string
@@ -68,25 +56,12 @@ type Controller struct {
 	// discovery set plus fresh Slurm and Advice reads instead of reloading every
 	// persisted job.
 	heimdallJobsBootstrapped bool
-
-	// processedFailedJobRecoveries suppresses duplicate decisions for the exact
-	// same Slurm attempt while this controller process is alive. Passive planning
-	// is not completion: a later job-mode change can still authorize recovery.
-	processedFailedJobRecoveries map[cluster.JobAttemptRef]struct{}
-
-	// failedJobRequeueFailures carries consumed command attempts across phase
-	// deadlines. The serial reconciliation loop exclusively owns this state.
-	failedJobRequeueFailures map[cluster.JobAttemptRef]int
-	// failedJobRecoveryCursor rotates the next tick past the last attempted job
-	// so a slow command cannot repeatedly take the budget ahead of other jobs.
-	failedJobRecoveryCursor *cluster.JobAttemptRef
 }
 
 type ControllerSyncResult struct {
-	Snapshot   ControllerSnapshot
-	FailedJobs FailedJobSyncResult
-	Advice     AdviceSyncResult
-	LogLinks   LogLinkObservation
+	Snapshot ControllerSnapshot
+	Advice   AdviceSyncResult
+	LogLinks LogLinkObservation
 }
 
 func (c *Controller) SyncOnce(ctx context.Context) (result ControllerSyncResult, err error) {
@@ -114,8 +89,7 @@ func (c *Controller) SyncOnce(ctx context.Context) (result ControllerSyncResult,
 
 	// Each tick builds one consistent view of Slurm, Heimdall jobs, advice, and
 	// local seen state. The controller then augments that view with targeted
-	// accounting reads before running job-state upserts, optional eager
-	// failed-job requeues, and advice reconciliation. Keeping those phases
+	// accounting reads before running job-state upserts and advice reconciliation. Keeping those phases
 	// explicit avoids mixing discovery, final-state enrichment, API upserts,
 	// and Slurm mutations in one pass.
 	if err := c.validate(); err != nil {
@@ -207,14 +181,6 @@ func (c *Controller) SyncOnce(ctx context.Context) (result ControllerSyncResult,
 
 	var actionErrs []error
 
-	if c.Options.EnableEagerRequeue {
-		observeStageStarted(observer, StageFailedJobReconciliation)
-		stageStartedAt = time.Now()
-		failedJobResult, phaseErr := c.reconcileFailedJobs(ctx, snapshot, &observation)
-		observeStage(&observation, StageFailedJobReconciliation, phaseErr, time.Since(stageStartedAt))
-		result.FailedJobs = failedJobResult
-		actionErrs = append(actionErrs, phaseErr)
-	}
 	if ctx.Err() != nil {
 		return result, joinActionErrors(ctx, actionErrs)
 	}
@@ -339,9 +305,6 @@ func (c *Controller) buildBaseSnapshot(ctx context.Context, observation *SyncObs
 		g.Go(func() error {
 			startedAt := time.Now()
 			opts := []heimdall.PaginationOption{heimdall.WithPageLimit(c.Options.JobPageLimit)}
-			if c.Options.EnableEagerRequeue {
-				opts = append(opts, heimdall.WithRecentFailuresSince(snapshot.ObservedAt.Add(-c.Options.BootstrapFailureLookback)))
-			}
 			resp, err := c.HeimdallClient.GetJobs(ctx, opts...)
 			heimdallDuration = time.Since(startedAt)
 			if err != nil {

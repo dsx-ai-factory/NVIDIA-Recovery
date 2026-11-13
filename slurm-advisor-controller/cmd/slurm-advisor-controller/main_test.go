@@ -31,17 +31,15 @@ import (
 
 func TestNewControllerWiresActionMode(t *testing.T) {
 	mocks := gomock.NewController(t)
-	core, logs := observer.New(zap.WarnLevel)
+	core, _ := observer.New(zap.WarnLevel)
 	executor := clustermock.NewMockJobMutator(mocks)
 	enricher := clustermock.NewMockActiveJobEnricher(mocks)
 	controller := newController(
 		config.Config{
-			Mode:                     config.ModeAct,
-			UserAllowlist:            []string{"alice", "bob"},
-			AdviceMaxAge:             7 * time.Minute,
-			FailedJobRecoveryTimeout: 18 * time.Second,
-			JobUpsertWorkerPoolSize:  6,
-			EnableEagerRequeue:       true,
+			Mode:                    config.ModeAct,
+			UserAllowlist:           []string{"alice", "bob"},
+			AdviceMaxAge:            7 * time.Minute,
+			JobUpsertWorkerPoolSize: 6,
 			Safety: config.SafetyChecks{
 				AcknowledgeSchedulerActions: true,
 			},
@@ -57,14 +55,8 @@ func TestNewControllerWiresActionMode(t *testing.T) {
 		zap.New(core),
 	)
 
-	if logs.Len() != 1 || logs.All()[0].ContextMap()["enable_eager_requeue"] != true {
-		t.Fatalf("warnings = %#v, want explicit compatibility opt-in warning", logs.All())
-	}
 	if controller.ModePolicy.DefaultMode != cluster.JobModeAct || !controller.ModePolicy.AllowAct {
 		t.Fatalf("ModePolicy = %#v, want allowed act default", controller.ModePolicy)
-	}
-	if !controller.Options.EnableEagerRequeue {
-		t.Fatal("EnableEagerRequeue = false, want explicit eager recovery opt-in")
 	}
 	// Dropping the startup selector would silently widen an act default to all users.
 	if !slices.Equal(controller.Options.UserAllowlist, []string{"alice", "bob"}) {
@@ -79,9 +71,6 @@ func TestNewControllerWiresActionMode(t *testing.T) {
 	if controller.SeenJobs == nil {
 		t.Fatal("SeenJobs = nil, want configured store")
 	}
-	if controller.Options.FailedJobRecoveryTimeout != 18*time.Second {
-		t.Fatalf("FailedJobRecoveryTimeout = %s, want 18s", controller.Options.FailedJobRecoveryTimeout)
-	}
 	if controller.Options.AdviceMaxAge != 7*time.Minute {
 		t.Fatalf("AdviceMaxAge = %s, want 7m", controller.Options.AdviceMaxAge)
 	}
@@ -95,7 +84,7 @@ func TestNewControllerWiresActionMode(t *testing.T) {
 
 func TestNewControllerWiresObserveMode(t *testing.T) {
 	mocks := gomock.NewController(t)
-	core, logs := observer.New(zap.WarnLevel)
+	core, _ := observer.New(zap.WarnLevel)
 	controller := newController(
 		config.Config{Mode: config.ModeObserve},
 		heimdallmock.NewMockHeimdallClient(mocks),
@@ -109,12 +98,6 @@ func TestNewControllerWiresObserveMode(t *testing.T) {
 		zap.New(core),
 	)
 
-	if logs.Len() != 0 {
-		t.Fatalf("warnings = %#v, want none with compatibility recovery disabled", logs.All())
-	}
-	if controller.Options.EnableEagerRequeue {
-		t.Fatal("EnableEagerRequeue = true, want advice-driven recovery by default")
-	}
 	if controller.ModePolicy.DefaultMode != cluster.JobModeObserve || controller.ModePolicy.AllowAct {
 		t.Fatalf("ModePolicy = %#v, want denied observe default", controller.ModePolicy)
 	}

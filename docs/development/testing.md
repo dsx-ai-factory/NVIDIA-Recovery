@@ -256,17 +256,10 @@ Decorate an action factory with `@unsafe` when its actions change shared stack
 state. Actions that change only the scenario's own jobs or files are safe. A
 scenario that uses an unsafe action prints a yellow warning when it starts.
 
-E2E defaults to Advice-only recovery. Scenario `32-requeue-limit-guardrail`
+E2E uses Advice-only recovery. Scenario `32-requeue-limit-guardrail`
 checks the job-level limit; `57-system-requeue-limit` checks a lower system cap.
 Scenarios 55 (checkpoint stopping) and 57 temporarily change JM policy and must
 run serially on a dedicated test stack.
-
-`56-eager-requeue` skips unless eager recovery is enabled. Run it separately on
-a fresh stack with:
-
-```bash
-E2E_ENABLE_EAGER_REQUEUE=1 E2E_SCENARIOS=56-eager-requeue make e2e
-```
 
 For direct pytest iteration on that same ready stack:
 

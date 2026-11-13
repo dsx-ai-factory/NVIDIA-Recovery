@@ -13,7 +13,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type GRPCClient struct {
@@ -81,33 +80,22 @@ func (c *GRPCClient) CreateOrUpdateJob(ctx context.Context, req *pb.CreateOrUpda
 	return c.client.CreateOrUpdateJob(ctx, req)
 }
 
-// GetJobs bootstraps non-final attempts and, when requested, recent failures.
-// Separate paginated queries keep the end-time cutoff off long-running jobs.
-// Both reads must finish before returning; a partial bootstrap is retried.
+// GetJobs bootstraps non-final attempts through paginated backend reads.
 func (c *GRPCClient) GetJobs(ctx context.Context, opts ...PaginationOption) ([]*pb.Job, error) {
 	pagination := ResolvePaginationOptions(opts...)
-	queries := []*pb.GetJobsRequest{{CompletedJobs: new(false)}}
-	if pagination.RecentFailuresSince != nil {
-		queries = append(queries, &pb.GetJobsRequest{
-			ReconciliationEligibleJobs: new(true),
-			EndTimeFrom:                timestamppb.New(*pagination.RecentFailuresSince),
-		})
-	}
 	var out []*pb.Job
-	for _, req := range queries {
-		req.Limit = pagination.PageLimit
-		pageToken := ""
-		for {
-			req.PageToken = &pageToken
-			resp, err := c.client.GetJobs(ctx, req)
-			if err != nil {
-				return nil, errors.Wrapf(err, "get jobs page %q", pageToken)
-			}
-			out = append(out, resp.GetJobs()...)
-			pageToken = resp.GetNextPageToken()
-			if pageToken == "" {
-				break
-			}
+	req := &pb.GetJobsRequest{CompletedJobs: new(false), Limit: pagination.PageLimit}
+	pageToken := ""
+	for {
+		req.PageToken = &pageToken
+		resp, err := c.client.GetJobs(ctx, req)
+		if err != nil {
+			return nil, errors.Wrapf(err, "get jobs page %q", pageToken)
+		}
+		out = append(out, resp.GetJobs()...)
+		pageToken = resp.GetNextPageToken()
+		if pageToken == "" {
+			break
 		}
 	}
 	return out, nil

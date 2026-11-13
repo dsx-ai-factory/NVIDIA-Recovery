@@ -70,7 +70,7 @@ artifacts. A render or HTTP 200 alone does not establish these outcomes.
    Slinky jobs, then successive recoveries.
 3. **Recovery:** missing job cap, system cap, three consecutive failures with
    no checkpoint and no fourth attempt, checkpoint progress, delayed Advice,
-   uncertain scheduler outcomes, and explicit eager compatibility. Permanent
+   uncertain scheduler outcomes, and Advice-only recovery. Permanent
    rejection, failed status publication, and newer generations must retain the
    tested disposition/retry behavior.
 4. **Collection:** two node identities, unique markers, legitimate identical

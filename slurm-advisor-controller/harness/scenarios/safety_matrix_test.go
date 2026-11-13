@@ -282,17 +282,6 @@ func TestSafetyMatrix(t *testing.T) {
 		h.requireFailedWithoutSuccessor(jobID)
 	})
 
-	h.runScenario("explicit eager recovery flag requeues a failed job without advice", func(h harness) {
-		h.startControllerWithEnv(controllerModeAct, "SLURM_ADVISOR_ENABLE_EAGER_REQUEUE=true")
-		jobID := h.submitTrackedFailingJob("advisor-eager-recovery")
-		h.waitForUpsert(jobID, jobStatusFailed)
-		h.wait(func() (bool, string) {
-			job, ok := h.squeueJob(jobID)
-			return ok && job.RestartCount == 1 && job.Held,
-				fmt.Sprintf("found=%t restart_count=%d held=%t", ok, job.RestartCount, job.Held)
-		})
-	})
-
 	h.runScenario("action terminate advice converges through scancel", func(h harness) {
 		jobID := h.submitManagedRunningSleepJob("advisor-terminate", controllerModeAct)
 		h.putAdvice(terminateAdvice(jobID))
