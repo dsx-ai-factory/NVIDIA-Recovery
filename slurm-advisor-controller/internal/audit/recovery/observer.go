@@ -12,7 +12,6 @@ import (
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/audit"
-	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/reconcile"
 	"github.com/google/uuid"
 )
@@ -226,35 +225,6 @@ func (observer *Observer) ObserveAdviceTerminalStatus(
 			IdempotencyKey: observer.newID(),
 		})
 	}
-}
-
-// ObserveFailedJobRequeueHold emits one event for a returned direct failed-job
-// scheduler command. Planned decisions do not represent returned commands and
-// are intentionally ignored.
-func (observer *Observer) ObserveFailedJobRequeueHold(
-	observation reconcile.FailedJobRequeueHoldObservation,
-) {
-	if observation.Outcome != reconcile.SchedulerActionOutcomeSuccess &&
-		observation.Outcome != reconcile.SchedulerActionOutcomeError {
-		return
-	}
-	producedAt := observation.CompletedAt
-	if producedAt.IsZero() {
-		producedAt = observer.now()
-	}
-	observer.add(audit.JobAutoRequeueHoldCompletedEvent{
-		HeimdallJobID: jobidentity.HeimdallJobID(
-			observation.JobID,
-			observation.AttemptIndex,
-		),
-		JobID:           observation.JobID,
-		AttemptIndex:    observation.AttemptIndex,
-		CorrelationUUID: observation.CorrelationUUID,
-		Success:         observation.Outcome == reconcile.SchedulerActionOutcomeSuccess,
-		Error:           errorString(observation.Err),
-		ProducedAt:      producedAt,
-		IdempotencyKey:  observer.newID(),
-	})
 }
 
 func (observer *Observer) add(event audit.ToProducerEvent) {

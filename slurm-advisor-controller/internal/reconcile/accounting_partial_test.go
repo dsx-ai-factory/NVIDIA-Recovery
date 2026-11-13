@@ -31,8 +31,8 @@ func TestControllerPublishesPartialAccountingAndRetriesUnresolvedJobs(t *testing
 		jobAttemptRef(completed), jobAttemptRef(failed), jobAttemptRef(missing),
 	}).Return([]cluster.JobExecutionRecord{completed, failed}, accountingErr)
 	reader.EXPECT().FinalizedJobs(gomock.Any(), []cluster.JobAttemptRef{
-		jobAttemptRef(failed), jobAttemptRef(missing),
-	}).Return([]cluster.JobExecutionRecord{failed, missing}, nil).After(firstAccounting)
+		jobAttemptRef(missing),
+	}).Return([]cluster.JobExecutionRecord{missing}, nil).After(firstAccounting)
 	expiredAdvice := newAdvice(t, adviceFixture{
 		adviceID: "expired", jobID: active.JobID, createdAt: &expiredAt,
 		state:    adviceState(pb.AdviceState_ADVICE_STATE_RESTARTED),
@@ -50,7 +50,7 @@ func TestControllerPublishesPartialAccountingAndRetriesUnresolvedJobs(t *testing
 	controller := Controller{
 		JobReader: reader, HeimdallClient: client, SeenJobs: seen, ActionExecutor: mutator,
 		ModePolicy: ModePolicy{DefaultMode: cluster.JobModeAct, AllowAct: true},
-		Options:    ControllerOptions{AdviceMaxAge: time.Minute, EnableEagerRequeue: true},
+		Options:    ControllerOptions{AdviceMaxAge: time.Minute},
 		Observer:   observer, Now: func() time.Time { return now },
 	}
 
@@ -69,9 +69,9 @@ func TestControllerPublishesPartialAccountingAndRetriesUnresolvedJobs(t *testing
 	if len(result.Snapshot.AccountingJobs) != 2 {
 		t.Fatalf("accounting snapshot = %v, want both successful results", result.Snapshot.AccountingJobs)
 	}
-	assertSeenRecords(t, seen, []state.SeenJobRecord{jobAttemptRef(active), jobAttemptRef(failed), jobAttemptRef(missing)})
-	if len(result.FailedJobs.Requeues) != 0 || len(result.Advice.TerminalOutcomes) != 0 || len(client.statusUpdates) != 0 {
-		t.Fatalf("incomplete accounting must defer recovery and expired Advice: failed=%+v advice=%+v statuses=%+v", result.FailedJobs, result.Advice, client.statusUpdates)
+	assertSeenRecords(t, seen, []state.SeenJobRecord{jobAttemptRef(active), jobAttemptRef(missing)})
+	if len(result.Advice.TerminalOutcomes) != 0 || len(client.statusUpdates) != 0 {
+		t.Fatalf("incomplete accounting must defer recovery and expired Advice: advice=%+v statuses=%+v", result.Advice, client.statusUpdates)
 	}
 	if observer.observations[0].Outcome != ObservationOutcomeError {
 		t.Fatalf("sync outcome = %s, want accounting failure reported", observer.observations[0].Outcome)
@@ -80,14 +80,9 @@ func TestControllerPublishesPartialAccountingAndRetriesUnresolvedJobs(t *testing
 	assertStageObservation(t, observer.observations[0].Stages, StageJobStatusPolling, ObservationOutcomeError)
 	assertStageObservation(t, observer.observations[0].Stages, StageJobReconciliation, ObservationOutcomeSuccess)
 
-	// No scheduler call is permitted until a complete accounting read succeeds.
-	mutator.EXPECT().JobRequeueHold(gomock.Any(), failed.JobID).Return(nil)
 	result, err = controller.SyncOnce(context.Background())
 	if err != nil {
 		t.Fatalf("retry SyncOnce() failed: %v", err)
-	}
-	if len(result.FailedJobs.Requeues) != 1 || !result.FailedJobs.Requeues[0].Applied {
-		t.Fatalf("retry recoveries = %+v, want the retained failed job recovered", result.FailedJobs.Requeues)
 	}
 	if len(client.statusUpdates) != 1 || client.statusUpdates[0].Status.GetReason() != pb.AdviceReconciliationReason_ADVICE_RECONCILIATION_REASON_ADVICE_EXPIRED {
 		t.Fatalf("retry Advice statuses = %+v, want deferred expiration published", client.statusUpdates)

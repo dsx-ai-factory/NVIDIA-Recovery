@@ -53,18 +53,10 @@ controller:
   jobUpsertWorkerPoolSize: 8
   accountingWorkerPoolSize: 8
   accountingTimeout: 5m
-  # Shared per-tick budget; unfinished recovery resumes on later ticks.
-  failedJobRecoveryTimeout: 30s
   adviceLoopTimeout: 15s
   adviceItemTimeout: 30s
   adviceMaxAge: 5m
   requeueHoldDelay: 1s
-  # Wait for restart Advice; true restores compatibility eager recovery.
-  # Eager recovery can bypass backend retry/checkpoint stops.
-  enableEagerRequeue: false
-  # End-time lookback for bootstrap eager recovery of finished failures.
-  # Active attempts and unresolved Advice are retained regardless of age.
-  bootstrapFailureLookback: 30m
   # APS routing identity: unspecified admits all valid comments, prod also
   # admits absent/empty environments, and other values require an exact match.
   environment: unspecified

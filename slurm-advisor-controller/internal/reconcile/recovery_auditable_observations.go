@@ -116,22 +116,6 @@ type SchedulerActionObservation struct {
 	Err error
 }
 
-// FailedJobRequeueHoldObservation describes a returned direct failed-job command.
-type FailedJobRequeueHoldObservation struct {
-	// JobID identifies the scheduler job.
-	JobID string
-	// AttemptIndex identifies the failed scheduler attempt.
-	AttemptIndex int32
-	// CorrelationUUID identifies a durable recovery sequence when available.
-	CorrelationUUID string
-	// Outcome describes the returned scheduler command.
-	Outcome SchedulerActionOutcome
-	// CompletedAt records when the scheduler command returned.
-	CompletedAt time.Time
-	// Err is the scheduler command error when present.
-	Err error
-}
-
 // AdviceTerminalStatusObservation describes a terminal status accepted by the
 // durable Advice status boundary.
 type AdviceTerminalStatusObservation struct {
@@ -160,8 +144,6 @@ type AuditObserver interface {
 	ObserveAdviceApplication(AdviceApplicationObservation)
 	// ObserveAdviceTerminalStatus records a durably accepted terminal status.
 	ObserveAdviceTerminalStatus(AdviceTerminalStatusObservation)
-	// ObserveFailedJobRequeueHold records one returned direct failed-job command.
-	ObserveFailedJobRequeueHold(FailedJobRequeueHoldObservation)
 }
 
 // NopAuditObserver ignores recovery observations.
@@ -179,9 +161,6 @@ func (NopAuditObserver) ObserveAdviceApplication(AdviceApplicationObservation) {
 
 // ObserveAdviceTerminalStatus records nothing.
 func (NopAuditObserver) ObserveAdviceTerminalStatus(AdviceTerminalStatusObservation) {}
-
-// ObserveFailedJobRequeueHold records nothing.
-func (NopAuditObserver) ObserveFailedJobRequeueHold(FailedJobRequeueHoldObservation) {}
 
 func (c *Controller) auditObserver() AuditObserver {
 	if c.AuditObserver != nil {
@@ -321,21 +300,4 @@ func (c *Controller) runAdviceSchedulerAction(
 		}
 	}
 	return observation.Err
-}
-
-func (c *Controller) observeFailedJobRequeueHold(
-	job cluster.JobExecutionRecord,
-	err error,
-) {
-	outcome := SchedulerActionOutcomeSuccess
-	if err != nil {
-		outcome = SchedulerActionOutcomeError
-	}
-	c.auditObserver().ObserveFailedJobRequeueHold(FailedJobRequeueHoldObservation{
-		JobID:        job.JobID,
-		AttemptIndex: job.AttemptIndex,
-		Outcome:      outcome,
-		CompletedAt:  c.observedAt().UTC(),
-		Err:          err,
-	})
 }

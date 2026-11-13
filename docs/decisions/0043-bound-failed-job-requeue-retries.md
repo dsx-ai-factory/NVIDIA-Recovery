@@ -1,12 +1,10 @@
 # ADR 0043: Bound Failed-Job Requeue Retries
 
-Status: accepted
+Status: superseded
 
 Date: 2026-09-30
 
-> **Implementation note (2026-10-01):** [ADR 0044](0044-budget-failed-job-recovery-phase.md)
-> supersedes the same-tick requirement with a phase budget and carries the
-> remaining three-command allowance across ticks.
+> **Implementation note (2026-11-11):** Direct failed-job recovery has been removed, retiring its retry and phase-budget rules; recovery now requires Advice.
 
 This decision partially supersedes [ADR 0022](0022-bootstrap-sac-job-discovery-once.md):
 failed-job command errors no longer retain recovery work for unlimited ticks.

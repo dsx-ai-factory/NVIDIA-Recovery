@@ -50,11 +50,11 @@ onward. Earlier decisions are not included.
 | [0040](0040-retire-job-anomaly-relay.md) | accepted | Retire the JM-to-ARM anomaly relay while preserving anomaly persistence, Advice, and direct ADI requests. |
 | [0041](0041-retire-arm-attribution-result-queue.md) | accepted | Remove ADI’s obsolete ARM result queue declaration; Job Manager owns the normal attribution result queue. |
 | [0042](0042-align-sac-and-watchdog-job-action-policy.md) | accepted | Share job-mode precedence and temporary username action selection between SAC and watchdog while preserving monitoring and independent safety gates. |
-| [0043](0043-bound-failed-job-requeue-retries.md) | accepted | Bound direct failed-job requeue retries and defer durable give-up status until Advice-driven recovery. |
-| [0044](0044-budget-failed-job-recovery-phase.md) | accepted | Bound the failed-job phase, preserve retry allowances across ticks, and expose scheduler command timeout counts. |
-| [0045](0045-require-advice-before-slurm-requeue.md) | accepted | Require restart Advice before recovery, with an eager-recovery compatibility path for rollout and rollback; partially supersedes ADRs 0013 and 0022. |
+| [0043](0043-bound-failed-job-requeue-retries.md) | superseded | Bound direct failed-job requeue retries and defer durable give-up status until Advice-driven recovery. Retired with the eager recovery implementation. |
+| [0044](0044-budget-failed-job-recovery-phase.md) | superseded | Bound the failed-job phase, preserve retry allowances across ticks, and expose scheduler command timeout counts. Retired with the eager recovery implementation. |
+| [0045](0045-require-advice-before-slurm-requeue.md) | accepted | Require restart Advice before recovery, with the eager compatibility path removed; partially supersedes ADRs 0013 and 0022. |
 | [0046](0046-preserve-successful-slurm-accounting-results.md) | accepted | Preserve and publish successful targeted accounting results after partial failures while retaining the complete-snapshot requirement for recovery and Advice actions. |
-| [0047](0047-bound-sac-bootstrap-discovery.md) | accepted | Bound SAC bootstrap to non-final attempts, unresolved Advice, and recent failures for eager recovery. |
+| [0047](0047-bound-sac-bootstrap-discovery.md) | accepted | Bound SAC bootstrap to non-final attempts, unresolved Advice, with recent-failure eager discovery removed. |
 | [0048](0048-start-recovery-traces-in-backend-and-share-observations.md) | accepted | Start recovery sequences only in the backend and share operation facts across tracing, audit, and milestone reporting; partially supersedes ADR 0013. |
 | [0049](0049-enable-attribution-by-default.md) | accepted | Include Attribution by default, retain explicit degraded operation, and require public compatible inputs and platform qualification; partially supersedes ADR 0034. |
 | [0050](0050-expose-authenticated-whole-job-audit-reads.md) | accepted | Add authenticated whole-job audit reads with bounded responses and additive identity backfill; partially supersedes ADR 0031. |

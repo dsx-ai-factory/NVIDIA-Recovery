@@ -20,7 +20,6 @@ from e2e_harness.audit import (
     advice_application_evaluated_event,
     advice_reached_event,
     advice_reconciliation_converged_event,
-    automatic_requeue_hold_event,
     evaluate_audit_trail,
     heimdall_job_id,
     job_observed_event,
@@ -867,7 +866,6 @@ def test_action_and_convergence_builders_target_the_requested_attempt() -> None:
     job = SubmittedJob("123", "2026-07-24T01:19:53Z")
 
     facts = (
-        automatic_requeue_hold_event(job, attempt=2),
         scheduler_action_event(job, action="slurm.release", attempt=2),
         advice_application_applied_event(job, attempt=2),
         advice_application_evaluated_event(job, action="slurm.release", attempt=2),
@@ -876,11 +874,11 @@ def test_action_and_convergence_builders_target_the_requested_attempt() -> None:
     )
 
     assert all(fact.payload_subset["attempt_index"] == 2 for fact in facts)
-    assert facts[1].payload_subset["action"] == "slurm.release"
-    assert facts[2].event_type == "advice_application_applied"
-    assert facts[3].event_type == "advice_application_evaluated"
-    assert facts[4].event_type == "advice_reconciliation_converged"
-    assert facts[5].event_producer == "slurm-watchdog"
+    assert facts[0].payload_subset["action"] == "slurm.release"
+    assert facts[1].event_type == "advice_application_applied"
+    assert facts[2].event_type == "advice_application_evaluated"
+    assert facts[3].event_type == "advice_reconciliation_converged"
+    assert facts[4].event_producer == "slurm-watchdog"
 
 
 @pytest.mark.parametrize("attempt", [0, 2])
@@ -912,38 +910,6 @@ def test_watcher_expectation_matches_current_payload_and_rejects_other_attempts(
     assert evaluate_audit_trail((event,), (matching,)).satisfied
     assert not evaluate_audit_trail((event,), (wrong_attempt,)).satisfied
     assert not evaluate_audit_trail((missing_occurrence_time,), (matching,)).satisfied
-
-
-def test_atomic_events_distinguish_watcher_and_automatic_requeue_paths() -> None:
-    job = SubmittedJob("123", "2026-07-24T01:19:53Z")
-
-    watcher_events = (
-        watcher_anomaly_detected_event(job, anomaly_type="CRASH"),
-        scheduler_action_event(job, action="slurm.requeue_hold"),
-        scheduler_action_event(job, action="slurm.release"),
-    )
-    automatic_events = (
-        automatic_requeue_hold_event(job),
-        scheduler_action_event(job, action="slurm.release"),
-    )
-    hybrid_events = automatic_events
-
-    assert "anomaly_detected" in {event.event_type for event in watcher_events}
-    assert "job_auto_requeue_hold_completed" not in {event.event_type for event in watcher_events}
-    assert "job_auto_requeue_hold_completed" in {event.event_type for event in automatic_events}
-    assert "anomaly_detected" not in {event.event_type for event in automatic_events}
-    assert "job_auto_requeue_hold_completed" in {event.event_type for event in hybrid_events}
-    assert "anomaly_detected" not in {event.event_type for event in hybrid_events}
-    assert {
-        event.payload_subset.get("action")
-        for event in watcher_events
-        if event.event_type == "advice_scheduler_action_completed"
-    } == {"slurm.requeue_hold", "slurm.release"}
-    assert {
-        event.payload_subset.get("action")
-        for event in automatic_events
-        if event.event_type == "advice_scheduler_action_completed"
-    } == {"slurm.release"}
 
 
 def test_job_state_builder_encodes_semantic_transition() -> None:

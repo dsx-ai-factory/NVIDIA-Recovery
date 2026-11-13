@@ -50,16 +50,9 @@ non-root init container copies only the key into that Pod's memory-backed
 only their Pod-local writable memory-backed `/run/slurm` directory containing
 the local `sackd` configuration cache and authentication socket.
 
-Failed-job recovery shares a `30s` budget per controller tick, configured by
-`controller.failedJobRecoveryTimeout` (environment variable
-`SLURM_ADVISOR_FAILED_JOB_RECOVERY_TIMEOUT`). The value must be a positive Go
-duration. It covers all failed jobs and their local requeue retries, allowing
-the controller to continue to Advice reconciliation when the budget expires.
-Unfinished recovery resumes on later ticks within the existing three-command
-attempt limit; budget expiry alone does not abandon a job. This budget is
-separate from `controller.slurmExecTimeout`, which limits an individual Slurm
-command and defaults to `5s`. The watchdog command timeout
-(`watchdog.slurmExecTimeout`) also defaults to `5s`.
+Individual Slurm commands are bounded by `controller.slurmExecTimeout` and
+`watchdog.slurmExecTimeout`, each defaulting to `5s`. Failed-job recovery waits
+for applicable restart Advice.
 
 ## Install
 
@@ -172,17 +165,6 @@ mode. Helm schema validation rejects larger counts until replica coordination
 exists. Each Deployment uses the `Recreate` strategy to avoid overlap during
 normal upgrades; separate releases or manual scaling still require operator
 coordination for exclusive ownership.
-
-`controller.enableEagerRequeue` maps to
-`SLURM_ADVISOR_ENABLE_EAGER_REQUEUE` and defaults to `false`, matching the
-controller's environment default and the systemd example. Failed-job
-observations are published, and requeue waits for applicable restart Advice.
-Set it to `true` only to restore compatibility eager recovery.
-
-Eager recovery can create a successor before Job Manager issues a retry-limit
-or checkpoint-progress stop. The flag does not bypass action mode,
-acknowledgement, or other scheduler safety checks, and backend delays never
-change its value automatically. See [ADR 0045](../../../docs/decisions/0045-require-advice-before-slurm-requeue.md).
 
 `controller.adviceMaxAge` limits scheduler actions for non-durable Advice to
 generations whose desired state changed within the configured duration. SAC

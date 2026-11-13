@@ -198,37 +198,7 @@ func run() int {
 			zap.Int("advice_items", totalAdviceItems(result.Snapshot.Advice)),
 		)
 		logEnvironmentAdmissionSummary(logger, cfg.Environment, result.Snapshot)
-		for _, requeue := range result.FailedJobs.Requeues {
-			if requeue.SkipReason != reconcile.FailedJobRequeueSkipNone {
-				fields := []zap.Field{
-					zap.String("effective_mode", string(requeue.Mode)),
-					zap.String("requeue_id", requeue.RequeueID),
-					zap.String("job_id", requeue.JobID),
-					zap.Int32("attempt_index", requeue.AttemptIndex),
-					zap.String("skip_reason", string(requeue.SkipReason)),
-				}
-				if requeue.MaxRequeueTimes != nil {
-					fields = append(fields, zap.Int32("max_requeue_times", *requeue.MaxRequeueTimes))
-				}
-				logger.Info("skipped failed-job requeuehold", fields...)
-				continue
-			}
-			if requeue.Applied {
-				logger.Info("applied failed-job requeuehold",
-					zap.String("effective_mode", string(requeue.Mode)),
-					zap.String("requeue_id", requeue.RequeueID),
-					zap.String("job_id", requeue.JobID),
-					zap.Int32("attempt_index", requeue.AttemptIndex),
-				)
-				continue
-			}
-			logger.Info("planned failed-job requeuehold",
-				zap.String("effective_mode", string(requeue.Mode)),
-				zap.String("requeue_id", requeue.RequeueID),
-				zap.String("job_id", requeue.JobID),
-				zap.Int32("attempt_index", requeue.AttemptIndex),
-			)
-		}
+
 	}
 
 	runOnce()
@@ -311,10 +281,6 @@ func newController(
 	auditObserver reconcile.AuditObserver,
 	logger *zap.Logger,
 ) reconcile.Controller {
-	if cfg.EnableEagerRequeue && logger != nil {
-		logger.Warn("eager requeue compatibility mode can bypass retry-limit and checkpoint-stop Advice",
-			zap.Bool("enable_eager_requeue", true))
-	}
 	return reconcile.Controller{
 		HeimdallClient:      client,
 		JobReader:           reader,
@@ -327,13 +293,10 @@ func newController(
 			AdvicePageLimit:                100,
 			JobPageLimit:                   100,
 			JobUpsertWorkerPoolSize:        cfg.JobUpsertWorkerPoolSize,
-			FailedJobRecoveryTimeout:       cfg.FailedJobRecoveryTimeout,
 			AdviceLoopTimeout:              cfg.AdviceLoopTimeout,
 			AdviceItemTimeout:              cfg.AdviceItemTimeout,
 			AdviceMaxAge:                   cfg.AdviceMaxAge,
 			AdviceRequeueHoldDelay:         cfg.AdviceRequeueHoldDelay,
-			EnableEagerRequeue:             cfg.EnableEagerRequeue,
-			BootstrapFailureLookback:       cfg.BootstrapFailureLookback,
 			Environment:                    cfg.Environment,
 			UserAllowlist:                  cfg.UserAllowlist,
 			PartitionAllowlist:             cfg.PartitionAllowlist,

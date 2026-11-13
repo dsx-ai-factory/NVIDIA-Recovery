@@ -6,19 +6,11 @@ Date: 2026-10-07
 
 Discussion: [PR #245](https://github.com/NVIDIA/NVIDIA-Recovery/pull/245)
 
-> **Implementation note (2026-10-21):** The controller retries milestone
-> delivery only for temporary failures (unavailable or overloaded backend,
-> timeouts, and unmapped backend errors); rejected reports are counted and not
-> retried. Queue, timeout, retry, and shutdown bounds are operator settings
-> (`controller.milestoneReporting`). Audit events from the backend and the
-> controller record trace and span IDs only for sampled spans, so a sampled-out
-> recovery keeps its sequence ID but never links to a trace that was not
-> exported. Open follow-up: milestones are held only in memory, so a controller
-> restart, or a report dropped after its last attempt, leaves the sequence
-> without a completion and its restart latency unmeasured. If that gap is
-> observed in practice, a durable outbox or reconstruction of completion from
-> the matching audit event would close it. This decision excludes both, so
-> adopting either requires a superseding decision.
+> **Implementation note (2026-11-11):** Milestone delivery retries only temporary failures within configurable queue, timeout, retry, and shutdown bounds; rejected reports are counted without retry, and audit trace/span IDs are recorded only for sampled spans while sequence IDs remain available for sampled-out recovery.
+> Memory-only milestones can still lose completion and latency on restart or exhausted retries; adopting a durable outbox or reconstruction from matching audit events requires a superseding decision.
+
+The eager audit path has been removed;
+the remaining rules and open milestone durability limitation stay in force.
 
 Accepted following PR review and maintainer confirmation on 2026-10-08.
 This decision partially supersedes

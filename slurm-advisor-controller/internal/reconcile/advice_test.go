@@ -1010,7 +1010,6 @@ type recordingAuditObserver struct {
 	adviceActions            []SchedulerActionObservation
 	adviceActionApplications []AdviceApplicationObservation
 	terminalStatuses         []AdviceTerminalStatusObservation
-	failedJobActions         []FailedJobRequeueHoldObservation
 }
 
 func (observer *recordingAuditObserver) ObserveAdviceSchedulerAction(
@@ -1031,12 +1030,6 @@ func (observer *recordingAuditObserver) ObserveAdviceTerminalStatus(
 	observation AdviceTerminalStatusObservation,
 ) {
 	observer.terminalStatuses = append(observer.terminalStatuses, observation)
-}
-
-func (observer *recordingAuditObserver) ObserveFailedJobRequeueHold(
-	observation FailedJobRequeueHoldObservation,
-) {
-	observer.failedJobActions = append(observer.failedJobActions, observation)
 }
 
 func terminateAdviceSnapshot(t *testing.T, jobIDs ...string) ControllerSnapshot {
