@@ -248,15 +248,16 @@ func legacySacctAllocation(row legacySacctRow) (SacctJob, error) {
 	arrayID, taskID, array := strings.Cut(row.canonicalID, "_")
 	if array {
 		var err error
-		allocation.Array.JobID, err = strconv.Atoi(arrayID)
-		if err != nil || allocation.Array.JobID <= 0 {
+		allocation.Array.JobID.Number, err = strconv.Atoi(arrayID)
+		if err != nil || allocation.Array.JobID.Number <= 0 {
 			return SacctJob{}, errors.New("invalid legacy sacct array job ID")
 		}
 		task, err := strconv.Atoi(taskID)
 		if err != nil || task < 0 || uint64(task) >= uint64(^uint32(0)) {
 			return SacctJob{}, errors.New("invalid legacy sacct array task ID")
 		}
-		allocation.Array.TaskID = numberField{Set: true, Number: task}
+		allocation.Array.JobID.Set = true
+		allocation.Array.TaskID = identityNumber{Set: true, Number: task}
 	} else if row.canonicalID != strconv.Itoa(row.jobID) {
 		return SacctJob{}, errors.New("legacy sacct allocation identifiers disagree")
 	}
@@ -402,12 +403,12 @@ func expandSacctOutputPattern(pattern string, allocation SacctJob, stepID string
 			value = allocation.Name
 		case 'A':
 			value = strconv.Itoa(allocation.JobID)
-			if allocation.Array.JobID > 0 {
-				value = strconv.Itoa(allocation.Array.JobID)
+			if allocation.Array.JobID.Number > 0 {
+				value = strconv.Itoa(allocation.Array.JobID.Number)
 			}
 		case 'a':
 			value = "4294967294" // Slurm's non-array task sentinel.
-			if allocation.Array.JobID > 0 && allocation.Array.TaskID.Set {
+			if allocation.Array.JobID.Number > 0 && allocation.Array.TaskID.Set {
 				value = strconv.Itoa(allocation.Array.TaskID.Number)
 			}
 		default:

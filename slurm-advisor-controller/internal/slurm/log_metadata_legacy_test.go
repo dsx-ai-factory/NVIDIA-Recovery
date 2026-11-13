@@ -493,8 +493,8 @@ func TestSacctSubmitLogPathsDashOutput(t *testing.T) {
 // throughout the recorded SubmitLine.
 func TestSacctSubmitLogPathsOptionsAndPatterns(t *testing.T) {
 	allocation := SacctJob{JobID: 9002, Name: "training"}
-	allocation.Array.JobID = 9000
-	allocation.Array.TaskID = numberField{Set: true, Number: 2}
+	allocation.Array.JobID = identityNumber{Set: true, Number: 9000}
+	allocation.Array.TaskID = identityNumber{Set: true, Number: 2}
 	for _, test := range []struct {
 		name    string
 		line    string

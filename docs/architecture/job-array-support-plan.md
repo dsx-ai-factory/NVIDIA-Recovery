@@ -1,6 +1,6 @@
 # Job Array Support Implementation Plan
 
-This is the proposed delivery plan for
+This is the delivery plan for
 [ADR 0054](../decisions/0054-recover-slurm-array-tasks-independently.md), not a
 claim that array support is implemented. The ADR owns identity, policy, and
 scope; this document keeps implementation sequencing outside the decision.
@@ -43,13 +43,14 @@ checkout of that reference repository.
 ## Proposed PR Stack
 
 Each PR builds on its predecessor and remains independently reviewable. Push
-and PR creation follow explicit maintainer instruction; this draft creates no
-remote branches or PRs.
+and PR creation follow explicit maintainer instruction. Task identity is split
+into PR 2a and PR 2b so parsing and backend preservation can be reviewed separately.
 
 | PR | Scope | Evidence required |
 | --- | --- | --- |
 | 1: Decision | Review ADR 0054 and this plan; record acceptance when selected. | Identity, retry, checkpoint, audit, and scope choices reviewed together. |
-| 2: Task identity | Normalize SAC `squeue`/`sacct` parsing, preserve metadata through publication and backend round trips, and validate conflicting identity at the owning boundary. | Both numeric representations produce the same task ID; task zero survives; synthetic ranges and invalid identities produce no actionable job; standalone IDs remain unchanged. |
+| 2a: Task identity parsing | Normalize SAC `squeue`/`sacct` parsing and publish canonical task identity through existing scheduler metadata. | Both numeric representations produce the same task ID; task zero survives; synthetic ranges and invalid identities produce no actionable job; standalone IDs remain unchanged; publication and gateway mappings retain identity. |
+| 2b: Backend identity preservation | Preserve identity through Job/Advice updates and validate conflicting identity at the Job Manager boundary using a scheduler-neutral storage policy. | Partial updates retain established identity; contradictory updates are rejected; existing standalone-job behavior is preserved. |
 | 3: Task recovery | Complete task-scoped accounting/attempt reconciliation, bootstrap, Advice, recovery bookkeeping, scheduler selectors, log enrichment, and watchdog handling. Reuse backend retry policy. | Two siblings recover independently; one exhausts its allowance without affecting the other; restart/bootstrap preserves budgets; commands and convergence remain task-specific. |
 | 4: Checkpoint association | Normalize event identity at Slurm ingestion and backend compatibility boundaries before Watcher lookups/deduplication and JM matching/writes. Add explicit checkpoint-association audits. | Save/load events and their audits resolve to the same task attempt; delayed registration retries; ambiguous events do not alter progress; sibling checkpoints cannot postpone another task's stop decision. |
 | 5: End-to-end qualification | Close audit propagation/query gaps across producers, update the release audit catalog, add isolated array scenarios, and update current support/operations documentation. | Real task failures, checkpoint ingestion, persisted audit reads, and unaffected siblings are demonstrated through production interfaces. |
@@ -57,6 +58,17 @@ remote branches or PRs.
 Tests that prove a change belong in its owning PR; the final PR adds integration
 evidence rather than deferring correctness checks. If a seam already satisfies
 the contract, retain it and add only justified behavioral coverage.
+
+### Task Identity Parsing Implementation (PR 2a)
+
+The parsing slice normalizes plain and wrapped Slurm numeric fields, retains
+task zero, skips synthetic pending rows, and rejects malformed task identity.
+Existing publication and gateway mappings preserve the canonical ID and
+scheduler metadata without new contract fields.
+
+Backend identity preservation and conflict validation follow in PR 2b. Recovery,
+checkpoint association, and end-to-end qualification remain later slices;
+parsing alone does not qualify array recovery for rollout.
 
 ## Behavioral Acceptance
 
