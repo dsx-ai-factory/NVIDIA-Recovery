@@ -129,10 +129,13 @@ make build-publish \
   SERVICES="job-manager watcher"
 ```
 
-The default `PLATFORMS=linux/amd64,linux/arm64` publishes a shared image index
-for both architectures. For example, the Job Manager reference is
-`registry.example.com/acme/nvidia-recovery/job-manager:dev`. Override
-`PLATFORMS=linux/arm64` when only that platform is needed.
+`PLATFORMS` defaults to `linux/amd64`. For example, the Job Manager reference
+is `registry.example.com/acme/nvidia-recovery/job-manager:dev`. Set
+`PLATFORMS=linux/amd64,linux/arm64` to publish a shared image index for both
+architectures, or `PLATFORMS=linux/arm64` for arm64 only. Attribution arm64
+qualification is pending, so any platform other than `linux/amd64` requires
+`SERVICES` without `attribution-adapter` and `attribution-service`, or
+`ATTRIBUTION_ENABLED=false` with `SERVICES` omitted.
 
 Docker Desktop's containerd image store can support multi-platform builds.
 If the selected builder cannot, create a container-backed builder:
