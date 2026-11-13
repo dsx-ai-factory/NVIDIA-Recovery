@@ -4,7 +4,7 @@ Status: accepted
 
 Date: 2026-11-11
 
-> **Implementation note (2026-11-11):** Release packaging and Go module publication remain pending, including published sibling dependencies and external-consumer qualification; operator build/CI qualification also remains pending.
+> **Implementation note (2026-11-11):** Advice Operator build/CI wiring and source archive inclusion are implemented in the [component workflow](../../advice-operator/README.md#development); Go module publication, published sibling dependencies, and external-consumer qualification remain pending.
 
 ## Context
 

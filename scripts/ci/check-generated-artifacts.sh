@@ -81,11 +81,27 @@ check_slurm_advisor_controller() {
         "${generated_files[@]}" || return 1
 }
 
+check_advice_operator() {
+    ci_log "checking generated Advice Operator API, mocks, CRDs, and RBAC"
+    "$SCRIPT_DIR/generate-go.sh" --package advice-operator || return 1
+    ci_check_no_generated_drift \
+        "advice-operator" \
+        advice-operator/api/v1alpha1/zz_generated.deepcopy.go \
+        advice-operator/internal/client/mock_advice_source.go \
+        advice-operator/config/crd/bases \
+        advice-operator/config/rbac/role.yaml \
+        deploy/helm/advice-operator/templates/crds/crd.yaml \
+        deploy/helm/advice-operator/templates/_manager-rbac.tpl || return 1
+}
+
 failed=0
 for package in "${packages[@]}"; do
     case "$package" in
         api-gateway)
             check_api_gateway || failed=1
+            ;;
+        advice-operator)
+            check_advice_operator || failed=1
             ;;
         slurm-advisor-controller)
             check_slurm_advisor_controller || failed=1

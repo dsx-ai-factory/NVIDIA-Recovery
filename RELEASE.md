@@ -6,8 +6,12 @@ through GitHub Releases, and the same chart through
 does not affect the names of deployed resources, which derive from the Helm
 release name. Operators build service images from the matching source using
 `scripts/build-images.sh`, choose their registry, and configure the chart with
-those images. No executable or container image is published here. Advice Operator
-and private Attribution source are excluded. Attribution is enabled by default;
+those images. No executable or container image is published here. Source archives
+include Advice Operator and its standalone Helm chart. Build its image separately
+with `make build-local SERVICES=advice-operator`; it is not a dependency of the
+umbrella chart. Go module publication follows
+[ADR 0057](docs/decisions/0057-publish-all-go-modules.md) and remains pending.
+Private Attribution source remains excluded. Attribution is enabled by default;
 public source/client publication and native amd64 end-to-end qualification remain
 release prerequisites. See [Attribution](docs/public-api/optional-attribution.md).
 

@@ -27,6 +27,7 @@ readonly -a DEFAULT_SERVICES=(
 
 readonly -a SERVICES=(
   "${DEFAULT_SERVICES[@]}"
+  advice-operator
   attribution-adapter
   attribution-service
 )
@@ -96,6 +97,10 @@ configure_service() {
   BUILD_ARGS=()
 
   case "$service" in
+    advice-operator)
+      DOCKERFILE="$REPO_ROOT/advice-operator/Dockerfile"
+      BUILD_CONTEXT="$REPO_ROOT"
+      ;;
     anomaly-detection-isolator)
       configure_python_service anomaly_detection_isolator/Dockerfile
       ;;
@@ -164,6 +169,7 @@ Usage:
   scripts/build-images.sh --list
 
 Builds every default service when no SERVICE is supplied.
+Advice Operator is supported through explicit selection: --load advice-operator.
 Attribution is enabled by default and requires upstream source access.
 Set ATTRIBUTION_ENABLED=false for an explicit degraded build without it.
 

@@ -14,7 +14,7 @@ change; they are not all required for every contribution.
 | Change | Focused check | What it covers |
 | --- | --- | --- |
 | Python package | `scripts/ci/test-python.sh --package watcher` | Unit tests for one package; replace `watcher` with the owning package name. Integration directories are excluded. |
-| Go module | `make GO_PACKAGES=api-gateway verify-go` | Generated artifacts, module tidiness, lint, vet, unit tests, and race tests for the selected module. Use `slurm-advisor-controller` for controller or watchdog changes. |
+| Go module | `make GO_PACKAGES=api-gateway verify-go` | Generated artifacts, module tidiness, lint, vet, unit tests, and race tests for the selected module. Use `slurm-advisor-controller` for Slurm controller or watchdog changes, or `advice-operator` for the Kubernetes Advice controller. |
 | Dashboard | `make lint-typescript test-typescript` | Dashboard lint and tests, after installing its locked pnpm dependencies. |
 | E2E harness and tooling | `make e2e-harness-test` | Cluster-free tests for `tests/e2e_harness` and, in `tests/tooling`, the CI, build, and E2E scripts. |
 | E2E shell and Python surfaces | `make e2e-lint` | Shell checks, existing lifecycle self-tests, Python formatting and lint. Requires ShellCheck and uv. |
@@ -22,7 +22,9 @@ change; they are not all required for every contribution.
 | Complete local recovery path | `DEPLOY_INFRA=1 DEPLOY_STACK=1 make e2e` | Disposable Kind/Slinky environment, backend services, and ordered recovery scenarios. Read the lifecycle warning below first. |
 
 The broad `make lint` and `make test` targets remain available. Unscoped
-`make verify-go` checks both Go modules. Use broad checks when shared changes
+`make verify-go` checks all three Go modules. Advice Operator controller tests
+provision pinned envtest binaries and run a local API server; use
+`make test-advice-operator-integration` for its tagged integration suite. Use broad checks when shared changes
 justify them; a repository-wide preflight is not the default gate.
 
 For file-scoped Python formatting and lint, pass the changed files explicitly:

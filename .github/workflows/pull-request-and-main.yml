@@ -202,6 +202,8 @@ jobs:
           cache-dependency-path: |
             api-gateway/go.mod
             api-gateway/go.sum
+            advice-operator/go.mod
+            advice-operator/go.sum
             slurm-advisor-controller/go.mod
             slurm-advisor-controller/go.sum
 
@@ -233,6 +235,8 @@ jobs:
           cache-dependency-path: |
             api-gateway/go.mod
             api-gateway/go.sum
+            advice-operator/go.mod
+            advice-operator/go.sum
 
       - name: Install minisign
         run: |
@@ -279,11 +283,16 @@ jobs:
           cache-dependency-path: |
             api-gateway/go.mod
             api-gateway/go.sum
+            advice-operator/go.mod
+            advice-operator/go.sum
             slurm-advisor-controller/go.mod
             slurm-advisor-controller/go.sum
 
       - name: Install pinned Go tools
         run: make install-go-tools
+
+      - name: Build Go modules
+        run: make build-go
 
       - name: Run Go tests
         env:
@@ -297,8 +306,44 @@ jobs:
           name: go-coverage
           path: |
             api-gateway/coverage.out
+            advice-operator/coverage.out
             slurm-advisor-controller/coverage.out
           if-no-files-found: warn
+
+  advice-operator-image:
+    name: Advice Operator Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Build and verify Advice Operator image
+        run: make test-advice-operator-image
+
+  advice-operator-integration:
+    name: Advice Operator Integration Test
+    needs:
+      - go-lint
+      - go-buf-lint
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go with cache
+        uses: ./.github/actions/setup-go-cache
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            api-gateway/go.mod
+            api-gateway/go.sum
+            advice-operator/go.mod
+            advice-operator/go.sum
+
+      - name: Run Advice Operator integration tests
+        run: make test-advice-operator-integration
 
   typescript-lint:
     name: TypeScript Lint

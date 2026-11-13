@@ -10,8 +10,8 @@ PLATFORMS ?= linux/amd64
 E2E_PROFILE ?= advisor-act
 SLINKY_SLURM_IMAGE ?= ghcr.io/slinkyproject/sackd:25.05-ubuntu24.04@sha256:dd1f0b6030229b3d602e3d80e6d50cc4f9fd17b325312521dfa07376fffc7569
 SLURM_ADVISOR_CONTROLLER_SLURM_IMAGE ?= $(SLINKY_SLURM_IMAGE)
-# Verify both supported Go modules by default. GO_PACKAGES can select either.
-GO_PACKAGES ?= api-gateway slurm-advisor-controller
+# Verify all supported Go modules by default. GO_PACKAGES can select a subset.
+GO_PACKAGES ?= api-gateway advice-operator slurm-advisor-controller
 GO_PACKAGE_ARGS = $(foreach package,$(GO_PACKAGES),--package $(package))
 GO_TEST_ARGS ?=
 GO_TOOLS_BIN ?= $(CURDIR)/.cache/go-tools/bin
@@ -26,7 +26,7 @@ export IMAGE_PREFIX
 export IMAGE_TAG
 export PLATFORMS
 
-.PHONY: check-generated check-generated-api-gateway-bindings check-generated-go check-slurm-watchdog-deps check-tidy-go format-python generate-api-gateway-bindings generate-go install-go-tools lint lint-buf lint-go lint-python lint-typescript test test-go test-go-race test-nightly-selection-contract test-python test-typescript test-unit test-slurm-advisor-controller-chart-e2e test-slurm-advisor-controller-image test-slurm-advisor-controller-systemd test-slurm-advisor-harness tidy-go verify-go vet-go
+.PHONY: build-go build-advice-operator test-advice-operator-integration test-advice-operator-image check-generated check-generated-api-gateway-bindings check-generated-go check-slurm-watchdog-deps check-tidy-go format-python generate-api-gateway-bindings generate-go install-go-tools lint lint-buf lint-go lint-python lint-typescript test test-go test-go-race test-nightly-selection-contract test-python test-typescript test-unit test-slurm-advisor-controller-chart-e2e test-slurm-advisor-controller-image test-slurm-advisor-controller-systemd test-slurm-advisor-harness tidy-go verify-go vet-go
 
 lint: format-python lint-python lint-go lint-buf check-generated lint-typescript
 
@@ -45,6 +45,18 @@ test-slurm-advisor-controller-image:
 
 test-slurm-advisor-controller-systemd:
 	deploy/systemd/slurm-advisor-controller/tests/contract.sh
+
+build-go:
+	scripts/ci/build-go.sh $(GO_PACKAGE_ARGS)
+
+build-advice-operator:
+	+$(MAKE) --no-print-directory -C advice-operator build
+
+test-advice-operator-image:
+	BUILD_IMAGE_TAG=$(BUILD_IMAGE_TAG) scripts/ci/test-advice-operator-image.sh
+
+test-advice-operator-integration:
+	scripts/ci/test-advice-operator-integration.sh
 
 install-go-tools:
 	scripts/ci/install-go-tools.sh
@@ -101,6 +113,7 @@ check-tidy-go:
 	scripts/ci/check-tidy-go.sh $(GO_PACKAGE_ARGS)
 
 verify-go:
+	+$(MAKE) --no-print-directory build-go GO_TEST_ARGS=
 	+$(MAKE) --no-print-directory install-go-tools GO_TEST_ARGS=
 	+$(MAKE) --no-print-directory check-generated-go GO_TEST_ARGS=
 	+$(MAKE) --no-print-directory check-tidy-go GO_TEST_ARGS=
