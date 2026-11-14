@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * @typedef {"starfleet" | "azure" | "ldap"} AuthProviderName
+ * @typedef {"gateway" | "starfleet" | "azure" | "ldap"} AuthProviderName
  */
 
 /**
  * @typedef {object} AuthEnvironment
  * @property {string | undefined} [NEXTAUTH_ENABLED]
+ * @property {string | undefined} [API_GATEWAY_URL]
  * @property {string | undefined} [STARFLEET_CLIENT_SECRET]
  * @property {string | undefined} [STARFLEET_CLIENT_ID]
  * @property {string | undefined} [STARFLEET_OPENID_CONFIG_URL]
@@ -33,7 +34,7 @@
 export class AuthConfigurationError extends Error {
   constructor() {
     super(
-      "NEXTAUTH_ENABLED=true requires one complete authentication provider configuration: Starfleet, Azure, or LDAP",
+      "NEXTAUTH_ENABLED=true requires one complete authentication provider configuration: API Gateway, Starfleet, Azure, or LDAP",
     );
     this.name = "AuthConfigurationError";
   }
@@ -50,6 +51,12 @@ function areAllStringsValid(values) {
 
 /** @type {{ name: AuthProviderName, isComplete: (environment: AuthEnvironment) => boolean }[]} */
 const PROVIDERS = [
+  {
+    // The API Gateway owns the OIDC login; the dashboard only needs to reach it.
+    name: "gateway",
+    isComplete: (environment) =>
+      areAllStringsValid([environment.API_GATEWAY_URL]),
+  },
   {
     name: "starfleet",
     isComplete: (environment) =>
@@ -85,7 +92,7 @@ const PROVIDERS = [
 
 /**
  * Resolve whether authentication is available and which provider owns it.
- * Provider selection preserves the established Starfleet, Azure, LDAP order.
+ * The API Gateway wins whenever it is configured; otherwise the established Starfleet, Azure, LDAP order applies.
  *
  * @param {AuthEnvironment} environment
  * @returns {AuthConfiguration}

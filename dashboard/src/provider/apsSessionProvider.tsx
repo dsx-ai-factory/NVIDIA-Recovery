@@ -20,7 +20,9 @@ export function ApsSessionProvider({
   authAvailable: boolean;
 }) {
   const content = authAvailable ? (
-    <SessionProvider basePath={withBasePath("/api/auth")}>
+    // Refetching hits /api/auth/session, the one place the API Gateway token can be
+    // refreshed and persisted. It must be shorter than the 5-minute refresh window.
+    <SessionProvider basePath={withBasePath("/api/auth")} refetchInterval={60}>
       {children}
     </SessionProvider>
   ) : (
