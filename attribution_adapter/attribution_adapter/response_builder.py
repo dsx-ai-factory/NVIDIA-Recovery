@@ -74,7 +74,7 @@ def _latest_evidence(sources: list[dict[str, Any]]) -> dict[str, Any] | None:
         The chosen source, or ``None`` when no source has a log line.
     """
     earliest = datetime.min.replace(tzinfo=UTC)
-    with_line = [source for source in sources if source.get("line")]
+    with_line = [source for source in sources if isinstance(source.get("line"), str) and source["line"]]
     return max(with_line, key=lambda source: _parse_source_time(source.get("time")) or earliest, default=None)
 
 
@@ -126,10 +126,11 @@ def _straggler_attributions(
             continue
         for node, report in sorted(reports.items()):
             ranks = _flagged_ranks(report)
-            if not node or not ranks:
+            raw_sources = report.get("sources", []) if isinstance(report, dict) else None
+            if not node or not ranks or not isinstance(raw_sources, list):
                 logger.warning(f"Skipping malformed {collector_key} report for node '{node}'")
                 continue
-            sources = [source for source in report.get("sources") or [] if isinstance(source, dict)]
+            sources = [source for source in raw_sources if isinstance(source, dict)]
             evidence = _latest_evidence(sources)
             attributions.append(
                 Attribution(
@@ -142,7 +143,7 @@ def _straggler_attributions(
                     observed_at=_observed_at(_parse_source_time(evidence.get("time")) if evidence else None, request),
                     recommended_action=None,
                     evidence_references=sorted(
-                        {f"source:{source['source']}" for source in sources if source.get("source")}
+                        {f"source:{source['source']}" for source in sources if isinstance(source.get("source"), str)}
                     ),
                 )
             )

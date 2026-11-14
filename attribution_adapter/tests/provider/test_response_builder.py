@@ -251,6 +251,7 @@ def test_straggler_report_is_ignored_for_other_signals(detection_signal):
         {"megatron_straggler": {"nodeA": "not a report"}},
         {"megatron_straggler": {"nodeA": {"pattern": "Megatron Pattern", "rank_scores": [], "sources": []}}},
         {"nvrx_straggler": {"nodeA": {"pattern": "NVRX Pattern", "rank_scores": [{"score": 1.0}]}}},
+        {"megatron_straggler": {"nodeA": {"pattern": "Megatron Pattern", "rank_scores": [{"rank": 5}], "sources": 42}}},
     ],
 )
 def test_empty_or_malformed_straggler_digest_adds_no_attribution(collectors):
@@ -262,3 +263,18 @@ def test_empty_or_malformed_straggler_digest_adds_no_attribution(collectors):
 
     assert _node_attributions(resp) == []
     assert len(resp.attributions) == 1  # the job-level symptom is still reported
+
+
+def test_straggler_report_with_unusable_evidence_fields_still_names_the_node():
+    """A source without a usable line or source name cannot fail the response or supply evidence."""
+    v2 = _running_job_with_straggler_digest("megatron_straggler", "Megatron Pattern")
+    v2.collectors["megatron_straggler"]["nodeA"]["sources"] = [{"line": 123, "source": None, "time": 5}, "not a source"]
+
+    resp = build_response(v2, _request("STRAGGLER"), attribution_session_id="att-1")
+
+    nodes = _node_attributions(resp)
+    assert len(nodes) == 1
+    assert nodes[0].resource_set.value == "nodeA"
+    assert nodes[0].evidence_excerpt == ""
+    assert nodes[0].evidence_references == []
+    assert nodes[0].observed_at == NOW  # no usable source time -> job_end_time fallback
