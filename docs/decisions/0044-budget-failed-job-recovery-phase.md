@@ -1,10 +1,12 @@
 # ADR 0044: Budget The Failed-Job Recovery Phase
 
-Status: accepted
+Status: superseded
 
 Date: 2026-10-01
 
 Discussion: [PR 207](https://github.com/NVIDIA/NVIDIA-Recovery/pull/207)
+
+> **Implementation note (2026-11-11):** Direct failed-job recovery has been removed, retiring its retry and phase-budget rules; recovery now requires Advice.
 
 ## Context
 

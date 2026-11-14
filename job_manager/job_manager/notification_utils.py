@@ -4,14 +4,7 @@
 
 from recovery_libs.notifications_client import JobRequeued, ReachedMaxRequeueTime, TemplateData
 from recovery_libs.schema.job_manager.models import JobTerminalAdvice
-from recovery_libs.storage.dataclass import JobConfigValidationFailureTypes, SlurmJobExecutionRecord
-
-invalid_job_config_messages = {
-    JobConfigValidationFailureTypes.LOG_FILE_PATH_NOT_FOUND: (
-        "No valid job log file path found, the log file name must start with '<job_name>_<job_id>_date' "
-        "to be considered valid. Preferably with timestamp information included as the unique identifier"
-    ),
-}
+from recovery_libs.storage.dataclass import SlurmJobExecutionRecord
 
 _MAX_REQUEUE_MESSAGE = "Reached the maximum number of requeue attempts."
 

@@ -50,18 +50,21 @@ onward. Earlier decisions are not included.
 | [0040](0040-retire-job-anomaly-relay.md) | accepted | Retire the JM-to-ARM anomaly relay while preserving anomaly persistence, Advice, and direct ADI requests. |
 | [0041](0041-retire-arm-attribution-result-queue.md) | accepted | Remove ADI’s obsolete ARM result queue declaration; Job Manager owns the normal attribution result queue. |
 | [0042](0042-align-sac-and-watchdog-job-action-policy.md) | accepted | Share job-mode precedence and temporary username action selection between SAC and watchdog while preserving monitoring and independent safety gates. |
-| [0043](0043-bound-failed-job-requeue-retries.md) | accepted | Bound direct failed-job requeue retries and defer durable give-up status until Advice-driven recovery. |
-| [0044](0044-budget-failed-job-recovery-phase.md) | accepted | Bound the failed-job phase, preserve retry allowances across ticks, and expose scheduler command timeout counts. |
-| [0045](0045-require-advice-before-slurm-requeue.md) | accepted | Require restart Advice before recovery, with an eager-recovery compatibility path for rollout and rollback; partially supersedes ADRs 0013 and 0022. |
+| [0043](0043-bound-failed-job-requeue-retries.md) | superseded | Bound direct failed-job requeue retries and defer durable give-up status until Advice-driven recovery. Retired with the eager recovery implementation. |
+| [0044](0044-budget-failed-job-recovery-phase.md) | superseded | Bound the failed-job phase, preserve retry allowances across ticks, and expose scheduler command timeout counts. Retired with the eager recovery implementation. |
+| [0045](0045-require-advice-before-slurm-requeue.md) | accepted | Require restart Advice before recovery, with the eager compatibility path removed; partially supersedes ADRs 0013 and 0022. |
 | [0046](0046-preserve-successful-slurm-accounting-results.md) | accepted | Preserve and publish successful targeted accounting results after partial failures while retaining the complete-snapshot requirement for recovery and Advice actions. |
-| [0047](0047-bound-sac-bootstrap-discovery.md) | accepted | Bound SAC bootstrap to non-final attempts, unresolved Advice, and recent failures for eager recovery. |
+| [0047](0047-bound-sac-bootstrap-discovery.md) | accepted | Bound SAC bootstrap to non-final attempts, unresolved Advice, with recent-failure eager discovery removed. |
 | [0048](0048-start-recovery-traces-in-backend-and-share-observations.md) | accepted | Start recovery sequences only in the backend and share operation facts across tracing, audit, and milestone reporting; partially supersedes ADR 0013. |
 | [0049](0049-enable-attribution-by-default.md) | accepted | Include Attribution by default, retain explicit degraded operation, and require public compatible inputs and platform qualification; partially supersedes ADR 0034. |
 | [0050](0050-expose-authenticated-whole-job-audit-reads.md) | accepted | Add authenticated whole-job audit reads with bounded responses and additive identity backfill; partially supersedes ADR 0031. |
 | [0051](0051-retire-embedded-anomaly-attributions.md) | accepted | Retire embedded anomaly attribution queries, public fields, configuration, and dashboard attribution-count badges. |
 | [0052](0052-run-e2e-tests-as-isolated-staged-scenarios.md) | accepted | Run each E2E test as a staged scenario that launches its own jobs through a scheduler-neutral launcher and verifies evidence over HTTP, isolated from other tests; narrows ADR 0005's service-proxy transport allowance. |
 | [0053](0053-fanout-audit-and-recovery-trace.md) | superseded | Fan out overlapping recovery activity to trace spans and audit events without making recovery-sequence data the audit source of truth; superseded by ADR 0048. |
-| [0054](0054-persist-application-requested-job-termination.md) | accepted | Persist application-requested cancellation by scheduler job ID and translate it into sticky exact-attempt terminal Advice. |
+| [0054](0054-recover-slurm-array-tasks-independently.md) | accepted | Recover Slurm array tasks with independent retry allowances, task-level checkpoint association and audit history, and scheduler metadata for Slurm-specific identity. |
+| [0055](0055-retire-job-status-event-consumer.md) | accepted | Retire RabbitMQ job-status ingestion and its exclusive configuration and storage helpers; job status arrives through the HTTP API. |
+| [0056](0056-establish-kubernetes-local-development-foundation.md) | accepted | Establish a minimal Tilt-based direct Kubernetes development environment and extend the staged E2E harness before adding Recovery components. |
+| [0057](0057-persist-application-requested-job-termination.md) | accepted | Persist application-requested cancellation by scheduler job ID and translate it into sticky exact-attempt terminal Advice. |
 
 ADR numbers 0018, 0019, 0023, and 0024 are retired; their external-service
 decisions were removed with maintainer approval. Do not reuse these numbers.

@@ -187,8 +187,8 @@ func TestControllerGatesEnvironmentBeforePublicationAndForgetsRejectedSeenJob(t 
 	if len(materializer.calls) != 1 || len(materializer.calls[0].targets) != 1 || materializer.calls[0].targets[0].JobID != matching.JobID {
 		t.Fatalf("log-link targets = %#v, want only %q", materializer.calls, matching.JobID)
 	}
-	if len(result.FailedJobs.Requeues) != 0 || len(result.Advice.Skips) != 0 {
-		t.Fatalf("rejected job reached recovery/advice reconciliation: failed=%#v advice=%#v", result.FailedJobs, result.Advice)
+	if len(result.Advice.Skips) != 0 {
+		t.Fatalf("rejected job reached recovery/advice reconciliation: advice=%#v", result.Advice)
 	}
 }
 
@@ -325,9 +325,6 @@ func TestControllerGatesAccountingEnvironmentForAdmittedActiveAttempt(t *testing
 	if _, ok := result.Snapshot.AccountingJobs[jobAttemptRef(accounting)]; ok {
 		t.Fatal("environment-rejected accounting record reached the snapshot")
 	}
-	if len(result.FailedJobs.Requeues) != 0 {
-		t.Fatalf("rejected accounting record produced failed recovery: %#v", result.FailedJobs.Requeues)
-	}
 	if len(client.upsertRequests) != 1 || client.upsertRequests[0].GetState() != pb.JobStatus_JOB_STATUS_RUNNING {
 		t.Fatalf("upserts = %#v, want only the admitted active record", client.upsertRequests)
 	}
@@ -364,8 +361,8 @@ func TestControllerRejectedCurrentAttemptBlocksOlderAdviceAndAccounting(t *testi
 	if len(result.Snapshot.ActiveJobs) != 0 || len(result.Snapshot.AccountingJobs) != 0 {
 		t.Fatalf("rejected job reached Slurm snapshot maps: active=%#v accounting=%#v", result.Snapshot.ActiveJobs, result.Snapshot.AccountingJobs)
 	}
-	if len(client.upsertRequests) != 0 || len(result.FailedJobs.Requeues) != 0 || len(result.Advice.Skips) != 0 {
-		t.Fatalf("older attempt participated after current rejection: upserts=%#v failed=%#v advice=%#v", client.upsertRequests, result.FailedJobs, result.Advice)
+	if len(client.upsertRequests) != 0 || len(result.Advice.Skips) != 0 {
+		t.Fatalf("older attempt participated after current rejection: upserts=%#v advice=%#v", client.upsertRequests, result.Advice)
 	}
 	assertSeenRecords(t, seen, nil)
 	if len(observer.observations) != 1 || len(observer.observations[0].ModeDecisions) != 0 {
@@ -1166,92 +1163,6 @@ func TestControllerRetainsUnresolvedBootstrappedJobAcrossTicks(t *testing.T) {
 	assertSeenRecords(t, seen, nil)
 }
 
-func TestControllerBoundsBootstrappedFailedJobRetries(t *testing.T) {
-	transientErr := errors.New("temporary Slurm failure")
-	for _, tt := range []struct {
-		name       string
-		actionErrs []error
-		wantErr    error
-	}{
-		{name: "transient failure recovers within tick", actionErrs: []error{transientErr, nil}},
-		{name: "command timeout with live caller retries", actionErrs: []error{context.DeadlineExceeded, nil}},
-		{name: "permanent failure stops immediately", actionErrs: []error{cluster.ErrJobRequeuePermanent}, wantErr: cluster.ErrJobRequeuePermanent},
-		{name: "unknown failure exhausts local budget", actionErrs: []error{transientErr, transientErr, transientErr}, wantErr: transientErr},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			ctx := context.Background()
-			key := cluster.JobAttemptRef{JobID: "12345", AttemptIndex: 1}
-			failedJob := managedJob(cluster.JobExecutionRecord{
-				JobID: key.JobID, AttemptIndex: key.AttemptIndex,
-				WorkflowID: "workflow-12345", State: cluster.JobStateFailed, Partition: "normal",
-			})
-			failedJob.ModeRequest = cluster.JobModeRequest{Mode: cluster.JobModeAct, Specified: true, Valid: true}
-			reader := newMockJobReader(t)
-			reader.EXPECT().ActiveJobs(gomock.Any()).Return(nil, nil).Times(2)
-			reader.EXPECT().FinalizedJobs(gomock.Any(), []cluster.JobAttemptRef{key}).Return([]cluster.JobExecutionRecord{failedJob}, nil)
-			executor := newMockJobMutator(t)
-			var previous *gomock.Call
-			for _, actionErr := range tt.actionErrs {
-				call := executor.EXPECT().JobRequeueHold(gomock.Any(), key.JobID).Return(actionErr)
-				if previous != nil {
-					call.After(previous)
-				}
-				previous = call
-			}
-			client := &fakeControllerClient{
-				getJobsResponses: map[string]*pb.GetJobsResponse{
-					"": {Jobs: []*pb.Job{{JobId: key.JobID, AttemptIndex: key.AttemptIndex}}},
-				},
-				listAdviceResponses: map[string]*pb.ListAdviceResponse{"": {}},
-			}
-			seen := state.NewMemorySeenJobStore()
-			audit := &recordingAuditObserver{}
-			controller := Controller{
-				Options:   ControllerOptions{EnableEagerRequeue: true},
-				JobReader: reader, HeimdallClient: client, SeenJobs: seen,
-				ActionExecutor: executor, AuditObserver: audit,
-				ModePolicy: ModePolicy{DefaultMode: cluster.JobModeAct, AllowAct: true},
-			}
-
-			result, err := controller.SyncOnce(ctx)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("first SyncOnce() error = %v, want %v", err, tt.wantErr)
-			}
-			if len(result.FailedJobs.Requeues) != 1 || result.FailedJobs.Requeues[0].Applied != (tt.wantErr == nil) {
-				t.Fatalf("first failed-job result = %#v, want one decision with applied=%v", result.FailedJobs, tt.wantErr == nil)
-			}
-			assertSeenRecords(t, seen, nil)
-			if len(audit.failedJobActions) != len(tt.actionErrs) {
-				t.Fatalf("audit commands = %d, want %d", len(audit.failedJobActions), len(tt.actionErrs))
-			}
-			for i, actionErr := range tt.actionErrs {
-				wantOutcome := SchedulerActionOutcomeSuccess
-				if actionErr != nil {
-					wantOutcome = SchedulerActionOutcomeError
-				}
-				if got := audit.failedJobActions[i]; got.Outcome != wantOutcome || !errors.Is(got.Err, actionErr) {
-					t.Fatalf("audit command %d = %#v, want outcome %q and error %v", i, got, wantOutcome, actionErr)
-				}
-			}
-
-			// A completed local decision must remove terminal accounting work and
-			// prevent both another scheduler action and another tick-level error.
-			result, err = controller.SyncOnce(ctx)
-			if err != nil {
-				t.Fatalf("second SyncOnce() failed: %v", err)
-			}
-			if len(result.FailedJobs.Requeues) != 0 {
-				t.Fatalf("second failed-job result = %#v, want no repeated decision", result.FailedJobs)
-			}
-			if diff := cmp.Diff([]fakeGetJobsCall{{Limit: 100}}, client.getJobsCalls); diff != "" {
-				t.Fatalf("GetJobs calls mismatch (-want +got):\n%s", diff)
-			}
-			assertSeenRecords(t, seen, nil)
-		})
-	}
-}
-
 func TestControllerSkipsAdviceForNonActionableCurrentSqueueState(t *testing.T) {
 	ctx := context.Background()
 	endedAt := time.Now()
@@ -1598,48 +1509,6 @@ func TestControllerRestartWithSatisfiedConstraintsDoesNotUpdateEligibleTime(t *t
 		t.Fatalf("SyncOnce() failed: %v", err)
 	}
 
-}
-
-func TestControllerRestartRequeuesFailedJobDiscoveredFromHeimdallWithoutAdvice(t *testing.T) {
-	ctx := context.Background()
-	failedJob := managedJob(cluster.JobExecutionRecord{
-		JobID:        "12345",
-		AttemptIndex: 1,
-		WorkflowID:   "workflow-12345",
-		State:        cluster.JobStateFailed,
-		Partition:    "normal",
-	})
-	failedJob.ModeRequest = cluster.JobModeRequest{
-		Mode:      cluster.JobModeAct,
-		Specified: true,
-		Valid:     true,
-	}
-	executor := newMockJobMutator(t)
-	executor.EXPECT().JobRequeueHold(gomock.Any(), "12345").Return(nil)
-	reader := newMockJobReader(t)
-	expectActiveJobs(reader, nil)
-	expectFinalizedJobs(reader, []cluster.JobAttemptRef{{JobID: "12345", AttemptIndex: 1}}, []cluster.JobExecutionRecord{failedJob})
-	controller := Controller{
-		Options:   ControllerOptions{EnableEagerRequeue: true},
-		JobReader: reader,
-		HeimdallClient: &fakeControllerClient{
-			getJobsResponses: map[string]*pb.GetJobsResponse{
-				"": {Jobs: []*pb.Job{{JobId: "12345", AttemptIndex: 1}}},
-			},
-			listAdviceResponses: map[string]*pb.ListAdviceResponse{"": {}},
-		},
-		ActionExecutor: executor,
-		SeenJobs:       state.NewMemorySeenJobStore(),
-		ModePolicy:     ModePolicy{DefaultMode: cluster.JobModeAct, AllowAct: true},
-	}
-
-	result, err := controller.SyncOnce(ctx)
-	if err != nil {
-		t.Fatalf("SyncOnce() failed: %v", err)
-	}
-	if len(result.FailedJobs.Requeues) != 1 || !result.FailedJobs.Requeues[0].Applied {
-		t.Fatalf("failed-job result = %#v, want one applied requeue", result.FailedJobs.Requeues)
-	}
 }
 
 func TestControllerKeepsSeenStateOnSourceFailure(t *testing.T) {

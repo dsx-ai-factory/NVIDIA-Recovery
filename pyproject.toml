@@ -39,7 +39,7 @@ members = [
 [tool.uv]
 override-dependencies = [
     # security floors for transitive dependencies
-    "aiohttp>=3.14.3",
+    "aiohttp>=3.14.5",
     "anyio>=4.15.1",
     "grpcio>=1.83.0rc1",
     "pygments>=2.20.0",

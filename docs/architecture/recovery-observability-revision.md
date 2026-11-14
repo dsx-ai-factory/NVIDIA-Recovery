@@ -85,7 +85,7 @@ execution boundary and shared immutable result.
 | Actual SAC command | `advice_scheduler_action_completed` | One command-return timestamp/outcome/occurrence feeds action span, audit, and milestone. |
 | SAC application result | `advice_application_applied`, `advice_application_evaluated`, `advice_application_failed` | Share classification with reconcile spans; planned actions are not command completions. |
 | Fresh-state convergence / abandonment | `advice_reconciliation_converged`, `advice_reconciliation_abandoned` | Reuse generation-scoped outcomes; do not extend command latency or add a terminal policy. |
-| Watchdog / retained eager commands | `watchdog_release_completed`, `job_auto_requeue_hold_completed` | Preserve audit independently; these paths need no backend lookup or sequence creation. |
+| Watchdog commands | `watchdog_release_completed` | Preserve audit independently; these paths need no backend lookup or sequence creation. |
 
 ## Revised flow
 

@@ -35,7 +35,6 @@ type Recorder struct {
 	adviceSkips              *prometheus.CounterVec
 	adviceActions            *prometheus.CounterVec
 	adviceStatusPublications *prometheus.CounterVec
-	failedRequeues           *prometheus.CounterVec
 	commandTimeouts          *prometheus.CounterVec
 	modeDecisions            *prometheus.CounterVec
 	environmentAdmissions    *prometheus.CounterVec
@@ -139,7 +138,6 @@ var commandTimeoutLabels = []string{"squeue", "sacct", "scontrol", "scancel", "o
 var reconcileStages = []reconcile.ReconcileStage{
 	reconcile.StageJobStatusPolling,
 	reconcile.StageJobReconciliation,
-	reconcile.StageFailedJobReconciliation,
 	reconcile.StageAdviceReconciliation,
 }
 
@@ -241,10 +239,6 @@ func NewRecorder(reg prometheus.Registerer) *Recorder {
 			Name: "slurm_advisor_controller_slurm_command_timeouts_total",
 			Help: "Total Slurm commands terminated by command or enclosing operation deadlines.",
 		}, []string{"command"}),
-		failedRequeues: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "slurm_advisor_controller_failed_requeues_total",
-			Help: "Total number of direct failed-job requeuehold actions by outcome and mode.",
-		}, []string{"outcome", "mode"}),
 		modeDecisions: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "slurm_advisor_controller_job_mode_decisions_total",
 			Help: "Total number of per-job mode decisions by default, requested, effective mode, and reason.",
@@ -542,9 +536,6 @@ func (r *Recorder) ObserveSync(obs reconcile.SyncObservation) {
 			publication.Reason,
 			string(publication.Outcome),
 		), publication.Count)
-	}
-	for _, requeue := range obs.FailedRequeues {
-		addPositiveCount(r.failedRequeues.WithLabelValues(string(requeue.Outcome), string(requeue.Mode)), requeue.Count)
 	}
 	for _, decision := range obs.ModeDecisions {
 		addPositiveCount(r.modeDecisions.WithLabelValues(

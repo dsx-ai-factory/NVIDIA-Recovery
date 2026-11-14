@@ -4,6 +4,8 @@ Status: accepted
 
 Date: 2026-10-06
 
+> **Implementation note (2026-11-11):** The eager recovery path has been removed; the remaining rules stay in force.
+
 ## Context
 
 [ADR 0022](0022-bootstrap-sac-job-discovery-once.md) bootstraps SAC once from

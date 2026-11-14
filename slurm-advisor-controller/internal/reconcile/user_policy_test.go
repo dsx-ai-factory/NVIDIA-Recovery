@@ -163,31 +163,6 @@ func TestControllerUserAdviceCandidatesUseFreshAccountingPolicy(t *testing.T) {
 	}
 }
 
-func TestControllerUserLaterExplicitActRecoversFailedJobOnce(t *testing.T) {
-	job := managedJob(cluster.JobExecutionRecord{JobID: "job", User: "bob", WorkflowID: "workflow", State: cluster.JobStateFailed, RecoveryConfig: &cluster.RecoveryConfig{AutoResumeMode: cluster.AutoResumeModeRequeue}})
-	reader := newMockJobReader(t)
-	mutator := newMockJobMutator(t)
-	mutator.EXPECT().JobRequeueHold(gomock.Any(), job.JobID).Return(nil).Times(1)
-	controller := Controller{JobReader: reader, HeimdallClient: &fakeControllerClient{}, SeenJobs: state.NewMemorySeenJobStore(), Options: ControllerOptions{EnableEagerRequeue: true, UserAllowlist: []string{"alice"}}, ModePolicy: ModePolicy{DefaultMode: cluster.JobModeObserve, AllowAct: true}, ActionExecutor: mutator}
-	for tick := range 3 {
-		if tick == 1 {
-			job.ModeRequest = cluster.JobModeRequest{Mode: cluster.JobModeAct, Specified: true, Valid: true}
-		}
-		expectActiveJobs(reader, []cluster.JobExecutionRecord{job})
-		expectFinalizedJobs(reader, []cluster.JobAttemptRef{jobAttemptRef(job)}, []cluster.JobExecutionRecord{job})
-		result, err := controller.SyncOnce(context.Background())
-		if err != nil {
-			t.Fatalf("tick %d: SyncOnce() failed: %v", tick, err)
-		}
-		if tick < 2 && (len(result.FailedJobs.Requeues) != 1 || result.FailedJobs.Requeues[0].Applied != (tick == 1)) {
-			t.Fatalf("tick %d: requeues = %+v, want one with applied=%t", tick, result.FailedJobs.Requeues, tick == 1)
-		}
-		if tick == 2 && len(result.FailedJobs.Requeues) != 0 {
-			t.Fatalf("successful recovery repeated: %+v", result.FailedJobs.Requeues)
-		}
-	}
-}
-
 func TestControllerUserNewerUnselectedAttemptBlocksStaleAdvice(t *testing.T) {
 	old := managedJob(cluster.JobExecutionRecord{JobID: "job", User: "alice", WorkflowID: "workflow", State: cluster.JobStateRunning})
 	current := old

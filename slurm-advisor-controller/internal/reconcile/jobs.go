@@ -64,7 +64,6 @@ func (c *Controller) reconcileJobs(ctx context.Context, snapshot ControllerSnaps
 	}
 
 	var errs []error
-	pendingFailedRecoveries := failedJobRecoveryKeys(snapshot, c.Options)
 	for _, result := range orderedResults {
 		outcome := ObservationOutcomeSuccess
 		if result.err != nil {
@@ -76,13 +75,6 @@ func (c *Controller) reconcileJobs(ctx context.Context, snapshot ControllerSnaps
 			continue
 		}
 		if result.upsert.finalized {
-			// With eager recovery enabled, a failed attempt remains discoverable
-			// until failed-job reconciliation reaches a decision. A later tick can
-			// retry a transient Slurm mutation failure without another full GetJobs
-			// read from Job Manager.
-			if _, pending := pendingFailedRecoveries[result.upsert.key]; pending {
-				continue
-			}
 			if err := c.SeenJobs.Forget(ctx, result.upsert.key); err != nil {
 				errs = append(errs, errors.Wrapf(
 					err,
@@ -188,19 +180,6 @@ func (c *Controller) jobUpsertWorkerPoolSize() int {
 		return 1
 	}
 	return c.Options.JobUpsertWorkerPoolSize
-}
-
-func failedJobRecoveryKeys(snapshot ControllerSnapshot, opts ControllerOptions) map[cluster.JobAttemptRef]struct{} {
-	// Advice independently rediscovers finalized attempts after publication.
-	// Retain them for direct mutation retries only when eager recovery is on.
-	if !opts.EnableEagerRequeue {
-		return nil
-	}
-	keys := make(map[cluster.JobAttemptRef]struct{})
-	for _, job := range failedJobsFromSnapshot(snapshot, opts) {
-		keys[jobAttemptRef(job)] = struct{}{}
-	}
-	return keys
 }
 
 func (c *Controller) forgetRejectedJobs(ctx context.Context, snapshot ControllerSnapshot) error {

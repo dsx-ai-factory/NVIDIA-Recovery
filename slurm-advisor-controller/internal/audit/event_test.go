@@ -117,21 +117,6 @@ func TestTypedEventsToProducerEvent(t *testing.T) {
 				EventProducedAt: producedAt.UnixMicro(), IdempotencyKey: "abandoned-event",
 			},
 		},
-		"job auto requeue hold completed": {
-			event: JobAutoRequeueHoldCompletedEvent{
-				HeimdallJobID: "heimdall-job-123", JobID: "456", AttemptIndex: 2,
-				CorrelationUUID: "correlation-789", Success: true, ProducedAt: producedAt,
-				IdempotencyKey: "direct-event",
-			},
-			want: ProducerEvent{
-				HeimdallJobID: "heimdall-job-123", EventProducer: ProducerSlurmAdvisorController,
-				EventType: JobAutoRequeueHoldCompleted, EventLevel: LevelRecovery,
-				Payload: JobAutoRequeueHoldCompletedPayload{
-					JobID: "456", AttemptIndex: 2, CorrelationUUID: "correlation-789", Success: true,
-				},
-				EventProducedAt: producedAt.UnixMicro(), IdempotencyKey: "direct-event",
-			},
-		},
 		"watchdog release": {
 			event: WatchdogReleaseCompletedEvent{
 				HeimdallJobID: "heimdall-job-123", JobID: "456", AttemptIndex: 2,

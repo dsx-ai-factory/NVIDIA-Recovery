@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Keep this foundation independent of the Slurm/Slinky root Tiltfile.
+cluster = os.environ.get('KUBERNETES_DEV_CLUSTER', 'nvr-kubernetes-dev')
+allow_k8s_contexts('kind-' + cluster)
+local_resource(
+    'jobset',
+    cmd=['bash', './install-jobset.sh'],
+    deps=['install-jobset.sh'],
+    labels=['infra'],
+)

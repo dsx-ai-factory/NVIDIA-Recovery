@@ -40,8 +40,6 @@ const (
 	AdviceReconciliationConverged EventType = "advice_reconciliation_converged"
 	// AdviceReconciliationAbandoned records a durably persisted unsuccessful terminal outcome.
 	AdviceReconciliationAbandoned EventType = "advice_reconciliation_abandoned"
-	// JobAutoRequeueHoldCompleted records a returned direct failed-job requeue-hold command.
-	JobAutoRequeueHoldCompleted EventType = "job_auto_requeue_hold_completed"
 	// WatchdogReleaseCompleted records a returned watchdog release command.
 	WatchdogReleaseCompleted EventType = "watchdog_release_completed"
 )
@@ -355,44 +353,6 @@ func (event AdviceReconciliationAbandonedEvent) ToProducerEvent() ProducerEvent 
 	)
 }
 
-// JobAutoRequeueHoldCompletedEvent records a returned direct failed-job command.
-type JobAutoRequeueHoldCompletedEvent struct {
-	// HeimdallJobID identifies the failed workload attempt.
-	HeimdallJobID string
-	// JobID identifies the scheduler job.
-	JobID string
-	// AttemptIndex identifies the failed scheduler attempt.
-	AttemptIndex int32
-	// CorrelationUUID identifies the durable recovery sequence when available.
-	CorrelationUUID string
-	// Success reports whether the scheduler command returned successfully.
-	Success bool
-	// Error contains the scheduler command error when present.
-	Error string
-	// ProducedAt is when the scheduler command returned.
-	ProducedAt time.Time
-	// IdempotencyKey identifies this producer event across delivery retries.
-	IdempotencyKey string
-}
-
-// ToProducerEvent converts the direct failed-job event into its delivery envelope.
-func (event JobAutoRequeueHoldCompletedEvent) ToProducerEvent() ProducerEvent {
-	return newProducerEvent(
-		event.HeimdallJobID,
-		ProducerSlurmAdvisorController,
-		JobAutoRequeueHoldCompleted,
-		JobAutoRequeueHoldCompletedPayload{
-			JobID:           event.JobID,
-			AttemptIndex:    event.AttemptIndex,
-			CorrelationUUID: event.CorrelationUUID,
-			Success:         event.Success,
-			Error:           event.Error,
-		},
-		event.ProducedAt,
-		event.IdempotencyKey,
-	)
-}
-
 // WatchdogReleaseCompletedEvent records a returned watchdog release command.
 type WatchdogReleaseCompletedEvent struct {
 	// HeimdallJobID identifies the held workload attempt.
@@ -454,7 +414,6 @@ var (
 	_ ToProducerEvent = AdviceApplicationFailedEvent{}
 	_ ToProducerEvent = AdviceReconciliationConvergedEvent{}
 	_ ToProducerEvent = AdviceReconciliationAbandonedEvent{}
-	_ ToProducerEvent = JobAutoRequeueHoldCompletedEvent{}
 	_ ToProducerEvent = WatchdogReleaseCompletedEvent{}
 )
 
@@ -596,20 +555,6 @@ type AdviceReconciliationAbandonedPayload struct {
 	Generation int64 `json:"generation"`
 	// Reason is the stable machine-readable abandonment reason.
 	Reason string `json:"reason"`
-}
-
-// JobAutoRequeueHoldCompletedPayload describes a direct requeue-hold result.
-type JobAutoRequeueHoldCompletedPayload struct {
-	// JobID identifies the scheduler job.
-	JobID string `json:"job_id"`
-	// AttemptIndex identifies the failed scheduler attempt.
-	AttemptIndex int32 `json:"attempt_index"`
-	// CorrelationUUID identifies the durable recovery sequence when available.
-	CorrelationUUID string `json:"correlation_uuid,omitempty"`
-	// Success reports whether the scheduler command returned successfully.
-	Success bool `json:"success"`
-	// Error contains the scheduler command error when present.
-	Error string `json:"error,omitempty"`
 }
 
 // WatchdogReleaseCompletedPayload describes a watchdog release result.

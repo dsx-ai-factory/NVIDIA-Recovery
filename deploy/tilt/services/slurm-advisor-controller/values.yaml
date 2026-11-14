@@ -1,6 +1,5 @@
 controller:
   # Exercise Advice-driven recovery throughout the default E2E deployment.
-  enableEagerRequeue: false
   auditTrail:
     destination: gateway
     flushInterval: 5s

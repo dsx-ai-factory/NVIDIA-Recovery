@@ -90,8 +90,6 @@ The scenario suite covers:
 - failed jobs remain failed without creating a successor while waiting for
   Advice; delayed restart Advice recovers them, while delayed termination
   Advice preserves the failed source.
-- `SLURM_ADVISOR_ENABLE_EAGER_REQUEUE=true` explicitly restores eager
-  `requeuehold` without Advice; the harness defaults this flag to false.
 - action-mode terminate advice converges through `scancel`.
 - restart plus node-exclusion advice requeues into hold, then updates
   constraints before the job can run again.
@@ -160,7 +158,6 @@ Controller metrics include:
 - `slurm_advisor_controller_job_upserts_total`
 - `slurm_advisor_controller_advice_skips_total`
 - `slurm_advisor_controller_advice_actions_total`
-- `slurm_advisor_controller_failed_requeues_total`
 - `slurm_advisor_controller_job_mode_decisions_total`
 - `slurm_advisor_controller_job_environment_admissions_total`
 
@@ -168,7 +165,7 @@ The reconcile duration histograms use production-oriented buckets from one
 second through ten minutes, followed by Prometheus's implicit `+Inf` bucket.
 The stage-duration histogram has bounded `stage` and `outcome` labels.
 Its `stage` values are `job_status_polling`, `job_reconciliation`,
-`failed_job_reconciliation`, and `advice_reconciliation`.
+and `advice_reconciliation`.
 The source-read duration histogram has bounded `source` and `outcome` labels.
 It records each Slurm, NVIDIA Recovery, and local seen-store read independently, so
 the concurrent base-snapshot read durations overlap rather than summing to the

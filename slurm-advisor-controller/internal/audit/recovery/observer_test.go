@@ -11,7 +11,6 @@ import (
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/audit"
-	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/reconcile"
 	"github.com/google/go-cmp/cmp"
 )
@@ -321,32 +320,6 @@ func TestObserverEmitsFailedAdviceApplication(t *testing.T) {
 			Error: "scheduler failed", ProducedAt: producedAt, IdempotencyKey: "event-id",
 		}.ToProducerEvent(),
 	}
-	if diff := cmp.Diff(want, sink.events); diff != "" {
-		t.Fatalf("emitted events mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func TestObserverEmitsFailedJobRequeueHoldCompletion(t *testing.T) {
-	t.Parallel()
-	completedAt := time.Date(2026, time.September, 2, 17, 3, 0, 0, time.UTC)
-	commandErr := errors.New("requeue failed")
-	sink := &recordingSink{}
-	observer := NewObserver(sink)
-	observer.newID = func() string { return "failed-job-event" }
-
-	observer.ObserveFailedJobRequeueHold(reconcile.FailedJobRequeueHoldObservation{
-		JobID: "789", AttemptIndex: 4,
-		Outcome:     reconcile.SchedulerActionOutcomeError,
-		CompletedAt: completedAt,
-		Err:         commandErr,
-	})
-
-	want := []audit.ProducerEvent{audit.JobAutoRequeueHoldCompletedEvent{
-		HeimdallJobID: jobidentity.HeimdallJobID("789", 4),
-		JobID:         "789", AttemptIndex: 4, Success: false,
-		Error: "requeue failed", ProducedAt: completedAt,
-		IdempotencyKey: "failed-job-event",
-	}.ToProducerEvent()}
 	if diff := cmp.Diff(want, sink.events); diff != "" {
 		t.Fatalf("emitted events mismatch (-want +got):\n%s", diff)
 	}

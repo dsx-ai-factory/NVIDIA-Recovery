@@ -4,6 +4,8 @@ This guide is for contributors changing NVIDIA Recovery. It takes you from a
 source checkout to a focused build and a check appropriate to your change.
 To run a local Slurm/Slinky deployment first, follow the
 [local tutorial](../getting-started.md).
+For the CPU-only direct Kubernetes foundation, use the
+[Kubernetes development profile](kubernetes.md).
 
 NVIDIA Recovery is experimental. The shipped scheduler integration is Slurm,
 including Slurm on Kubernetes through Slinky. Start with the
@@ -11,6 +13,22 @@ including Slurm on Kubernetes through Slinky. Start with the
 scheduler-neutral Advice, and the Slurm Advisor Controller owns scheduler
 actions. NVIDIA Attribution is enabled by default; see its
 [source and qualification prerequisites](../public-api/optional-attribution.md).
+
+## Choose your local environment
+
+Run these Make targets from the repository root. Leave interactive Tilt running
+in one terminal and run tests from another; stop Tilt before tearing down.
+
+| Action | Slurm/Slinky recovery stack | Direct Kubernetes foundation |
+| --- | --- | --- |
+| Start interactive development | `make dev` | `make dev-k8s` |
+| Converge without interactive Tilt | `make dev-ci` | `make dev-k8s-ci` |
+| Run tests against the existing environment | `CLUSTER_NAME=heimdall-e2e-dev make e2e-rerun` | `make dev-k8s-test` |
+| Tear down | `make dev-down` | `make dev-k8s-down` |
+
+The Kubernetes foundation currently runs CPU-only JobSet smoke scenarios;
+Recovery components will be added incrementally. See each environment's guide
+above for prerequisites and configuration.
 
 ## Choose your component and tools
 

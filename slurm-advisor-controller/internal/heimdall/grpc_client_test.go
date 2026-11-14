@@ -294,61 +294,6 @@ func TestGRPCClientGetJobsReturnsLaterPageError(t *testing.T) {
 	}
 }
 
-// The cutoff must only constrain the failure read, remain fixed across pages,
-// and never let a failed second read commit a partial bootstrap.
-func TestGRPCClientGetJobsIncludesRecentFailures(t *testing.T) {
-	for _, failLastPage := range []bool{false, true} {
-		name := "complete"
-		if failLastPage {
-			name = "failure-page-unavailable"
-		}
-		t.Run(name, func(t *testing.T) {
-			cutoff := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
-			first := &pb.Job{JobId: "long-running"}
-			second := &pb.Job{JobId: "pending"}
-			failed := &pb.Job{JobId: "recent-failure"}
-			last := &pb.Job{JobId: "recent-timeout"}
-			server := &recordingHeimdallServer{
-				getJobsResponses: map[string]*pb.GetJobsResponse{
-					"":     {Jobs: []*pb.Job{first}, NextPageToken: new("next")},
-					"next": {Jobs: []*pb.Job{second}},
-				},
-				recentFailureResponses: map[string]*pb.GetJobsResponse{
-					"":     {Jobs: []*pb.Job{failed}, NextPageToken: new("next")},
-					"next": {Jobs: []*pb.Job{last}},
-				},
-			}
-			if failLastPage {
-				server.recentFailureErrors = map[string]error{"next": status.Error(codes.Unavailable, "unavailable")}
-			}
-			client, cleanup := newBufconnClient(t, server)
-			defer cleanup()
-			jobs, err := client.GetJobs(context.Background(), heimdall.WithPageLimit(1), heimdall.WithRecentFailuresSince(cutoff))
-			if failLastPage {
-				if status.Code(err) != codes.Unavailable || jobs != nil {
-					t.Fatalf("GetJobs() = %v, %v; want no partial results and Unavailable", jobs, err)
-				}
-			} else {
-				if err != nil {
-					t.Fatal(err)
-				}
-				if diff := cmp.Diff([]*pb.Job{first, second, failed, last}, jobs, protocmp.Transform()); diff != "" {
-					t.Fatal(diff)
-				}
-			}
-			want := []pageCall{
-				{PageToken: "", Limit: 1, CompletedJobs: new(false)},
-				{PageToken: "next", Limit: 1, CompletedJobs: new(false)},
-				{PageToken: "", Limit: 1, ReconciliationEligibleJobs: new(true), EndTimeFrom: &cutoff},
-				{PageToken: "next", Limit: 1, ReconciliationEligibleJobs: new(true), EndTimeFrom: &cutoff},
-			}
-			if diff := cmp.Diff(want, server.getJobsCalls); diff != "" {
-				t.Fatal(diff)
-			}
-		})
-	}
-}
-
 func newBufconnClient(t *testing.T, server pb.HeimdallServiceServer) (*heimdall.GRPCClient, func()) {
 	t.Helper()
 
@@ -380,17 +325,15 @@ func newBufconnClient(t *testing.T, server pb.HeimdallServiceServer) (*heimdall.
 type recordingHeimdallServer struct {
 	pb.UnimplementedHeimdallServiceServer
 
-	upsertJobID            string
-	getJobsCalls           []pageCall
-	getJobsErrByPage       map[string]error
-	getJobsResponses       map[string]*pb.GetJobsResponse
-	recentFailureResponses map[string]*pb.GetJobsResponse
-	recentFailureErrors    map[string]error
-	listAdviceCalls        []pageCall
-	listAdviceErrByPage    map[string]error
-	listAdviceResponses    map[string]*pb.ListAdviceResponse
-	statusAdviceID         string
-	statusUpdate           *pb.AdviceReconciliationStatus
+	upsertJobID         string
+	getJobsCalls        []pageCall
+	getJobsErrByPage    map[string]error
+	getJobsResponses    map[string]*pb.GetJobsResponse
+	listAdviceCalls     []pageCall
+	listAdviceErrByPage map[string]error
+	listAdviceResponses map[string]*pb.ListAdviceResponse
+	statusAdviceID      string
+	statusUpdate        *pb.AdviceReconciliationStatus
 }
 
 type pageCall struct {
@@ -419,12 +362,6 @@ func (s *recordingHeimdallServer) GetJobs(_ context.Context, req *pb.GetJobsRequ
 		CompletedJobs:              req.CompletedJobs,
 		EndTimeFrom:                endTimeFrom,
 	})
-	if req.EndTimeFrom != nil {
-		if err := s.recentFailureErrors[req.GetPageToken()]; err != nil {
-			return nil, err
-		}
-		return s.recentFailureResponses[req.GetPageToken()], nil
-	}
 	if err := s.getJobsErrByPage[req.GetPageToken()]; err != nil {
 		return nil, err
 	}

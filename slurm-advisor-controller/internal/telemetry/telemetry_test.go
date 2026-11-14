@@ -30,7 +30,6 @@ func TestRecorderPublishesSyncObservation(t *testing.T) {
 		Stages: []reconcile.StageObservation{
 			{Stage: reconcile.StageJobStatusPolling, Outcome: reconcile.ObservationOutcomeSuccess, Duration: 50 * time.Millisecond},
 			{Stage: reconcile.StageJobReconciliation, Outcome: reconcile.ObservationOutcomeSuccess, Duration: 75 * time.Millisecond},
-			{Stage: reconcile.StageFailedJobReconciliation, Outcome: reconcile.ObservationOutcomeSuccess, Duration: 25 * time.Millisecond},
 			{Stage: reconcile.StageAdviceReconciliation, Outcome: reconcile.ObservationOutcomeError, Duration: 100 * time.Millisecond},
 		},
 		Sources: []reconcile.SourceObservation{
@@ -62,11 +61,6 @@ func TestRecorderPublishesSyncObservation(t *testing.T) {
 		},
 		AdviceActions: []reconcile.ActionObservation{
 			{Action: reconcile.ActionAdviceRelease, Mode: reconcile.ActMode, Outcome: reconcile.ObservationOutcomeSuccess, Count: 1},
-		},
-		FailedRequeues: []reconcile.OutcomeCountObservation{
-			{Mode: reconcile.ObserveMode, Outcome: reconcile.ObservationOutcomePlanned, Count: 1},
-			{Mode: reconcile.ActMode, Outcome: reconcile.ObservationOutcomeApplied, Count: 1},
-			{Mode: reconcile.ActMode, Outcome: reconcile.ObservationOutcomeSkippedRequeueLimit, Count: 1},
 		},
 		ModeDecisions: []reconcile.ModeDecisionObservation{
 			{
@@ -105,7 +99,7 @@ func TestRecorderPublishesSyncObservation(t *testing.T) {
 
 	assertCounterValue(t, families, "slurm_advisor_controller_reconcile_loops_total", 1)
 	assertHistogramCount(t, families, "slurm_advisor_controller_reconcile_duration_seconds", 1)
-	assertHistogramCount(t, families, "slurm_advisor_controller_reconcile_stage_duration_seconds", 4)
+	assertHistogramCount(t, families, "slurm_advisor_controller_reconcile_stage_duration_seconds", 3)
 	assertHistogramBuckets(t, families, "slurm_advisor_controller_reconcile_duration_seconds", reconcileDurationBuckets)
 	assertHistogramBuckets(t, families, "slurm_advisor_controller_reconcile_stage_duration_seconds", reconcileDurationBuckets)
 	assertMetricFamilyHasNoLabel(t, families, "slurm_advisor_controller_reconcile_stage_duration_seconds", "mode")
@@ -121,7 +115,6 @@ func TestRecorderPublishesSyncObservation(t *testing.T) {
 	assertCounterValue(t, families, "slurm_advisor_controller_job_upserts_total", 3)
 	assertCounterValue(t, families, "slurm_advisor_controller_advice_skips_total", 2)
 	assertCounterValue(t, families, "slurm_advisor_controller_advice_actions_total", 1)
-	assertCounterValue(t, families, "slurm_advisor_controller_failed_requeues_total", 3)
 	assertCounterValue(t, families, "slurm_advisor_controller_job_mode_decisions_total", 1)
 	assertCounterValue(t, families, "slurm_advisor_controller_job_environment_admissions_total", 3)
 	assertCounterValue(t, families, "slurm_advisor_controller_log_links_created_total", 1)

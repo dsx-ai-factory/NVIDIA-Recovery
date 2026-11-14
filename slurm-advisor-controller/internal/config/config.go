@@ -106,16 +106,10 @@ type Config struct {
 	JobUpsertWorkerPoolSize      int
 	AccountingWorkerPoolSize     int
 	AccountingTimeout            time.Duration
-	// FailedJobRecoveryTimeout bounds each tick's failed-job recovery phase.
-	FailedJobRecoveryTimeout time.Duration
-	AdviceLoopTimeout        time.Duration
-	AdviceItemTimeout        time.Duration
-	AdviceMaxAge             time.Duration
-	AdviceRequeueHoldDelay   time.Duration
-	// EnableEagerRequeue allows failed-job recovery before restart Advice; disabled by default.
-	EnableEagerRequeue bool
-	// BootstrapFailureLookback bounds rediscovery of finished failures for eager recovery by end time.
-	BootstrapFailureLookback time.Duration
+	AdviceLoopTimeout            time.Duration
+	AdviceItemTimeout            time.Duration
+	AdviceMaxAge                 time.Duration
+	AdviceRequeueHoldDelay       time.Duration
 	// AuditTrailDestination selects logging (the default) or gateway delivery.
 	AuditTrailDestination          string
 	AuditTrailMaxBatchSize         int
@@ -138,13 +132,11 @@ type Config struct {
 	// These track environment values whose explicit zero values must survive
 	// WithDefaults.
 	adviceMaxAgeEnvSet                 bool
-	bootstrapFailureLookbackEnvSet     bool
 	logMetadataRefreshIntervalEnvSet   bool
 	logMetadataEnrichmentTimeoutEnvSet bool
 	jobUpsertWorkerPoolSizeEnvSet      bool
 	accountingWorkerPoolSizeEnvSet     bool
 	accountingTimeoutEnvSet            bool
-	failedJobRecoveryTimeoutEnvSet     bool
 	metricsEnabledEnvSet               bool
 	metricsAddrEnvSet                  bool
 	auditTrailMaxBatchSizeEnvSet       bool
@@ -175,13 +167,10 @@ type environmentConfig struct {
 	JobUpsertWorkerPoolSize        optionalInt        `envconfig:"SLURM_ADVISOR_JOB_UPSERT_WORKER_POOL_SIZE"`
 	AccountingWorkerPoolSize       optionalInt        `envconfig:"SLURM_ADVISOR_ACCOUNTING_WORKER_POOL_SIZE"`
 	AccountingTimeout              optionalDuration   `envconfig:"SLURM_ADVISOR_ACCOUNTING_TIMEOUT"`
-	FailedJobRecoveryTimeout       optionalDuration   `envconfig:"SLURM_ADVISOR_FAILED_JOB_RECOVERY_TIMEOUT"`
 	AdviceLoopTimeout              time.Duration      `envconfig:"SLURM_ADVISOR_ADVICE_LOOP_TIMEOUT"`
 	AdviceItemTimeout              time.Duration      `envconfig:"SLURM_ADVISOR_ADVICE_ITEM_TIMEOUT"`
 	AdviceMaxAge                   optionalDuration   `envconfig:"SLURM_ADVISOR_ADVICE_MAX_AGE"`
 	AdviceRequeueHoldDelay         time.Duration      `envconfig:"SLURM_ADVISOR_REQUEUE_HOLD_DELAY"`
-	EnableEagerRequeue             bool               `envconfig:"SLURM_ADVISOR_ENABLE_EAGER_REQUEUE"`
-	BootstrapFailureLookback       optionalDuration   `envconfig:"SLURM_ADVISOR_BOOTSTRAP_FAILURE_LOOKBACK"`
 	Environment                    string             `envconfig:"SLURM_ADVISOR_ENVIRONMENT"`
 	MetricsEnabled                 optionalBool       `envconfig:"SLURM_ADVISOR_METRICS_ENABLED"`
 	MetricsAddr                    optionalString     `envconfig:"SLURM_ADVISOR_METRICS_ADDR"`
@@ -256,13 +245,10 @@ func FromEnv() (Config, error) {
 		JobUpsertWorkerPoolSize:        settings.JobUpsertWorkerPoolSize.value,
 		AccountingWorkerPoolSize:       settings.AccountingWorkerPoolSize.value,
 		AccountingTimeout:              settings.AccountingTimeout.value,
-		FailedJobRecoveryTimeout:       settings.FailedJobRecoveryTimeout.value,
 		AdviceLoopTimeout:              settings.AdviceLoopTimeout,
 		AdviceItemTimeout:              settings.AdviceItemTimeout,
 		AdviceMaxAge:                   settings.AdviceMaxAge.value,
 		AdviceRequeueHoldDelay:         settings.AdviceRequeueHoldDelay,
-		EnableEagerRequeue:             settings.EnableEagerRequeue,
-		BootstrapFailureLookback:       settings.BootstrapFailureLookback.value,
 		AuditTrailDestination:          settings.AuditTrailDestination,
 		AuditTrailMaxBatchSize:         settings.AuditTrailMaxBatchSize.value,
 		AuditTrailBufferSize:           settings.AuditTrailBufferSize.value,
@@ -318,13 +304,11 @@ func FromEnv() (Config, error) {
 			maxOwnedLinksEnvSet:          settings.LogLinksMaxOwnedLinks.set,
 		},
 		adviceMaxAgeEnvSet:                 settings.AdviceMaxAge.set,
-		bootstrapFailureLookbackEnvSet:     settings.BootstrapFailureLookback.set,
 		logMetadataRefreshIntervalEnvSet:   settings.LogMetadataRefreshInterval.set,
 		logMetadataEnrichmentTimeoutEnvSet: settings.LogMetadataEnrichmentTimeout.set,
 		jobUpsertWorkerPoolSizeEnvSet:      settings.JobUpsertWorkerPoolSize.set,
 		accountingWorkerPoolSizeEnvSet:     settings.AccountingWorkerPoolSize.set,
 		accountingTimeoutEnvSet:            settings.AccountingTimeout.set,
-		failedJobRecoveryTimeoutEnvSet:     settings.FailedJobRecoveryTimeout.set,
 		metricsEnabledEnvSet:               settings.MetricsEnabled.set,
 		metricsAddrEnvSet:                  settings.MetricsAddr.set,
 		auditTrailMaxBatchSizeEnvSet:       settings.AuditTrailMaxBatchSize.set,
@@ -579,12 +563,6 @@ func WithDefaults(cfg Config) Config {
 	if cfg.AccountingTimeout == 0 && !cfg.accountingTimeoutEnvSet {
 		cfg.AccountingTimeout = 5 * time.Minute
 	}
-	if cfg.FailedJobRecoveryTimeout == 0 && !cfg.failedJobRecoveryTimeoutEnvSet {
-		cfg.FailedJobRecoveryTimeout = 30 * time.Second
-	}
-	if cfg.BootstrapFailureLookback == 0 && !cfg.bootstrapFailureLookbackEnvSet {
-		cfg.BootstrapFailureLookback = 30 * time.Minute
-	}
 	if cfg.AdviceLoopTimeout == 0 {
 		cfg.AdviceLoopTimeout = cfg.PollInterval
 	}
@@ -716,12 +694,6 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.AccountingTimeout <= 0 {
 		return errors.Newf("accounting timeout must be positive: %s", cfg.AccountingTimeout)
-	}
-	if cfg.FailedJobRecoveryTimeout <= 0 {
-		return errors.Newf("failed-job recovery timeout must be positive: %s", cfg.FailedJobRecoveryTimeout)
-	}
-	if cfg.BootstrapFailureLookback <= 0 {
-		return errors.Newf("bootstrap failure lookback must be positive: %s", cfg.BootstrapFailureLookback)
 	}
 	if cfg.AdviceLoopTimeout <= 0 {
 		return errors.Newf("advice loop timeout must be positive: %s", cfg.AdviceLoopTimeout)

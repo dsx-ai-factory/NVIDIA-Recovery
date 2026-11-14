@@ -145,7 +145,6 @@ SLURM_ADVISOR_ADVICE_LOOP_TIMEOUT=15s
 SLURM_ADVISOR_ADVICE_ITEM_TIMEOUT=30s
 SLURM_ADVISOR_ADVICE_MAX_AGE=5m
 SLURM_ADVISOR_REQUEUE_HOLD_DELAY=1s
-SLURM_ADVISOR_ENABLE_EAGER_REQUEUE=false
 SLURM_ADVISOR_ENVIRONMENT=customer-slurm
 SLURM_ADVISOR_PARTITION_ALLOWLIST=gpu,debug
 # Temporary initial internal rollout only; deprecated soon, removable without notice.
@@ -158,12 +157,8 @@ SLURM_ADVISOR_METRICS_ENABLED=true
 SLURM_ADVISOR_METRICS_ADDR=127.0.0.1:19091
 ```
 
-Leave `SLURM_ADVISOR_ENABLE_EAGER_REQUEUE=false` to wait for restart Advice
-before requeueing failed jobs. Setting it to `true` restores eager recovery for
-rollout or rollback, including the risk that it creates a successor before Job
-Manager issues a retry-limit or checkpoint-progress stop. Existing scheduler
-action gates still apply. The standalone process and the Helm chart's
-`controller.enableEagerRequeue` both default to `false` for Advice-only recovery.
+Failed jobs wait for applicable restart Advice before requeueing, allowing Job
+Manager to apply retry-limit and checkpoint-progress policies.
 
 Replace `HEIMDALL_ENDPOINT` (recorded during backend installation),
 `SLURM_ADVISOR_ENVIRONMENT`, and the partition allowlist with your site values.

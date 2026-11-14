@@ -26,12 +26,6 @@ const (
 	ObservationOutcomeError   ObservationOutcome = "error"
 	ObservationOutcomePlanned ObservationOutcome = "planned"
 	ObservationOutcomeApplied ObservationOutcome = "applied"
-	// ObservationOutcomeSkippedRecoveryMode records a failed-job recovery that
-	// APS policy makes ineligible because auto-resume is not set to requeue.
-	ObservationOutcomeSkippedRecoveryMode ObservationOutcome = "skipped_recovery_mode"
-	// ObservationOutcomeSkippedRequeueLimit records a failed-job recovery that
-	// APS policy makes ineligible because the job has exhausted its requeues.
-	ObservationOutcomeSkippedRequeueLimit ObservationOutcome = "skipped_requeue_limit"
 	// ObservationOutcomeSkippedDisabled records a deliberate skip when action
 	// mode is active but the specific scheduler action is not enabled.
 	ObservationOutcomeSkippedDisabled ObservationOutcome = "skipped_disabled"
@@ -52,10 +46,9 @@ const (
 type ReconcileStage string
 
 const (
-	StageJobStatusPolling        ReconcileStage = "job_status_polling"
-	StageJobReconciliation       ReconcileStage = "job_reconciliation"
-	StageFailedJobReconciliation ReconcileStage = "failed_job_reconciliation"
-	StageAdviceReconciliation    ReconcileStage = "advice_reconciliation"
+	StageJobStatusPolling     ReconcileStage = "job_status_polling"
+	StageJobReconciliation    ReconcileStage = "job_reconciliation"
+	StageAdviceReconciliation ReconcileStage = "advice_reconciliation"
 )
 
 // JobUpsertSource records which snapshot source produced a Heimdall job upsert.
@@ -109,7 +102,6 @@ type SyncObservation struct {
 	AdviceSkips                    []AdviceSkipObservation
 	AdviceActions                  []ActionObservation
 	AdviceStatusPublications       []AdviceStatusPublicationObservation
-	FailedRequeues                 []OutcomeCountObservation
 	ModeDecisions                  []ModeDecisionObservation
 	EnvironmentAdmissions          []EnvironmentAdmissionObservation
 	JobAttemptCache                JobAttemptCacheObservation
@@ -162,14 +154,6 @@ type AdviceStatusPublicationObservation struct {
 	Reason      string
 	Outcome     ObservationOutcome
 	Count       int
-}
-
-// OutcomeCountObservation records an aggregate count for decisions that only
-// need an outcome label.
-type OutcomeCountObservation struct {
-	Mode    OperationMode
-	Outcome ObservationOutcome
-	Count   int
 }
 
 type ModeDecisionObservation struct {
@@ -309,17 +293,6 @@ func observeAdviceStatusPublication(
 		Reason:      strings.TrimPrefix(reason.String(), "ADVICE_RECONCILIATION_REASON_"),
 		Outcome:     outcome,
 		Count:       1,
-	})
-}
-
-func observeFailedRequeue(obs *SyncObservation, mode OperationMode, outcome ObservationOutcome) {
-	if obs == nil {
-		return
-	}
-	obs.FailedRequeues = append(obs.FailedRequeues, OutcomeCountObservation{
-		Mode:    mode,
-		Outcome: outcome,
-		Count:   1,
 	})
 }
 

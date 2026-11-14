@@ -38,10 +38,6 @@ event_bus:
   username: *rabbitmq_username
   password: null
   vhost: *rabbitmq_vhost
-  workflow_controller_exchange: workflow_controller
-  workflow_controller_exchange_type: topic
-  job_queue: job_updates
-  job_routing_key: workflow_controller.job.*
   anomaly_exchange: watcher_eventbus_exchange
   anomaly_queue: anomaly_detected_job_manager
   anomaly_routing_key: anomaly.detected.*

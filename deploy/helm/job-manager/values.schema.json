@@ -261,9 +261,6 @@
       "additionalProperties": false,
       "required": [
         "host",
-        "workflow_controller_exchange",
-        "job_queue",
-        "job_routing_key",
         "anomaly_exchange",
         "anomaly_queue",
         "anomaly_routing_key",
@@ -280,9 +277,6 @@
       ],
       "properties": {
         "host": { "type": "string", "minLength": 1 },
-        "workflow_controller_exchange": { "type": "string", "minLength": 1 },
-        "job_queue": { "type": "string", "minLength": 1 },
-        "job_routing_key": { "type": "string", "minLength": 1 },
         "anomaly_exchange": { "type": "string", "minLength": 1 },
         "anomaly_queue": { "type": "string", "minLength": 1 },
         "anomaly_routing_key": { "type": "string", "minLength": 1 },

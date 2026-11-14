@@ -18,12 +18,6 @@ UNEXPECTED_EARLY_STOP_REQUEUE_JOBS_GAUGE = Gauge(
     namespace=NAMESPACE,
     subsystem=SUBSYSTEM,
 )
-JOB_UPDATE_MESSAGE_RECEIVED_COUNTER = Counter(
-    name="job_update_message_received",
-    documentation="The number of job update event bus messages received from WFC.",
-    namespace=NAMESPACE,
-    subsystem=SUBSYSTEM,
-)
 ANOMALY_MESSAGE_RECEIVED_COUNTER = Counter(
     name="anomaly_message_received",
     documentation="The number of job anomaly event bus messages received from Watcher.",
@@ -77,13 +71,6 @@ EVENT_BUS_UNEXPECTED_ERROR_COUNTER = Counter(
     documentation="The number of event bus unexpected errors encountered by job manager when consuming messages.",
     namespace=NAMESPACE,
     subsystem=SUBSYSTEM,
-)
-JOB_WITH_INVALID_CONFIG_COUNTER = Counter(
-    name="job_with_invalid_config",
-    documentation="The number of jobs with invalid configuration detected by job manager.",
-    namespace=NAMESPACE,
-    subsystem=SUBSYSTEM,
-    labelnames=["failure_type"],
 )
 
 EVENT_ATTEMPT_MATCH_BY_LOG_FILE_NAME = Counter(

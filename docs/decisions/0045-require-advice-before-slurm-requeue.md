@@ -4,9 +4,7 @@ Status: accepted
 
 Date: 2026-10-01
 
-> **Implementation note (2026-10-06):** [Public Helm defaults](../../deploy/helm/slurm-advisor-controller/values.yaml)
-> at `9a30d875` now disable eager recovery; explicit compatibility opt-in retains
-> the bounded retries and phase budget from ADRs 0043 and 0044 and emits a warning.
+> **Implementation note (2026-11-11):** The eager recovery path has been removed; the remaining rules stay in force.
 
 This decision supersedes the direct failed-job recovery and associated
 recovery-decision retention rules in

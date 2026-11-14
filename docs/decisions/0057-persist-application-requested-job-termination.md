@@ -1,4 +1,4 @@
-# ADR 0054: Persist Application-Requested Job Termination
+# ADR 0057: Persist Application-Requested Job Termination
 
 Status: accepted
 

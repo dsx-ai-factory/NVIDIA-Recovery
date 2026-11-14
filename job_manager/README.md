@@ -61,7 +61,6 @@ Verifications:
 
 - To verify event bus consumption, there are some scripts that can generate fake data and send them to the local
   rabbitmq instance, located in `tests/scripts/` directory.
-  _ `job_update_event_bus_publish.py`: publishes job update events to the event bus.
   _ `anomaly_event_bus_publish.py`: publishes job anomaly events to the event bus.
   _ `checkpoint_event_bus_publish.py`: publishes checkpoint events to the event bus.
   _ `insert_workflow_records.py`: directly inserts workflow and job records to the local mysql database.
@@ -72,6 +71,11 @@ Verifications:
       ```
 
 ## Deployment Guide
+
+Job status updates use the HTTP API. The legacy RabbitMQ job-status consumer
+and its queue configuration have been removed. See the
+[rollout notes](../docs/architecture/slurm-advisor-controller.md#retired-job-status-event-consumer)
+for custom configuration and existing broker cleanup.
 
 Use the public chart under `deploy/helm/job-manager/` or enable the Job
 Manager subchart through `deploy/helm/nvidia-recovery/`. Supply database and event-bus

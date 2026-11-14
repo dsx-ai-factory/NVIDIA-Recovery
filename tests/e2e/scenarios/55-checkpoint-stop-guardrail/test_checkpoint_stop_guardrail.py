@@ -25,7 +25,7 @@ from e2e_harness.checks import (
 )
 from e2e_harness.config import E2EConfig
 from e2e_harness.recovery_client import RecoveryClient
-from e2e_harness.retry_policy import eager_requeue_enabled, system_retry_limit
+from e2e_harness.retry_policy import system_retry_limit
 from e2e_harness.stages import LIMIT_SETTLE_SECONDS, STATE_CRASH_MARKER
 from e2e_harness.workloads import SCHEDULER_BOUNDARY_RECOVERY, recovery_metadata, slurm_batch
 from recovery_libs.testing.kubernetes import StackControl
@@ -51,13 +51,10 @@ def retry_policy(
 
     if e2e_config.profile != "advisor-act":
         pytest.skip("checkpoint-stop enforcement requires the action-enabled advisor profile")
-    if eager_requeue_enabled(slurm_stack):
-        pytest.skip("retry-policy enforcement requires eager requeue to be disabled")
     policy = request.node.get_closest_marker("retry_policy")
     with system_retry_limit(
         stack,
         recovery,
-        slurm_stack=slurm_stack,
         job_manager=e2e_config.workload_name("job-manager"),
         limit=policy.kwargs["system_limit"],
         checkpoint_threshold=3,

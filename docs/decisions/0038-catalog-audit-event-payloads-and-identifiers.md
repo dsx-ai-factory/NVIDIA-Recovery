@@ -6,6 +6,8 @@ Implementation note: [ADR 0048](0048-start-recovery-traces-in-backend-and-share-
 
 Date: 2026-09-09
 
+> **Implementation note (2026-11-11):** The eager recovery path has been removed; the remaining rules stay in force.
+
 Related:
 [ADR 0017](0017-persist-best-effort-workload-audit-events-in-notifications.md)
 records the original proposal for ownership, persistence, and best-effort

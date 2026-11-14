@@ -31,11 +31,9 @@ from recovery_libs.schema.job_manager.models import (
     RecoveryOperation,
     RecoveryTriggerType,
     SlurmJobExecutionStatus,
-    SortOrderEnum,
     SystemRequeueConfig,
 )
 from recovery_libs.schema.watcher.model import Event
-from recovery_libs.storage.attribution_storage import AttributionStorage
 from recovery_libs.storage.base import BaseStorage, RecoveryStorageException
 from recovery_libs.storage.dataclass import (
     AdviceRecord,
@@ -344,96 +342,6 @@ def storage_attribution_to_summary(
         insight = attribution_insight_config["none"]["insight"]
 
     return summary, insight
-
-
-def populate_sticky_exclusion_node_list(
-    job_record_storage: MySQLStorage,
-    attribution_storage: AttributionStorage,
-    job_update: SlurmJobExecutionRecord,
-    known_job_record: SlurmJobExecutionRecord,
-) -> None:
-    """
-    This function populates the sticky exclusion node list for a job attempt from the most recent finished job attempt
-    and the confirmed bad nodes identified in the anomaly attribution results of such attempt.
-
-    When there's no previous finished job attempt, the exclusion node list from the current job attempt will be
-    preserved in the sticky exclusion node list to ensure that the exclusion node list from user input is not lost.
-    """
-
-    # Job managed by requeue. It's guaranteed to only have 1 job attempt active at any given time.
-    if known_job_record.aps_spec and known_job_record.aps_spec.auto_resume_mode == AutoResumeModeEnum.REQUEUE:
-        if job_update.state == SlurmJobNonFinalStates.PENDING:
-            logger.debug(
-                f"Not populating sticky exclusion node list for job {job_update.job_id}, attempt "
-                f"{job_update.job_attempt_index} because it is still in PENDING state."
-            )
-            return
-
-        # When we are in this function, current attempt is already persisted in the database and will be returned in the
-        # query result. So we need to query the last 2 attempts ordered by attempt index in descending order to find the
-        # most recent earlier attempt and use its sticky exclusion node list.
-        job_attempts, _ = job_record_storage.read_job_records(
-            job_id=job_update.job_id,
-            sort_by=[("job_attempt_index", SortOrderEnum.DESC)],
-            limit=2,
-        )
-        earlier_job_attempts = [
-            attempt for attempt in job_attempts if attempt.job_attempt_index < job_update.job_attempt_index
-        ]
-
-        if not earlier_job_attempts:
-            # When no earlier job attempts are found, the current job is the head of the workflow, the
-            # exclusion_node_list came from user input and should be preserved in the sticky exclusion node list.
-            logger.info(
-                f"No earlier job attempts found for job {job_update.job_id}, attempt {job_update.job_attempt_index}, "
-                "populating sticky exclusion node list with the current exclusion node list "
-                f"'{job_update.exclusion_node_list}'."
-            )
-            job_update.sticky_exclusion_node_list = job_update.exclusion_node_list
-            return
-
-        # Carry over the sticky node list from the previous attempt.
-        job_update.sticky_exclusion_node_list = earlier_job_attempts[0].sticky_exclusion_node_list or []
-        # Find the confirmed bad nodes from the attribution result of the preivous attempt and include them as well.
-        node_events = attribution_storage.read_node_attributions_for_job(
-            job_id=job_update.job_id, job_attempt_index=earlier_job_attempts[0].job_attempt_index
-        )
-        job_update.sticky_exclusion_node_list.extend(
-            [node_event.node for node_event in node_events if node_event.exclusion_type == ExclusionType.CONFIRMED]
-        )
-    else:  # Job managed by singleton dependency. Mulitple jobs with the same name can exist at the same time.
-        if job_update.state == SlurmJobNonFinalStates.PENDING:
-            logger.debug(
-                f"Not populating sticky exclusion node list for job {job_update.job_id}, attempt {job_update.job_attempt_index} "
-                "because it is still in PENDING state."
-            )
-            return
-
-        # Query the last 5 job attempts that are finished and sort them by their end_time in descending order.
-        finished_job_attempts, _ = job_record_storage.read_job_records(
-            job_name=job_update.job_name,
-            states=[s.value for s in SlurmJobFinalStates],
-            sort_by=[("end_time", SortOrderEnum.DESC)],
-            limit=1,
-        )
-
-        if not finished_job_attempts:
-            # When no finished job attempts are found, the current job is the head of the workflow, the
-            # exclusion_node_list came from user input and should be preserved in the sticky exclusion node list.
-            job_update.sticky_exclusion_node_list = job_update.exclusion_node_list
-            return
-
-        # Carry over the sticky node list from the previous attempt.
-        job_update.sticky_exclusion_node_list = finished_job_attempts[0].sticky_exclusion_node_list or []
-        # Find the confirmed bad nodes from the attribution result of the preivous attempt and include them as well.
-        node_events = attribution_storage.read_node_attributions_for_job(
-            job_id=finished_job_attempts[0].job_id, job_attempt_index=finished_job_attempts[0].job_attempt_index
-        )
-        job_update.sticky_exclusion_node_list.extend(
-            [node_event.node for node_event in node_events if node_event.exclusion_type == ExclusionType.CONFIRMED]
-        )
-
-        return
 
 
 def sanitize_log_file_paths_for_retry(job_record: SlurmJobExecutionRecord, storage: MySQLStorage) -> None:

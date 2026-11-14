@@ -16,21 +16,9 @@ from recovery_libs.testing.kubernetes import StackControl
 
 from e2e_harness.recovery_client import RecoveryClient
 
-_SAC = "slurm-advisor-controller"
 _CONFIG_KEY = "job_manager_config.yaml"
-_EAGER_ENV = "SLURM_ADVISOR_ENABLE_EAGER_REQUEUE"
 _RECONNECT_TIMEOUT_SECONDS = 30.0
 _RECONNECT_POLL_SECONDS = 0.5
-
-
-def eager_requeue_enabled(slurm_stack: StackControl) -> bool:
-    """Read the eager-requeue flag rendered by the E2E Helm chart, from SAC in the Slurm namespace."""
-
-    deployment = slurm_stack.get("deployment", _SAC)
-    controller = next(
-        container for container in deployment["spec"]["template"]["spec"]["containers"] if container["name"] == _SAC
-    )
-    return any(entry["name"] == _EAGER_ENV and entry.get("value") == "true" for entry in controller.get("env", []))
 
 
 def _apply_job_manager_config(stack: StackControl, job_manager: str, value: str) -> None:
@@ -61,12 +49,11 @@ def system_retry_limit(
     stack: StackControl,
     recovery: RecoveryClient,
     *,
-    slurm_stack: StackControl,
     job_manager: str,
     limit: int = 1,
     checkpoint_threshold: int | None = None,
 ) -> Iterator[None]:
-    """Temporarily configure JM retry limits with SAC eager recovery disabled.
+    """Temporarily configure JM retry limits.
 
     Checkpoint stopping is disabled by default to isolate the system retry limit.
     Supply a checkpoint threshold and a higher system limit (or -1 to disable it)
@@ -74,8 +61,7 @@ def system_retry_limit(
     higher than the expected final attempt.
 
     This changes shared JM settings and is for the serial, disposable E2E stack.
-    SAC must already have eager recovery disabled and remains untouched. Only the
-    JM config data key is patched, and its exact original contents are restored
+    Only the JM config data key is patched, and its exact original contents are restored
     even if setup or the scenario fails. Restarts wait for prior JM pods to
     disappear before allowing the scenario or the next test to proceed.
     """
@@ -84,8 +70,6 @@ def system_retry_limit(
         raise ValueError("system retry limit must be positive or -1")
     if checkpoint_threshold is not None and checkpoint_threshold < 1:
         raise ValueError("checkpoint threshold must be positive or None")
-    if eager_requeue_enabled(slurm_stack):
-        raise AssertionError("retry-policy scenarios require SAC eager requeue to be disabled")
 
     original_config = stack.get("configmap", f"{job_manager}-config")["data"][_CONFIG_KEY]
     updated_config = yaml.safe_load(original_config)

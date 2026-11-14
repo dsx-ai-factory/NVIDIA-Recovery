@@ -85,10 +85,6 @@ service:
     password: "guest"
     vhost: "/"
 
-    workflow_controller_exchange: "test_wc_eventbus_exchange"
-    job_queue: "test_job_queue"
-    job_routing_key: "test.job.updates"
-
     anomaly_exchange: "anomaly_exchange"
     anomaly_queue: "test_anomaly_queue"
     anomaly_routing_key: "job.anomaly.*"
