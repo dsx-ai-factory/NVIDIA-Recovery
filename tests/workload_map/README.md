@@ -3,7 +3,9 @@
 This is the first implementation of
 [ADR 0058](../../docs/decisions/0058-qualify-workload-map-independently.md).
 It exercises upstream Workload-Map directly without Advice Operator, a gateway,
-or Recovery backend services. It is a test tool, not a supported recovery
+or Recovery backend services. The scope is the CRD operations NVIDIA Recovery
+needs, not exhaustive SDK or scheduler conformance. PodGroup count and topology are not Recovery requirements.
+It is a test tool, not a supported recovery
 controller or a complete cluster validator.
 
 The Go probe pins `github.com/dsx-ai-factory/workload-map/karta/sdk v0.3.0`
@@ -83,7 +85,8 @@ Writes preserve the original UID and resourceVersion, and cleanup uses the
 launcher's exact-object ownership checks. The runner creates no cluster or
 namespace and installs no controllers. Use a dedicated test namespace with
 permission to create/delete JobSets, list their Jobs and Pods, update owned
-JobSets, and read diagnostics. The environment collector defaults to
+JobSets, and read diagnostics. KAI lifecycle runs also require listing namespace
+Events to establish scheduler provenance. The environment collector defaults to
 `jobset-controller-manager` in `jobset-system`; override
 `WORKLOAD_MAP_CONTROLLER_NAMESPACE` and `WORKLOAD_MAP_CONTROLLER_DEPLOYMENT`
 for other installations. Restricted read-only inspection uses its separate command.
@@ -273,3 +276,46 @@ Each terminal case requires SDK `Failed` and the probe's specific terminal refus
 for both suspend and resume. These are native restart policies, not normalized
 Recovery attempt indices. A terminal workload remains outside active-workload
 suspend/resume recovery.
+
+## Recovery integration boundaries
+
+The terminal refusal is **probe policy**, not an upstream SDK guarantee. The SDK
+can change suspend fields on terminal objects; a Recovery caller must enforce its
+own active-workload boundary before invoking it. Native `Failed` also does not
+prove that Pods have stopped. Retained PyTorchJob evidence includes running Pods
+at failure with `OnFailure`, and deletion/replacement activity around failure with
+`Never`, despite `cleanPodPolicy: None`. Do not use that policy or a terminal
+condition as a drain guarantee. The active lifecycle tests separately require
+complete Pod drain before instrumentation and resume.
+
+During a native JobSet restart, normalized `Initializing` and `Running` can overlap
+even with no Ready Pods. Native conditions, Pod observations, and restart counters
+remain necessary to interpret execution boundaries.
+
+KAI lifecycle qualification checks `Scheduled` events emitted by `kai-scheduler` for each
+exact owned Pod UID before and after resume, alongside Ready Pods and preserved
+scheduler/queue configuration. It makes no assertion about PodGroup count,
+queue quota enforcement, queue-position preservation, or gang behavior. Events
+must be readable; absent evidence cannot produce a KAI pass. The original matrix
+predates this event assertion. A fresh focused run on 2026-11-16 passed both
+JobSet lifecycle cases (`run-ILUbfNRd`) and the PyTorchJob lifecycle case
+(`run-jxjvHwPU`), retaining KAI events for all 22 original/replacement Pod UIDs.
+The test namespace had no remaining JobSets, PyTorchJobs, Jobs, or Pods after
+cleanup. Native retry/terminal scenarios do not assert scheduler events.
+
+The tested installation uses the JobSet profile defaults, Training Operator's
+v1.9.0 standalone overlay (`/manager`, without extra command-line flags), and
+KAI's v0.12.0 chart defaults with `default-queue`. No additional controller flag
+was needed for the observed native retries or suspend/resume; workload-level
+settings are listed above. Training Operator also injects an `init-pytorch`
+container using `alpine:3.10`. These are release/tag pins, not an immutable
+supply-chain lock; recorded image IDs identify observed controller binaries.
+
+Instrumentation coverage establishes marker propagation and preservation for the
+fixtures tested. The SDK's typed template round trip can omit explicit empty
+values (for example empty arguments, tolerations, or annotations). The probe
+fails closed on rewrites outside its documented normalization allowlist. Such
+refusals are compatibility findings to resolve before admitting those manifests,
+not evidence that their contents are invalid. Placement-constraint mutation
+remains unqualified; preserving existing constraints does not qualify composing
+new ones through the SDK.

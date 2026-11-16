@@ -98,6 +98,8 @@ def running(run: Run[WorkloadMapProbe]) -> Evidence:
             pod["metadata"]["labels"].get("qualification.nvidia.com/marker") == run.services.identity["owner"]
             for pod in pods
         )
+    if scheduler == "kai-scheduler" and not run.services.kai_scheduled(run.job):
+        return Evidence(False, "waiting for KAI Scheduled events for each owned Pod UID")
     return Evidence(True, f"{phase}: native role counts and three Ready Pods agree; statuses={result['statuses']}")
 
 
@@ -138,7 +140,9 @@ def qualified(run: Run[WorkloadMapProbe]) -> None:
     }.items():
         run.services.capability(capability, "pass", detail)
     if os.environ.get("WORKLOAD_MAP_SCHEDULER") == "kai-scheduler":
-        run.services.capability("kai", "pass", "queue placement observed; gang/preemption not qualified")
+        run.services.capability(
+            "kai", "pass", "KAI Scheduled events observed for original and replacement Pods; queue label preserved"
+        )
 
 
 @scenario
@@ -182,21 +186,23 @@ def terminal(run: Run[WorkloadMapProbe]) -> Evidence:
 
 
 def refuses_terminal_mutation(run: Run[WorkloadMapProbe]) -> None:
-    """The real SDK probe must refuse both operations on an observed terminal workload."""
+    """The probe safety policy must refuse both operations on a terminal workload."""
     run.services.begin_capability("terminal_boundary")
     record = run.job.metadata["workload"]
     assert record["spec"]["runPolicy"]["backoffLimit"] == 0
     assert all(role["restartPolicy"] == "Never" for role in record["spec"]["pytorchReplicaSpecs"].values())
-    _refuse_terminal_sdk(run)
+    _refuse_terminal_probe(run)
 
 
-def _refuse_terminal_sdk(run: Run[WorkloadMapProbe]) -> None:
+def _refuse_terminal_probe(run: Run[WorkloadMapProbe]) -> None:
     run.services.begin_capability("terminal_boundary")
     for operation in ("suspend", "resume"):
         # Require the terminal refusal reason; an unrelated subprocess failure is not evidence.
         with pytest.raises(RuntimeError, match="terminal workload"):
             run.services.invoke(operation, run.job.metadata["workload"])
-    run.services.capability("terminal_boundary", "pass", "native failed PyTorchJob refuses suspend and resume")
+    run.services.capability(
+        "terminal_boundary", "pass", "probe safety policy refused suspend/resume on the native terminal PyTorchJob"
+    )
 
 
 @scenario
@@ -268,6 +274,6 @@ def test_pytorch_native_retry_exhaustion() -> Scenario[WorkloadMapProbe]:
         stages=(
             act("pin native identity", lambda run: run.services.bind(run.job)),
             eventually("native retry budget is exhausted", native_retry_exhausted, within=180),
-            act("reject terminal retry recovery", _refuse_terminal_sdk),
+            act("reject terminal retry recovery", _refuse_terminal_probe),
         ),
     )

@@ -429,3 +429,39 @@ def test_pytorch_retry_check_uses_history_without_mutating_real_run(fixture, res
         with pytest.raises(AssertionError):
             native_retry_exhausted(terminal_run)
     assert dict(run.notes) == dict(terminal_run.notes) == {"sentinel": "unchanged"}
+
+
+@pytest.mark.parametrize(
+    "reporter,reason,uid",
+    [
+        ("default-scheduler", "Scheduled", "pod"),
+        ("kai-scheduler", "FailedScheduling", "pod"),
+        ("kai-scheduler", "Scheduled", "other-incarnation"),
+    ],
+)
+def test_kai_requires_successful_event_for_exact_pod(fixture, monkeypatch, reporter, reason, uid):
+    """Propagated labels, other schedulers, and same-name replacement events cannot pass."""
+    probe, client, job = fixture
+    job.metadata["pods"] = [{"metadata": {"uid": "pod", "labels": {"kai.scheduler/queue": "queue"}}}]
+    event = {"involvedObject": {"uid": uid}, "reason": reason, "reportingComponent": reporter}
+    monkeypatch.setattr(client, "events", lambda _: [event], raising=False)
+    assert not probe.kai_scheduled(job)
+    assert probe.capabilities["kai"]["outcome"] == "not_tested"
+
+
+def test_kai_retains_evidence_and_requires_every_replacement(fixture, monkeypatch):
+    """Each new Pod UID needs its own scheduling evidence; event expiry retains earlier proof."""
+    probe, client, job = fixture
+    job.metadata["pods"] = [{"metadata": {"uid": uid}} for uid in ("one", "two")]
+    events = {
+        "one": [{"involvedObject": {"uid": "one"}, "reason": "Scheduled", "source": {"component": "kai-scheduler"}}]
+    }
+    monkeypatch.setattr(client, "events", lambda uid: events.get(uid, []), raising=False)
+    assert not probe.kai_scheduled(job)
+    events["two"] = [{"involvedObject": {"uid": "two"}, "reason": "Scheduled", "reportingComponent": "kai-scheduler"}]
+    assert probe.kai_scheduled(job)
+    events.clear()
+    assert probe.kai_scheduled(job)
+    job.metadata["pods"] = [{"metadata": {"uid": "replacement"}}]
+    assert not probe.kai_scheduled(job)
+    assert set(json.loads(probe.report.read_text())["scheduling_events"]) == {"one", "two"}

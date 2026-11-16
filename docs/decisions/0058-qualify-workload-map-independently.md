@@ -5,9 +5,11 @@ Status: accepted
 Date: 2026-11-16
 
 > **Implementation note (2026-11-16):** The [qualification suite](../../tests/workload_map/README.md)
-> implements offline checks, read-only inspection, and active JobSet/PyTorchJob
-> scenarios for default and KAI scheduling; its coverage and evidence distinguish
-> observed results from remaining GPU, node-exclusion, and disruptive-scheduler gaps.
+> now records CPU lifecycle/retry evidence across all four combinations, beyond
+> the initial exploratory coverage described below, and read-only inspection
+> additionally distinguishes inconclusive observations.
+> Qualification targets Recovery's CRD operations without a PodGroup-topology
+> requirement; placement-constraint mutation and full recovery remain unqualified.
 
 ## Context
 

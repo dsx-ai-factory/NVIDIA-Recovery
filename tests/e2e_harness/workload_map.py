@@ -33,6 +33,7 @@ class WorkloadMapProbe:
         self.identity: dict[str, str] | None = None
         self.observations: list[dict[str, Any]] = []
         self.transformations: list[dict[str, Any]] = []
+        self.scheduling_events: dict[str, list[dict[str, str]]] = {}
         self.status_timing: dict[str, dict[str, Any]] = {}
         self.capabilities = {
             name: {"outcome": "not_tested", "detail": "not exercised in this scenario"}
@@ -158,6 +159,32 @@ class WorkloadMapProbe:
                 )
         self._write_report()
         return result
+
+    def kai_scheduled(self, job: Job) -> bool:
+        """Require KAI scheduling evidence for each owned Pod, without assuming PodGroup topology.
+
+        Events may arrive after readiness. The caller retries this observation;
+        missing events cannot establish scheduler provenance from labels alone.
+        """
+        self._validate(job)
+        self.begin_capability("kai")
+        pods = job.metadata["pods"]
+        for pod in pods:
+            uid = pod["metadata"]["uid"]
+            matches = []
+            for event in self.client.events(uid):
+                reporter = event.get("reportingComponent") or event.get("source", {}).get("component")
+                if (
+                    event.get("involvedObject", {}).get("uid") == uid
+                    and event.get("reason") == "Scheduled"
+                    and reporter == "kai-scheduler"
+                ):
+                    matches.append({"reason": "Scheduled", "reporter": reporter, "pod_uid": uid})
+            # Preserve earlier evidence if the API later expires the event.
+            if matches:
+                self.scheduling_events[uid] = matches
+        self._write_report()
+        return bool(pods) and all(pod["metadata"]["uid"] in self.scheduling_events for pod in pods)
 
     def scoped_pods(self, job: Job) -> list[dict[str, Any]]:
         """Find all scenario Pods for this JobSet, including children of vanished Jobs."""
@@ -323,6 +350,7 @@ class WorkloadMapProbe:
                     "status_timing": self.status_timing,
                     "observations": self.observations,
                     "transformations": self.transformations,
+                    "scheduling_events": self.scheduling_events,
                 },
                 indent=2,
             )

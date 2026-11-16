@@ -55,6 +55,8 @@ def running(run: Run[WorkloadMapProbe]) -> Evidence:
         assert all(pod["spec"]["schedulerName"] == run.notes["scheduler"] for pod in pods)
         if run.notes["scheduler"] == "kai-scheduler":
             assert all(pod["metadata"]["labels"].get("kai.scheduler/queue") == run.notes["queue"] for pod in pods)
+    if run.notes["scheduler"] == "kai-scheduler" and not run.services.kai_scheduled(run.job):
+        return Evidence(False, "waiting for KAI Scheduled events for each owned Pod UID")
     return Evidence(
         True,
         f"{phase}: original native UID, SDK scale={expected}, {expected} Ready owned Pods; statuses={result['statuses']}",
@@ -93,7 +95,7 @@ def record_qualified_capabilities(run: Run[WorkloadMapProbe]) -> None:
         run.services.capability(capability, "pass", detail)
     if run.notes["scheduler"] == "kai-scheduler":
         run.services.capability(
-            "kai", "pass", "selected queue placed replacement Pods; preemption and gang behavior are not tested"
+            "kai", "pass", "KAI Scheduled events observed for original and replacement Pods; queue label preserved"
         )
 
 
@@ -173,7 +175,7 @@ def native_restarts_exhausted(run: Run[WorkloadMapProbe]) -> Evidence:
 
 
 def refuse_terminal_recovery(run: Run[WorkloadMapProbe]) -> None:
-    """Require both SDK lifecycle operations to refuse a native terminal workload."""
+    """Require the probe safety policy to refuse a native terminal workload."""
     run.services.begin_capability("terminal_boundary")
     before = run.job.metadata["workload"]
     for operation in ("suspend", "resume"):
@@ -183,7 +185,7 @@ def refuse_terminal_recovery(run: Run[WorkloadMapProbe]) -> None:
     assert current["metadata"]["uid"] == before["metadata"]["uid"]
     assert current["spec"].get("suspend") == before["spec"].get("suspend")
     run.services.capability(
-        "terminal_boundary", "pass", "both SDK lifecycle transformations refused the terminal JobSet"
+        "terminal_boundary", "pass", "probe safety policy refused suspend/resume on the native terminal JobSet"
     )
 
 
