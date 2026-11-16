@@ -2,18 +2,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import hashlib
+import json
 import logging
 import os
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from io import StringIO
 from typing import Any
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import Connection, create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker
 
-from recovery_libs.storage.base import RecoveryStorageException
+from recovery_libs.storage.base import RecoveryStorageAdmissionError, RecoveryStorageException
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +44,41 @@ FRESH_DATABASE_REQUIRED = (
     "The database contains an unsupported or unversioned shared-storage schema. "
     "Provision a fresh empty database/schema; automatic migration, restamping, and data conversion are not supported."
 )
+
+
+class _AttemptScope:
+    """Keep lock ownership sticky across swallowed errors and session retries."""
+
+    def __init__(self, key: str, connection: Connection):
+        self.key = key
+        self.connection = connection
+        self.dbapi_connection = connection.connection.dbapi_connection
+        self.failed = False
+
+    def check_connection(self, *_args):
+        # SQLAlchemy may reconnect an invalidated Connection after rollback.
+        # A replacement DBAPI connection never owns this admission's named lock.
+        if (
+            self.failed
+            or self.connection.closed
+            or self.connection.invalidated
+            or self.connection.connection.dbapi_connection is not self.dbapi_connection
+        ):
+            self.failed = True
+            raise RecoveryStorageAdmissionError("Job attempt admission connection was lost")
+
+    def check_ownership(self, *_args):
+        self.check_connection()
+        try:
+            # Use the original DBAPI handle to avoid SQL event recursion and
+            # implicit SQLAlchemy reconnects. This SELECT never commits writes.
+            with self.dbapi_connection.cursor() as cursor:
+                cursor.execute("SELECT IS_USED_LOCK(%s) = CONNECTION_ID()", (self.key,))
+                if cursor.fetchone()[0] != 1:
+                    raise RecoveryStorageAdmissionError("Job attempt admission lock was lost")
+        except Exception as error:
+            self.failed = True
+            raise RecoveryStorageAdmissionError("Cannot verify job attempt admission ownership") from error
 
 
 class MySQLConnection:
@@ -109,7 +149,10 @@ class MySQLConnection:
             echo=echo,
             connect_args=connect_args,
         )
-        self.session = sessionmaker(bind=self.engine)
+        self._session = sessionmaker(bind=self.engine)
+        self._attempt_scope: ContextVar[_AttemptScope | None] = ContextVar(
+            f"mysql_attempt_scope_{id(self)}", default=None
+        )
         if write_pool_enabled:
             # A separate engine, not just a different isolation_level on the shared one: that
             # would apply READ COMMITTED to every query on every connection in the pool, not
@@ -126,14 +169,105 @@ class MySQLConnection:
                 pool_size=write_pool_size,
                 max_overflow=write_max_overflow,
             )
-            self.write_session = sessionmaker(bind=self.write_engine)
+            self._write_session = sessionmaker(bind=self.write_engine)
         else:
             self.write_engine = self.engine
-            self.write_session = self.session
+            self._write_session = self._session
         if alembic_directory:
             self.alembic_directory = alembic_directory
         else:
             self.alembic_directory = os.path.join(os.path.dirname(__file__), "alembic")
+
+    @property
+    def session(self):
+        """Create read sessions on the admission connection while a scope is held."""
+        scope = self._attempt_scope.get()
+        if scope is not None:
+            scope.check_ownership()
+            return sessionmaker(bind=scope.connection)
+        return self._session
+
+    @property
+    def write_session(self):
+        """Create write sessions on the same connection as an active admission lock."""
+        scope = self._attempt_scope.get()
+        if scope is not None:
+            scope.check_ownership()
+            return sessionmaker(bind=scope.connection)
+        return self._write_session
+
+    @contextmanager
+    def job_attempt_scope(self, job_id: str, attempt_index: int, *, timeout_seconds: int = 10) -> Iterator[None]:
+        """Serialize one attempt's admission, validation, recovery setup, and writes.
+
+        MySQL named locks serialize absent rows across Job and Advice tables.
+        The pinned connection owns the lock, but each nested storage session
+        keeps its existing transaction/commit boundary. Reusing that connection
+        prevents blocked contenders from consuming connections the holder needs.
+        Same-attempt nesting is reentrant; different-attempt nesting is rejected
+        so DAG callers must finish the parent scope before processing children.
+        Failures roll back any open transaction and release the lock; a failed
+        release invalidates the connection instead of returning it to the pool.
+        Connection replacement or lock loss permanently poisons the scope, even
+        when an optional collaborator catches the initial storage exception.
+        """
+        if attempt_index is None:
+            raise RecoveryStorageException("An exact attempt index is required for admission")
+        key = (
+            "nvr:"
+            + hashlib.sha256(
+                json.dumps([self.engine.url.database, job_id, attempt_index], separators=(",", ":")).encode()
+            ).hexdigest()[:60]
+        )
+        active = self._attempt_scope.get()
+        if active is not None:
+            if active.key != key:
+                raise RecoveryStorageException("Cannot nest admission scopes for different job attempts")
+            active.check_ownership()
+            try:
+                yield
+            finally:
+                active.check_ownership()
+            return
+        with self.write_engine.connect().execution_options(isolation_level="READ COMMITTED") as connection:
+            try:
+                acquired = connection.execute(
+                    text("SELECT GET_LOCK(:key, :timeout)"),
+                    {"key": key, "timeout": timeout_seconds},
+                ).scalar()
+                connection.commit()
+            except BaseException:
+                # GET_LOCK may have succeeded even if the following commit or
+                # response failed. Never return that uncertain session to the pool.
+                connection.invalidate()
+                raise
+            if acquired != 1:
+                raise RecoveryStorageException("Timed out acquiring the job attempt admission lock")
+            scope = _AttemptScope(key, connection)
+            hooks = {
+                "before_execute": scope.check_connection,
+                "before_cursor_execute": scope.check_connection,
+                "commit": scope.check_ownership,
+            }
+            for name, callback in hooks.items():
+                event.listen(connection, name, callback)
+            token = self._attempt_scope.set(scope)
+            try:
+                yield
+            finally:
+                self._attempt_scope.reset(token)
+                for name, callback in hooks.items():
+                    event.remove(connection, name, callback)
+                try:
+                    scope.check_ownership()
+                    connection.rollback()
+                    released = connection.execute(text("SELECT RELEASE_LOCK(:key)"), {"key": key}).scalar()
+                    connection.commit()
+                    if released != 1:
+                        raise RecoveryStorageException("Job attempt admission lock was lost")
+                except BaseException:
+                    connection.invalidate()
+                    raise
 
     def bootstrap(self, schema_upgrade: bool = True) -> bool:
         """

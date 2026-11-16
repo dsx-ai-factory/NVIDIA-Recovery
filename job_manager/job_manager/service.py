@@ -65,7 +65,7 @@ from recovery_libs.schema.job_manager.models import (
 )
 from recovery_libs.schema.watcher.model import Attributes, Event
 from recovery_libs.storage.attribution_storage import AttributionStorage
-from recovery_libs.storage.base import RecoveryStorageException
+from recovery_libs.storage.base import RecoveryStorageAdmissionError, RecoveryStorageException
 from recovery_libs.storage.dataclass import (
     AdviceRecord,
     DagDependency,
@@ -109,6 +109,7 @@ from job_manager.dag_utils import (
     register_dag_dependencies,
 )
 from job_manager.job_mapping import storage_to_http_job_status
+from job_manager.job_scheduler_identity import preserve_job_scheduler_identity
 from job_manager.logger import logger
 from job_manager.metrics import (
     ANOMALY_ATTRIBUTION_MESSAGE_RECEIVED_COUNTER,
@@ -491,16 +492,29 @@ class JobManager:
         record is persisted; the emitter gates on anomaly eligibility and de-dups via an
         atomic claim, so redundant calls are no-ops.
         """
-        event_bus = self.config["service"].get("event_bus", {})
-        emit_attribution_request_if_needed(
-            record,
-            storage=self.storage,
-            publisher=self.adi_attribution_request_publisher,
-            routing_key=event_bus.get("adi_attribution_request_routing_key", "job.updates.attribution_request"),
-            enabled=self.config["service"].get("adi_attribution_request_emit_enabled", False),
-            straggler_enabled=self.config["service"].get("adi_straggler_emit_enabled", False),
-            recovery_context_provider=lambda: self._recovery_context_for_attribution(record),
-        )
+        if not self.config["service"].get("adi_attribution_request_emit_enabled", False):
+            return
+        # Identity validation must precede the emission claim. The emitter treats
+        # trace-context failures as optional and therefore cannot enforce this.
+        with self.storage.job_attempt_scope(record.job_id, record.job_attempt_index):
+            known_job = self.storage.read_job_record(record.job_id, record.job_attempt_index)
+            known_advice = self.storage.read_advice_by_job(record.job_id, record.job_attempt_index)
+            preserve_job_scheduler_identity(
+                record.job_id,
+                record.scheduler_metadata,
+                known_job.scheduler_metadata if isinstance(known_job, SlurmJobExecutionRecord) else None,
+                known_advice.scheduler_metadata if isinstance(known_advice, AdviceRecord) else None,
+            )
+            event_bus = self.config["service"].get("event_bus", {})
+            emit_attribution_request_if_needed(
+                record,
+                storage=self.storage,
+                publisher=self.adi_attribution_request_publisher,
+                routing_key=event_bus.get("adi_attribution_request_routing_key", "job.updates.attribution_request"),
+                enabled=self.config["service"].get("adi_attribution_request_emit_enabled", False),
+                straggler_enabled=self.config["service"].get("adi_straggler_emit_enabled", False),
+                recovery_context_provider=lambda: self._recovery_context_for_attribution(record),
+            )
 
     def _recovery_context_for_attribution(self, record: SlurmJobExecutionRecord) -> Context | None:
         anomalies = record.anomalies or []
@@ -575,6 +589,8 @@ class JobManager:
                     else record.end_time
                 ),
             )
+        except RecoveryStorageAdmissionError:
+            raise
         except Exception as error:
             logger.exception(
                 "Failed to begin recovery sequence for Advice %s; continuing without correlation",

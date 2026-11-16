@@ -390,3 +390,23 @@ def test_bootstrap_check_only_does_not_mutate_empty_database(
     mock_command.current.assert_not_called()
     mock_command.upgrade.assert_not_called()
     connection.engine.connect.return_value.__enter__.return_value.execute.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["acquire_commit", "release"])
+def test_admission_never_pools_a_connection_with_uncertain_lock_ownership(connection, failure, monkeypatch):
+    """Connection loss after acquiring or while releasing must not leak a lock."""
+    monkeypatch.setattr("recovery_libs.storage.mysql_connection.event.listen", MagicMock())
+    monkeypatch.setattr("recovery_libs.storage.mysql_connection.event.remove", MagicMock())
+    connection.engine.url.database = "test_db"
+    pinned = connection.write_engine.connect.return_value.execution_options.return_value.__enter__.return_value
+    pinned.closed = pinned.invalidated = False
+    pinned.connection.dbapi_connection.cursor.return_value.__enter__.return_value.fetchone.return_value = (1,)
+    if failure == "acquire_commit":
+        pinned.execute.return_value.scalar.return_value = 1
+        pinned.commit.side_effect = RuntimeError("commit failed")
+    else:
+        pinned.execute.return_value.scalar.side_effect = [1, 0]
+    with pytest.raises((RuntimeError, RecoveryStorageException)), connection.job_attempt_scope("4200_0", 0):
+        assert failure == "release"
+    pinned.invalidate.assert_called_once()
+    assert connection._attempt_scope.get() is None
