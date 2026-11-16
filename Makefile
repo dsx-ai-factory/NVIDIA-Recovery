@@ -242,3 +242,24 @@ e2e-rerun-failed:
 e2e-trace-view:
 	npm ci --prefix scripts/trace-viewer --ignore-scripts --no-audit --no-fund
 	scripts/trace-viewer/node_modules/.bin/speedscope "$(E2E_TRACE)"
+
+# Exploratory Workload-Map qualification is independent of production Go modules.
+WORKLOAD_MAP_PROBE ?= $(CURDIR)/.cache/workload-map-probe
+.PHONY: build-workload-map-probe verify-workload-map test-workload-map-live
+build-workload-map-probe:
+	mkdir -p "$(dir $(WORKLOAD_MAP_PROBE))"
+	go -C tests/workload_map build -o "$(WORKLOAD_MAP_PROBE)" .
+
+verify-workload-map:
+	test -z "$$(gofmt -l tests/workload_map)"
+	uv run --locked ruff check tests/e2e_harness/workload_map.py tests/e2e_harness/tests/test_workload_map.py tests/workload_map_live
+	uv run --locked ruff format --check tests/e2e_harness/workload_map.py tests/e2e_harness/tests/test_workload_map.py tests/workload_map_live
+	shellcheck tests/workload_map_live/run.sh
+	uv run --locked --group e2e pytest -q tests/e2e_harness/tests/test_workload_map.py
+	go -C tests/workload_map mod tidy -diff
+	go -C tests/workload_map vet ./...
+	go -C tests/workload_map test -race ./...
+
+# This target uses an explicitly selected existing test cluster and never provisions one.
+test-workload-map-live: build-workload-map-probe
+	bash tests/workload_map_live/run.sh "$(WORKLOAD_MAP_PROBE)" $(K8S_TEST_ARGS)

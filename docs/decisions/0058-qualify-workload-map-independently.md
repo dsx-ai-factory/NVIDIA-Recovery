@@ -4,6 +4,11 @@ Status: accepted
 
 Date: 2026-11-16
 
+> **Implementation note (2026-11-16):** The [initial experiment](../../tests/workload_map/README.md)
+> covers offline JobSet/PyTorchJob interpretation and live default-scheduler
+> JobSet suspend/resume; the remaining matrix and portable cluster validation
+> are not yet implemented.
+
 ## Context
 
 Direct Kubernetes recovery depends on Workload-Map interpreting workload
