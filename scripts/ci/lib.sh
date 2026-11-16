@@ -105,6 +105,7 @@ ci_go_package_dir() {
     case "$1" in
         api-gateway) echo "api-gateway" ;;
         slurm-advisor-controller) echo "slurm-advisor-controller" ;;
+        workload-map) echo "tests/workload_map" ;;
         *)
             echo "unsupported Go package: $1" >&2
             return 2

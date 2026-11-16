@@ -4,10 +4,10 @@ Status: accepted
 
 Date: 2026-11-16
 
-> **Implementation note (2026-11-16):** The [initial experiment](../../tests/workload_map/README.md)
-> covers offline JobSet/PyTorchJob interpretation and live default-scheduler
-> JobSet suspend/resume; the remaining matrix and portable cluster validation
-> are not yet implemented.
+> **Implementation note (2026-11-16):** The [qualification suite](../../tests/workload_map/README.md)
+> implements offline checks, read-only inspection, and active JobSet/PyTorchJob
+> scenarios for default and KAI scheduling; its coverage and evidence distinguish
+> observed results from remaining GPU, node-exclusion, and disruptive-scheduler gaps.
 
 ## Context
 

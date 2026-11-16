@@ -7,12 +7,13 @@ must not replace them.
 
 ## Modules And Authority
 
-NVIDIA Recovery currently has two Go modules:
+NVIDIA Recovery has two production Go modules and a test-only qualification module:
 
 | Module | Role |
 | --- | --- |
 | `api-gateway/` | Scheduler-neutral public HTTP and gRPC service facade and generated API bindings. |
 | `slurm-advisor-controller/` | Slurm adapter and level-based recovery controller. |
+| `tests/workload_map/` | Offline Workload-Map SDK qualification probe; checked with `make verify-workload-map`. |
 
 Advice Operator is removed from the supported source and Helm charts.
 The shared Advice API, Job Manager models, and Slurm recovery controller remain
