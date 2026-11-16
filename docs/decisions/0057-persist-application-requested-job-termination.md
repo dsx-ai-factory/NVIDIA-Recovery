@@ -18,8 +18,10 @@ exact-attempt record alone therefore cannot preserve the application decision
 for a successor created by the race. The decision must also survive Job
 Manager restarts and may arrive before the first attempt is registered.
 
-NVIDIA Recovery currently operates one instance per scheduler cluster, so a
-scheduler job ID is unambiguous within one Job Manager database. Existing
+Each NVIDIA Recovery deployment manages jobs from a single scheduler cluster.
+Multiple deployments, such as prod and dev, can share that cluster, with
+configuration ensuring they manage disjoint sets of jobs. A scheduler job ID
+is unambiguous within the target deployment's Job Manager database. Existing
 Gateway authentication remains the ingress trust boundary; a job ID identifies
 the target but is not itself an authentication credential.
 
