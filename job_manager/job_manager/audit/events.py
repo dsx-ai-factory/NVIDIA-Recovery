@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import time
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -16,6 +17,23 @@ def current_unix_microseconds() -> int:
 
 JobAuditSnapshot = dict[str, Any]
 AdviceAuditSnapshot = dict[str, Any]
+
+
+class ApplicationTerminationRequestedPayload(BaseModel):
+    application_intention_id: int
+    job_id: str
+    attempt_index: int
+    desired_state: str
+    reason: str | None
+    requested_at: datetime
+
+
+class ApplicationTerminationRequestedEvent(
+    ProducerEvent[ApplicationTerminationRequestedPayload],
+    frozen=True,
+):
+    event_producer: Literal["job-manager"] = "job-manager"
+    event_type: Literal["application_termination_requested"] = "application_termination_requested"
 
 
 class JobAttemptFirstSeenPayload(BaseModel):
