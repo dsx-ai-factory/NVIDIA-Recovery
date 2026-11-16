@@ -26,6 +26,12 @@ Advisor contract. Task support should use that boundary and the existing generic
 job/attempt model. It does not require an in-job orchestrator, in-job cycles, or
 an array-level backend lifecycle.
 
+The existing `job_group_id` groups execution instances under one logical
+entity. A Slurm array is one use of that generic grouping: its tasks are
+separate recovery jobs whose records share the array submission ID as their
+group ID. Keeping this relationship in the existing Job Manager field preserves
+job-group queries and consumers of grouped job records.
+
 ## Decision
 
 ### Represent each concrete task as a recovery job
@@ -58,8 +64,12 @@ See [Slurm's job array documentation](https://slurm.schedmd.com/job_array.html).
 
 An attempt is `(canonical job_id, job_attempt_index)`. Keep the invariant
 `heimdall_job_id = uuid.uuid5(uuid.NAMESPACE_URL, f"{job_id}-{job_attempt_index}")`.
-The Slurm restart count identifies the task's current attempt; accounting
-history reconstruction must group and reconcile attempts within that same task.
+For an array task, set `job_group_id` to the decimal array submission ID,
+`job_id` to `<array_job_id>_<array_task_id>`, and `job_attempt_index` to that
+task's attempt index. Standalone jobs retain their existing identity and have
+no array-derived group ID. The Slurm restart count identifies the task's current
+attempt; accounting history reconstruction must group and reconcile attempts
+within that same task.
 Sibling rows, accounting duplicates, and job steps must not advance its attempt
 index. Incomplete accounting must not reset an established attempt or retry
 allowance.
@@ -84,9 +94,14 @@ known array identity.
 
 API Gateway transports scheduler metadata opaquely. Slurm-specific parsing and
 validation belong in scheduler adapters and the existing backend compatibility
-boundary. Do not add top-level array ID, task ID, job-group, or in-job-cycle
-fields or tables to the backend data model. This extends the metadata pattern
-without expanding ADR 0028's legacy typed-field projections.
+boundary. Job Manager's `project_job_scheduler_fields()` projects
+`slurm_array_job_id` into the existing typed `job_group_id`, retaining the
+original metadata; an absent array ID leaves an existing group value intact
+on partial updates. The projected group ID must agree with the array ID in
+metadata and the canonical task `job_id`. Do not add new array or task identity
+fields to the Advisor contract or new array-specific fields or tables to the
+backend model. This extends ADR 0028's existing typed-field projection at the
+Job Manager boundary.
 
 ### Recover and budget tasks independently
 
@@ -181,8 +196,10 @@ Trace sampling must not suppress these audit events, consistent with
 ## Consequences
 
 - The backend's existing job/attempt, Advice, checkpoint, and audit mechanisms
-  can serve arrays without a Slurm-shaped hierarchy. Metadata keys and task
-  normalization become a cross-component compatibility contract.
+  can serve arrays without a Slurm-shaped hierarchy. Existing job-group reads
+  group sibling tasks by array submission ID while each task retains its own
+  attempts and recovery state. Metadata keys and task normalization become a
+  cross-component compatibility contract.
 - Recovery and checkpoint progress remain isolated even when tasks share an
   array submission, retry configuration, log file, or scheduler node.
 - Synthetic pending ranges are not individually represented until concrete
