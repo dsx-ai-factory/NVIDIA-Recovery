@@ -1,9 +1,30 @@
 # Job Array Support Implementation Plan
 
-This is the proposed delivery plan for
+This is the delivery plan for
 [ADR 0054](../decisions/0054-recover-slurm-array-tasks-independently.md), not a
 claim that array support is implemented. The ADR owns identity, policy, and
 scope; this document keeps implementation sequencing outside the decision.
+
+## Implementation Progress
+
+The task identity phase normalizes plain and wrapped Slurm array IDs, preserves
+task zero, skips synthetic ranges, and rejects malformed or conflicting identity.
+Job Manager projects the array ID into `job_group_id`; storage preserves known
+identity across partial upserts and checks conflicts under the existing row lock.
+HTTP/MySQL tests cover sibling grouping, distinct attempts, metadata round trips,
+and rejected updates. No schema migration is required.
+
+Task recovery, checkpoint association, and end-to-end qualification remain the
+subsequent phases. In particular, accounting attempt reconciliation and scheduler
+action qualification are still required before enabling array recovery.
+
+Focused verification:
+
+```bash
+make GO_PACKAGES=slurm-advisor-controller verify-go
+scripts/ci/test-python.sh --package job-manager --package recovery-libs
+uv run --locked --package job-manager pytest -q job_manager/tests/integration/test_array_identity.py
+```
 
 ## Starting Point
 

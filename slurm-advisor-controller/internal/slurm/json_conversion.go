@@ -19,6 +19,30 @@ type numberField struct {
 	Number   int  `json:"number"`
 }
 
+type identityNumberField numberField
+
+// UnmarshalJSON accepts concrete integers and explicitly flagged Slurm identities.
+func (field *identityNumberField) UnmarshalJSON(data []byte) error {
+	var value timestampField
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if bytes.HasPrefix(bytes.TrimSpace(data), []byte("{")) {
+		var members map[string]json.RawMessage
+		if err := json.Unmarshal(data, &members); err != nil {
+			return err
+		}
+		if _, ok := members["set"]; !ok {
+			return errors.New("wrapped Slurm number requires set")
+		}
+		if _, ok := members["number"]; !ok && value.Set {
+			return errors.New("set Slurm number requires number")
+		}
+	}
+	*field = identityNumberField(value)
+	return nil
+}
+
 type timestampField struct {
 	Set      bool
 	Infinite bool
@@ -89,36 +113,36 @@ type SlurmMeta struct {
 }
 
 type SlurmJob struct {
-	ArrayJobID     numberField     `json:"array_job_id"`
-	ArrayTaskID    numberField     `json:"array_task_id"`
-	Cluster        string          `json:"cluster"`
-	Command        string          `json:"command"`
-	Comment        string          `json:"comment"`
-	Dependency     string          `json:"dependency"`
-	EndTime        timestampField  `json:"end_time"`
-	ExcludedNodes  string          `json:"excluded_nodes"`
-	FailedNode     string          `json:"failed_node"`
-	Hold           bool            `json:"hold"`
-	JobID          int             `json:"job_id"`
-	JobState       slurmStateList  `json:"job_state"`
-	Name           string          `json:"name"`
-	Nodes          string          `json:"nodes"`
-	NodeCount      numberField     `json:"node_count"`
-	Partition      string          `json:"partition"`
-	RequiredNodes  string          `json:"required_nodes"`
-	RestartCnt     int             `json:"restart_cnt"`
-	ResvName       string          `json:"resv_name"`
-	StartTime      timestampField  `json:"start_time"`
-	StateReason    string          `json:"state_reason"`
-	StandardOutput string          `json:"standard_output"`
-	StdoutExpanded string          `json:"stdout_expanded"`
-	SubmitTime     timestampField  `json:"submit_time"`
-	Tasks          numberField     `json:"tasks"`
-	TresReqStr     string          `json:"tres_req_str"`
-	TresAllocStr   string          `json:"tres_alloc_str"`
-	MailUser       string          `json:"mail_user"`
-	UserID         json.RawMessage `json:"user_id"`
-	UserName       string          `json:"user_name"`
+	ArrayJobID     identityNumberField `json:"array_job_id"`
+	ArrayTaskID    identityNumberField `json:"array_task_id"`
+	Cluster        string              `json:"cluster"`
+	Command        string              `json:"command"`
+	Comment        string              `json:"comment"`
+	Dependency     string              `json:"dependency"`
+	EndTime        timestampField      `json:"end_time"`
+	ExcludedNodes  string              `json:"excluded_nodes"`
+	FailedNode     string              `json:"failed_node"`
+	Hold           bool                `json:"hold"`
+	JobID          int                 `json:"job_id"`
+	JobState       slurmStateList      `json:"job_state"`
+	Name           string              `json:"name"`
+	Nodes          string              `json:"nodes"`
+	NodeCount      numberField         `json:"node_count"`
+	Partition      string              `json:"partition"`
+	RequiredNodes  string              `json:"required_nodes"`
+	RestartCnt     int                 `json:"restart_cnt"`
+	ResvName       string              `json:"resv_name"`
+	StartTime      timestampField      `json:"start_time"`
+	StateReason    string              `json:"state_reason"`
+	StandardOutput string              `json:"standard_output"`
+	StdoutExpanded string              `json:"stdout_expanded"`
+	SubmitTime     timestampField      `json:"submit_time"`
+	Tasks          numberField         `json:"tasks"`
+	TresReqStr     string              `json:"tres_req_str"`
+	TresAllocStr   string              `json:"tres_alloc_str"`
+	MailUser       string              `json:"mail_user"`
+	UserID         json.RawMessage     `json:"user_id"`
+	UserName       string              `json:"user_name"`
 }
 
 type SqueueData struct {
@@ -178,7 +202,10 @@ func observedJobsWithSourceFromSqueue(data []byte) ([]squeueObservation, error) 
 }
 
 func observedJobFromSqueue(jobData SlurmJob) (cluster.JobExecutionRecord, bool, error) {
-	jobID, arrayJobID, arrayTaskID, include := jobIdentityFromSqueue(jobData)
+	jobID, arrayJobID, arrayTaskID, include, err := jobIdentityFromSqueue(jobData)
+	if err != nil {
+		return cluster.JobExecutionRecord{}, false, err
+	}
 	if !include {
 		return cluster.JobExecutionRecord{}, false, nil
 	}
@@ -290,19 +317,28 @@ func observedJobFromSqueue(jobData SlurmJob) (cluster.JobExecutionRecord, bool, 
 	return job, true, nil
 }
 
-func jobIdentityFromSqueue(job SlurmJob) (jobID, arrayJobID, arrayTaskID string, include bool) {
-	rawJobID := strconv.Itoa(job.JobID)
-	if !job.ArrayJobID.Set || job.ArrayJobID.Number <= 0 {
-		return rawJobID, "", "", true
-	}
+func jobIdentityFromSqueue(job SlurmJob) (jobID, arrayJobID, arrayTaskID string, include bool, err error) {
+	return slurmJobIdentity(job.JobID, job.ArrayJobID, job.ArrayTaskID)
+}
 
-	arrayJobID = strconv.Itoa(job.ArrayJobID.Number)
-	arrayTaskID = strconv.Itoa(job.ArrayTaskID.Number)
-	if !job.ArrayTaskID.Set {
-		return "", arrayJobID, arrayTaskID, false
+func slurmJobIdentity(rawID int, arrayID, taskID identityNumberField) (jobID, arrayJobID, arrayTaskID string, include bool, err error) {
+	if rawID <= 0 || uint64(rawID) >= 4294967294 {
+		return "", "", "", false, errors.New("invalid Slurm raw job ID")
 	}
-
-	return arrayJobID + "_" + arrayTaskID, arrayJobID, arrayTaskID, true
+	if arrayID.Infinite || (arrayID.Set && (arrayID.Number < 0 || uint64(arrayID.Number) >= 4294967294)) {
+		return "", "", "", false, errors.Newf("invalid Slurm array job ID for job %d", rawID)
+	}
+	if !arrayID.Set || arrayID.Number == 0 {
+		return strconv.Itoa(rawID), "", "", true, nil
+	}
+	if taskID.Infinite || (taskID.Set && (taskID.Number < 0 || uint64(taskID.Number) >= 4294967294)) {
+		return "", "", "", false, errors.Newf("invalid Slurm array task ID for job %d", rawID)
+	}
+	if !taskID.Set {
+		return "", "", "", false, nil
+	}
+	arrayJobID, arrayTaskID = strconv.Itoa(arrayID.Number), strconv.Itoa(taskID.Number)
+	return arrayJobID + "_" + arrayTaskID, arrayJobID, arrayTaskID, true, nil
 }
 
 func parseTresReqStr(tresReqStr string) (map[string]float64, error) {

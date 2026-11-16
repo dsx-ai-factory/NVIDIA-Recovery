@@ -198,3 +198,69 @@ def test_post_jobs_rejects_malformed_slurm_job_metadata():
         assert response.status_code == 400
         assert response.json() == {"detail": INVALID_SLURM_JOB_METADATA_DETAIL}
         job_manager_mock.upsert_job_record.assert_not_called()
+
+
+@pytest.mark.parametrize("task", ["0", "7"])
+def test_post_jobs_projects_array_group_and_preserves_task_identity(task):
+    payload = {
+        "job_id": f"4200_{task}",
+        "job_attempt_index": 2,
+        "workflow_id": "array-workflow",
+        "scheduler_metadata": {
+            "scheduler": "slurm",
+            "slurm_job_id": f"4200_{task}",
+            "slurm_raw_job_id": "4200",
+            "slurm_array_job_id": "4200",
+            "slurm_array_task_id": task,
+        },
+    }
+    with patch("job_manager.main.job_manager") as manager:
+        manager.upsert_job_record.side_effect = _return_upserted_record
+        response = TestClient(app).post("/jobs", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["job_id"] == payload["job_id"]
+    assert body["job_attempt_index"] == 2
+    assert body["job_group_id"] == "4200"
+    assert body["schedulerMetadata"] == payload["scheduler_metadata"]
+    assert body["heimdall_job_id"] == str(generate_heimdall_job_id(payload["job_id"], 2))
+
+
+@pytest.mark.parametrize(
+    "overrides,metadata",
+    [
+        ({}, {"slurm_job_id": "4200_1"}),
+        ({}, {"slurm_array_task_id": "1"}),
+        ({}, {"slurm_array_job_id": "4300"}),
+        ({}, {"slurm_array_task_id": 0}),
+        ({}, {"slurm_array_job_id": None}),
+        ({}, {"slurm_raw_job_id": "4200.batch"}),
+        ({"job_id": "4200"}, {}),
+        ({"job_group_id": "4300"}, {}),
+        ({"job_id": "4200_4294967294"}, {"slurm_array_task_id": "4294967294"}),
+    ],
+)
+def test_post_jobs_rejects_conflicting_array_identity_before_persistence(overrides, metadata):
+    payload = {
+        "job_id": "4200_0",
+        "job_attempt_index": 0,
+        "workflow_id": "array-workflow",
+        "scheduler_metadata": {
+            "scheduler": "slurm",
+            "slurm_array_job_id": "4200",
+            "slurm_array_task_id": "0",
+            **metadata,
+        },
+        **overrides,
+    }
+    with patch("job_manager.main.job_manager") as manager:
+        response = TestClient(app).post("/jobs", json=payload)
+        manager.upsert_job_record.assert_not_called()
+    assert response.status_code == 400
+
+
+def test_absent_array_metadata_preserves_existing_group():
+    assert _fields({"scheduler": "slurm"}, job_id="4200_0", job_group_id="4200").job_group_id == "4200"
+    assert _fields({"scheduler": "slurm"}, job_id="4300").job_group_id is None
+    with pytest.raises(SlurmJobMetadataValidationError):
+        _fields({"scheduler": "slurm"}, job_id="4200_0", job_group_id="4300")

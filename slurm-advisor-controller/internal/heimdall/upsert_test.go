@@ -95,6 +95,46 @@ func TestBuildCreateOrUpdateJobRequestUsesStableHeimdallID(t *testing.T) {
 	}
 }
 
+func TestBuildCreateOrUpdateJobRequestRejectsConflictingArrayIdentity(t *testing.T) {
+	for _, metadata := range []map[string]any{
+		{"slurm_job_id": "4200_1"},
+		{"slurm_array_job_id": "4300"},
+		{"slurm_array_task_id": "1"},
+		{"slurm_array_task_id": 0},
+		{"slurm_raw_job_id": "4201"},
+	} {
+		job := cluster.JobExecutionRecord{
+			JobID: "4200_0", RawJobID: "4200", ArrayJobID: "4200", ArrayTaskID: "0",
+			WorkflowID: "array-workflow", SchedulerMetadata: metadata,
+		}
+		if request, err := BuildCreateOrUpdateJobRequest(job, UpsertRequestOptions{}); err == nil || request != nil {
+			t.Fatalf("conflicting metadata %v produced request %v, error %v", metadata, request, err)
+		}
+	}
+}
+
+func TestBuildCreateOrUpdateJobRequestPreservesArrayTaskZero(t *testing.T) {
+	job := cluster.JobExecutionRecord{
+		JobID: "4200_0", RawJobID: "4200", ArrayJobID: "4200", ArrayTaskID: "0",
+		WorkflowID: "array-workflow", AttemptIndex: 2,
+	}
+	request, err := BuildCreateOrUpdateJobRequest(job, UpsertRequestOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := request.GetSchedulerMetadata().AsMap()
+	for key, want := range map[string]string{
+		"slurm_job_id": "4200_0", "slurm_raw_job_id": "4200", "slurm_array_job_id": "4200", "slurm_array_task_id": "0",
+	} {
+		if metadata[key] != want {
+			t.Fatalf("%s = %v, want %s", key, metadata[key], want)
+		}
+	}
+	if request.GetJobId() != "4200_0" || request.GetAttemptIndex() != 2 || request.GetHeimdallJobId() != GenerateHeimdallJobID("4200_0", 2) {
+		t.Fatalf("request lost task attempt identity: %v", request)
+	}
+}
+
 func TestMapJobStateReportsRequeuedAttemptAsFailed(t *testing.T) {
 	if got := mapJobState(cluster.JobStateRequeued); got != pb.JobStatus_JOB_STATUS_FAILED {
 		t.Fatalf("mapJobState(requeued) = %q, want %q", got, pb.JobStatus_JOB_STATUS_FAILED)

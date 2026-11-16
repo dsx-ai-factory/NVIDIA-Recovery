@@ -1512,6 +1512,13 @@ def test_upsert_job_record_preserves_existing_fields_when_update_has_none(mysql_
     assert existing_job.user == "test_user"
     assert existing_job.node_count == 5
     assert existing_job.partition == "recovery"
+    existing_job.scheduler_metadata = {
+        "scheduler": "slurm",
+        "slurm_job_id": "20000",
+        "managed_by": "slurm-advisor-controller",
+        "environment": "test",
+        "slurm_state": "RUNNING",
+    }
 
     incoming_update = SlurmJobExecutionRecord(
         job_id="20000",
@@ -1538,6 +1545,13 @@ def test_upsert_job_record_preserves_existing_fields_when_update_has_none(mysql_
     assert updated_record.command == "sbatch test.sh"
     assert updated_record.reservation == "recovery_prod"
     assert updated_record.heimdall_job_id == generate_heimdall_job_id("20000", 0)
+    assert updated_record.scheduler_metadata == {
+        "scheduler": "slurm",
+        "slurm_job_id": "20000",
+        "managed_by": "slurm-advisor-controller",
+        "environment": "test",
+        "slurm_state": "RUNNING",
+    }
     session.commit.assert_called_once()
     session.refresh.assert_called_once_with(existing_job)
 
