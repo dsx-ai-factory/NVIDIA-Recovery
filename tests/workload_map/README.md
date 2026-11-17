@@ -221,16 +221,18 @@ of the recorded baseline, not guarantees for other versions.
 
 ## Expanded qualification results (2026-11-16)
 
-All 12 live cases passed on the disposable Kind cluster, with Kubernetes v1.35.0,
+All 12 live cases passed again after removal of the generic serialization validator
+and its report envelope, using the rebuilt probe and current Python bridge. The
+reports use schema 2. The disposable Kind cluster ran Kubernetes v1.35.0,
 Workload-Map SDK v0.3.0, JobSet v0.12.0, Training Operator v1.9.0
 (`kubeflow/training-operator:v1-5170a36`), and KAI v0.12.0.
 
 | Workload | Scheduler | Result | Retained local report |
 | --- | --- | --- | --- |
-| JobSet | Default | 3 passed | `run-PWLy5JQt` |
-| PyTorchJob | Default | 3 passed | `run-VewU7E3f` |
-| JobSet | KAI | 3 passed | `run-kcq6r2Bh` |
-| PyTorchJob | KAI | 3 passed | `run-RmCjCjWm` |
+| JobSet | Default | 3 passed | `run-yUGaJbHw` |
+| PyTorchJob | Default | 3 passed | `run-jNAG4oEK` |
+| JobSet | KAI | 3 passed | `run-53r77CKF` |
+| PyTorchJob | KAI | 3 passed | `run-IU9beEsU` |
 
 Reports are under `reports/workload-map/` and include controller image IDs and
 scheduler provenance. Earlier failed runs remain retained; a KAI installation
@@ -238,10 +240,12 @@ upgrade left the scheduler using a token bound to a replaced ServiceAccount UID.
 The installer now refreshes the scheduler after installation, and both KAI suites
 passed after that correction.
 
-The matrix covers the lifecycle and native retry cases described above. PyTorchJob
+The current matrix covers the lifecycle and native retry cases described above,
+including KAI scheduling events for all 22 original/replacement lifecycle Pod UIDs.
+PyTorchJob
 also co-matched `Failed` and `Initializing` at a native terminal boundary. Status
 sets must therefore be interpreted together with native evidence. All test
-workloads, Jobs, Pods, PodGroups, and BindRequests were absent after cleanup.
+JobSets, PyTorchJobs, Jobs, and Pods were absent after cleanup.
 
 Read-only inspection passed with administrator access and with a restricted
 ServiceAccount allowed only to get JobSets. Requesting inaccessible controller
@@ -297,10 +301,9 @@ KAI lifecycle qualification checks `Scheduled` events emitted by `kai-scheduler`
 exact owned Pod UID before and after resume, alongside Ready Pods and preserved
 scheduler/queue configuration. It makes no assertion about PodGroup count,
 queue quota enforcement, queue-position preservation, or gang behavior. Events
-must be readable; absent evidence cannot produce a KAI pass. The original matrix
-predates this event assertion. A fresh focused run on 2026-11-16 passed both
-JobSet lifecycle cases (`run-ILUbfNRd`) and the PyTorchJob lifecycle case
-(`run-jxjvHwPU`), retaining KAI events for all 22 original/replacement Pod UIDs.
+must be readable; absent evidence cannot produce a KAI pass. The full matrix
+recorded above includes this event assertion and ran after serializer-validator
+removal, retaining KAI events for all 22 original/replacement Pod UIDs.
 The test namespace had no remaining JobSets, PyTorchJobs, Jobs, or Pods after
 cleanup. Native retry/terminal scenarios do not assert scheduler events.
 
