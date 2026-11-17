@@ -16,46 +16,113 @@ import (
 )
 
 func TestJobMutationsUseValidatedWFCCommands(t *testing.T) {
-	ctx := context.Background()
-	executor := &recordingExecutor{
-		results: map[string][]byte{
-			"squeue\x00-j\x0012345\x00-s\x00-o\x00%i\x00-h": []byte("12345.batch\n12345.extern\n12345.0\n"),
+	for _, test := range []struct {
+		name        string
+		observation string
+		jobID       string
+	}{
+		{
+			name:        "standalone",
+			observation: `{"jobs":[{"job_id":12345}]}`,
+			jobID:       "12345",
 		},
-	}
-	slurmCluster := &slurmCluster{rwCommands: executor, roCommands: executor}
+		{
+			name:        "array task zero",
+			observation: `{"jobs":[{"job_id":4207,"array_job_id":4200,"array_task_id":0}]}`,
+			jobID:       "4200_0",
+		},
+		{
+			name:        "array raw ID equals parent",
+			observation: `{"jobs":[{"job_id":4200,"array_job_id":4200,"array_task_id":1}]}`,
+			jobID:       "4200_1",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			executor := &recordingExecutor{
+				results: map[string][]byte{
+					"squeue\x00--json": []byte(test.observation),
+					"squeue\x00-j\x00" + test.jobID + "\x00-s\x00-o\x00%i\x00-h": []byte(
+						test.jobID + ".batch\n" + test.jobID + ".extern\n" + test.jobID + ".0\n"),
+				},
+			}
+			slurmCluster := &slurmCluster{rwCommands: executor, roCommands: executor}
+			jobs, err := slurmCluster.GetJobs(ctx)
+			if err != nil {
+				t.Fatalf("GetJobs() failed: %v", err)
+			}
+			if len(jobs) != 1 || jobs[0].JobID != test.jobID {
+				t.Fatalf("GetJobs() = %v, want job ID %s", jobs, test.jobID)
+			}
+			jobID := jobs[0].JobID
 
-	if err := slurmCluster.JobKill(ctx, "12345"); err != nil {
-		t.Fatalf("JobKill() failed: %v", err)
-	}
-	if err := slurmCluster.JobHold(ctx, "12345"); err != nil {
-		t.Fatalf("JobHold() failed: %v", err)
-	}
-	if err := slurmCluster.JobRelease(ctx, "12345"); err != nil {
-		t.Fatalf("JobRelease() failed: %v", err)
-	}
-	if err := slurmCluster.JobSignal(ctx, "12345", "SIGTERM"); err != nil {
-		t.Fatalf("JobSignal() failed: %v", err)
-	}
-	if err := slurmCluster.JobNodeUpdate(ctx, "12345", []string{"node3", "node4"}, []string{"node1", "node2"}, 4); err != nil {
-		t.Fatalf("JobNodeUpdate() failed: %v", err)
-	}
-	if err := slurmCluster.JobRequeueHold(ctx, "12345"); err != nil {
-		t.Fatalf("JobRequeueHold() failed: %v", err)
-	}
-	if err := slurmCluster.JobUpdateEligibleNow(ctx, "12345"); err != nil {
-		t.Fatalf("JobUpdateEligibleNow() failed: %v", err)
-	}
+			if err := slurmCluster.JobKill(ctx, jobID); err != nil {
+				t.Fatalf("JobKill() failed: %v", err)
+			}
+			if err := slurmCluster.JobHold(ctx, jobID); err != nil {
+				t.Fatalf("JobHold() failed: %v", err)
+			}
+			if err := slurmCluster.JobRelease(ctx, jobID); err != nil {
+				t.Fatalf("JobRelease() failed: %v", err)
+			}
+			if err := slurmCluster.JobSignal(ctx, jobID, "SIGTERM"); err != nil {
+				t.Fatalf("JobSignal() failed: %v", err)
+			}
+			if err := slurmCluster.JobNodeUpdate(ctx, jobID, []string{"node3", "node4"}, []string{"node1", "node2"}, 4); err != nil {
+				t.Fatalf("JobNodeUpdate() failed: %v", err)
+			}
+			if err := slurmCluster.JobRequeueHold(ctx, jobID); err != nil {
+				t.Fatalf("JobRequeueHold() failed: %v", err)
+			}
+			if err := slurmCluster.JobUpdateEligibleNow(ctx, jobID); err != nil {
+				t.Fatalf("JobUpdateEligibleNow() failed: %v", err)
+			}
 
-	assertCommandArgs(t, executor.calls, [][]string{
-		{"scancel", "12345"},
-		{"scontrol", "hold", "12345"},
-		{"scontrol", "release", "12345"},
-		{"squeue", "-j", "12345", "-s", "-o", "%i", "-h"},
-		{"scancel", "--ctld", "--signal=SIGTERM", "12345.0"},
-		{"scontrol", "update", "JobID=12345", "NumNodes=4", "ReqNodeList=node1,node2", "ExcNodeList=node3,node4"},
-		{"scontrol", "requeuehold", "12345"},
-		{"scontrol", "update", "JobID=12345", "EligibleTime=Now"},
-	})
+			assertCommandArgs(t, executor.calls, [][]string{
+				{"squeue", "--json"},
+				{"scancel", test.jobID},
+				{"scontrol", "hold", test.jobID},
+				{"scontrol", "release", test.jobID},
+				{"squeue", "-j", test.jobID, "-s", "-o", "%i", "-h"},
+				{"scancel", "--ctld", "--signal=SIGTERM", test.jobID + ".0"},
+				{"scontrol", "update", "JobID=" + test.jobID, "NumNodes=4", "ReqNodeList=node1,node2", "ExcNodeList=node3,node4"},
+				{"scontrol", "requeuehold", test.jobID},
+				{"scontrol", "update", "JobID=" + test.jobID, "EligibleTime=Now"},
+			})
+		})
+	}
+}
+
+func TestArrayJobSignalRequiresTaskScopedSteps(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		steps    string
+		wantStep string
+	}{
+		{name: "first workload step", steps: "4200_0.batch\n4200_0.extern\n4200_0.3\n4200_0.5\n", wantStep: "4200_0.3"},
+		{name: "no workload step", steps: "4200_0.batch\n4200_0.extern\n"},
+		{name: "no steps", steps: ""},
+		{name: "raw task ID", steps: "4207.0\n"},
+		{name: "raw ID equals parent", steps: "4200.0\n"},
+		{name: "sibling task", steps: "4200_1.0\n"},
+		{name: "sibling after matching step", steps: "4200_0.0\n4200_1.0\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			executor := &recordingExecutor{results: map[string][]byte{
+				"squeue\x00-j\x004200_0\x00-s\x00-o\x00%i\x00-h": []byte(test.steps),
+			}}
+			adapter := &slurmCluster{rwCommands: executor, roCommands: executor}
+			err := adapter.JobSignal(context.Background(), "4200_0", "SIGTERM")
+			if (err != nil) != (test.wantStep == "") {
+				t.Fatalf("JobSignal() error = %v, want step %q", err, test.wantStep)
+			}
+			wantCommands := [][]string{{"squeue", "-j", "4200_0", "-s", "-o", "%i", "-h"}}
+			if test.wantStep != "" {
+				wantCommands = append(wantCommands, []string{"scancel", "--ctld", "--signal=SIGTERM", test.wantStep})
+			}
+			assertCommandArgs(t, executor.calls, wantCommands)
+		})
+	}
 }
 
 func TestJobReleasePreservesConcreteArrayElementID(t *testing.T) {

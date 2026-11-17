@@ -76,13 +76,29 @@ remote branches or PRs.
 | --- | --- | --- |
 | 1: Decision | Review ADR 0054 and this plan; record acceptance when selected. | Identity, retry, checkpoint, audit, and scope choices reviewed together. |
 | 2: Task identity | Normalize SAC `squeue`/`sacct` parsing, preserve metadata through publication and backend round trips, and validate conflicting identity at the owning boundary. Extend Job Manager's `project_job_scheduler_fields()` to project `slurm_array_job_id` into the existing `job_group_id` field. | Both numeric representations produce the same task ID; task zero survives; synthetic ranges and invalid identities produce no actionable job; array tasks share their array ID as group ID while standalone IDs remain unchanged. |
-| 3: Task recovery | Complete task-scoped accounting/attempt reconciliation, bootstrap, Advice, recovery bookkeeping, scheduler selectors, log enrichment, and watchdog handling. Reuse backend retry policy. | Two siblings recover independently; one exhausts its allowance without affecting the other; restart/bootstrap preserves budgets; commands and convergence remain task-specific. |
+| 3a: Task recovery reuse | Reuse the existing standalone recovery business logic with canonical task identity from PR #62; change production logic only if isolation tests expose a gap. | Two siblings have independent retry allowances and checkpoint-history queries; command retry/bootstrap, scheduler selectors, and watchdog timers remain task-specific. |
+| 3b: Generic recovery hardening | Separately strengthen accounting reconstruction, successor discovery, snapshot precedence, identity validation, and log ownership for standalone jobs and array tasks. These are observation/ownership safeguards, not a new array recovery sequence. | Partial/reordered history cannot misidentify attempts; delayed Advice cannot mutate a successor; conflicting identity and ambiguous log ownership fail closed. Document format compatibility and remaining limitations explicitly. |
 | 4: Checkpoint association | Normalize event identity at Slurm ingestion and backend compatibility boundaries before Watcher lookups/deduplication and JM matching/writes. Add explicit checkpoint-association audits. | Save/load events and their audits resolve to the same task attempt; delayed registration retries; ambiguous events do not alter progress; sibling checkpoints cannot postpone another task's stop decision. |
 | 5: End-to-end qualification | Close audit propagation/query gaps across producers, update the release audit catalog, add isolated array scenarios, and update current support/operations documentation. | Real task failures, checkpoint ingestion, persisted audit reads, and unaffected siblings are demonstrated through production interfaces. |
 
 Tests that prove a change belong in its owning PR; the final PR adds integration
 evidence rather than deferring correctness checks. If a seam already satisfies
 the contract, retain it and add only justified behavioral coverage.
+
+### Task recovery implementation
+
+Phase 3a requires no additional production business logic on top of task identity.
+Behavioral tests exercise the existing retry/checkpoint policy, Advice controller,
+scheduler commands, and watchdog using distinct canonical task IDs. Group identity
+does not select recovery work or share retry allowance. The bootstrap test proves
+that command failures retry the same attempt while a sibling's observed successor
+converges independently.
+
+Accounting reconstruction and log ownership hardening belong to phase 3b, not to
+the independent-task recovery state machine. Phase 3a does not establish safety
+with incomplete accounting history or qualify supported Slurm versions. Its
+two-task harness scenario is additional integration coverage, not a substitute
+for phase 5 qualification. Checkpoint ingestion changes remain phase 4.
 
 For each concrete array task, use the array submission ID as `job_group_id`,
 `<array_job_id>_<array_task_id>` as `job_id`, and that task's attempt index as
