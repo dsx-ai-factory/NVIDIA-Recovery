@@ -35,14 +35,16 @@ fail the command. Extraction errors appear in `capability_errors` alongside usab
 results; callers must check that map even when the process exits successfully.
 Missing suspend support is reported explicitly.
 
-`instrument` adds `qualification.nvidia.com/marker` through the SDK's template
-API, refusing a conflicting qualification marker. Focused fixture assertions
-check the settings used by Recovery; the probe does not validate arbitrary
-template preservation or SDK serialization. A separate offline test uses the same
-SDK template API to set and then replace required node affinity on every JobSet
-and PyTorchJob template, checking native fields and retained marker labels. It
-tests complete caller-supplied replacement, not constraint merging or actual
-Pod placement. `suspend` and `resume` exercise the
+`instrument` models admission: it adds `qualification.nvidia.com/marker` and a
+per-workload `recovery.nvidia.com/exclude-…` required node-affinity expression with
+operator `DoesNotExist` through the SDK template API. It adds the expression to
+every existing scheduling alternative, retaining the user's constraints. Offline
+fixtures cover templates without affinity, multiple existing alternatives, and
+repeated instrumentation. This is focused consumer coverage, not a generic
+serializer or affinity validator. The marker is a stable fixture correlation
+value; it does not define the production correlation-ID contract.
+
+`suspend` and `resume` exercise the
 SDK root lifecycle API.
 Transformations return the full object on stdout but never contact Kubernetes;
 treat that output with the same care as the input manifest. Terminal and deleting
@@ -78,11 +80,11 @@ make test-workload-map-live K8S_TEST_ARGS='-n 2'
 ```
 
 The scenarios use the existing staged runner and JobSet launcher. Lifecycle cases
-create uniquely named JobSets with two or six CPU Pods and compare SDK scale with
-independently owned resources. They suspend through the SDK,
-wait for complete Pod drain, and observe a suspended interval. After SDK template
-instrumentation and resume, they require new Ready Pod UIDs carrying the marker
-under the original JobSet name and UID. A successful API write is not a passed
+instrument uniquely named manifests through the SDK before submitting them, then
+compare SDK scale with two or six independently owned CPU Pods. Initial Pods must
+carry the marker and exclusion affinity. The tests suspend through the SDK, wait
+for complete Pod drain, and resume without editing templates. Replacement Ready
+Pods must retain the same instrumentation under the original JobSet name and UID. A successful API write is not a passed
 lifecycle check. A separate failing workload exercises the native restart budget.
 
 Writes preserve the original UID and resourceVersion, and cleanup uses the
@@ -170,9 +172,10 @@ export WORKLOAD_MAP_QUEUE=default-queue
 
 JobSet lifecycle cases use two replicated Jobs with parallelism one or three and
 matching completions, producing two or six concurrent Pods. PyTorchJob uses one
-Master and two Workers. After complete suspension, the SDK instruments each native
-Pod template, then the tests resume the workload and check marker propagation,
-selected scheduling, new Pod UIDs, and unchanged parent UID. These are CPU
+Master and two Workers. Instrumentation runs before create for both workload
+kinds, modeling admission without deploying a webhook. Initial and replacement
+Pods must carry the marker and exclusion affinity; resume also verifies selected
+scheduling, new Pod UIDs, and unchanged parent UID. These are CPU
 fixtures; no GPU utilization or training progress is inferred.
 
 Reports retain append-only UTC and elapsed-time observations, all co-matched
@@ -184,7 +187,7 @@ source for overall test and cleanup outcomes.
 
 Recovery's telemetry path uses correlation labels injected into Pod templates;
 the collector reads those labels without SDK component inference. Qualification
-checks template-label propagation onto replacement Pods. SDK Pod classification
+checks template-label and exclusion-affinity propagation onto initial and replacement Pods. SDK Pod classification
 is outside this suite's scope. The harness retains controller-owner UID checks
 for independent evidence and safe cleanup. Publishing Pod/node associations in
 the job controller remains separate integration work.
@@ -195,8 +198,8 @@ the job controller remains separate integration work.
 | --- | --- |
 | JobSet and PyTorchJob extraction, marker mutation, native suspend fields, terminal rejection | Cluster-free checks against SDK built-ins and independent fixture expectations. |
 | JobSet/default and KAI schedulers | Two- and six-Pod same-object lifecycle, live marker propagation, and native retry exhaustion scenarios. Exact observed results are recorded separately. |
-| Pod/node association publishing | Not tested; separate job-controller integration work. SDK Pod classification is outside scope. |
-| Correlation labels and placement constraints | Selected settings of representative fixtures checked offline; marker propagation and scheduler/queue preservation checked live. Required node-affinity replacement is checked offline for both workload kinds; live node exclusion remains not tested. |
+| Pod selectors and association publishing | Selector definitions are exposed by inspection but not independently qualified yet. Pod/node publishing is separate job-controller integration work; SDK Pod classification is outside scope. |
+| Correlation labels and placement constraints | Selected settings of representative fixtures checked offline; marker propagation and scheduler/queue preservation checked live. Admission-time exclusion affinity is checked alongside user constraints offline; the live suite checks its propagation. Node-label mutation and actual node exclusion remain untested. |
 | PyTorchJob/default and KAI schedulers | Master/Worker lifecycle, marker propagation, terminal-state and native retry scenarios. Exact observed results are recorded separately. |
 | OOM, eviction, gang preemption | Not tested; separate failure and scheduler qualification remains necessary. |
 | Checkpoint restore, training progress, recovery latency | Not tested; requires the subsequent full recovery path. |
@@ -223,14 +226,33 @@ resumed snapshots across the two initial runs simultaneously matched `Initializi
 and `Running`; consumers must not assume normalized statuses are mutually exclusive. These are observations
 of the recorded baseline, not guarantees for other versions.
 
-## Expanded qualification results (2026-11-16)
+## Admission-aligned qualification results (2026-11-17)
+
+All 12 cases passed with labels and per-workload `DoesNotExist` exclusion affinity
+installed through the rebuilt SDK probe before create. All six lifecycle cases
+checked the instrumentation on both initial and replacement Pods, with no template
+writes during recovery. KAI scheduling events covered all 22 lifecycle Pod UIDs.
+The reports use schema 3 and the same pinned versions listed in the earlier matrix.
+
+| Workload | Scheduler | Result | Retained local report |
+| --- | --- | --- | --- |
+| JobSet | Default | 3 passed | `run-DXK3jPo5` |
+| PyTorchJob | Default | 3 passed | `run-OVnZZwyY` |
+| JobSet | KAI | 3 passed | `run-DXwvagM3` |
+| PyTorchJob | KAI | 3 passed | `run-OpTV7JpW` |
+
+No JobSets, PyTorchJobs, Jobs or Pods remained in the test namespace after cleanup.
+This validates the pre-create transformation and controller propagation, not an
+installed admission webhook or excluded-node avoidance through Node-label changes.
+
+## Earlier expanded qualification results (2026-11-16)
 
 All 12 live cases passed again after removal of the generic serialization validator
 and its report envelope, using the rebuilt probe and current Python bridge. The
 reports use schema 2. New active reports use schema 3 after removal of the
 unused SDK Pod-classification capability; the retained live runs predate that
-removal. They continue to document the unchanged lifecycle and label-propagation
-checks. The disposable Kind cluster ran Kubernetes v1.35.0,
+removal. They document the earlier post-drain instrumentation flow and do not establish
+the current admission-time checks. The disposable Kind cluster ran Kubernetes v1.35.0,
 Workload-Map SDK v0.3.0, JobSet v0.12.0, Training Operator v1.9.0
 (`kubeflow/training-operator:v1-5170a36`), and KAI v0.12.0.
 
@@ -271,8 +293,10 @@ an explicit local/existing-cluster selection and are not automatically run in CI
 
 Inspection retains per-capability errors: a failed scale expression does not erase
 successful status or template extraction. Transformations return the full workload
-object. Live instrumentation requires an owned, suspended and drained workload,
-checks the marker on every expected template, and rejects changes outside templates.
+object. The live client prepares new manifests before create, checks the marker
+and exclusion rule on every expected template, and rejects changes outside
+templates. No post-create instrumentation write exists; only suspend/resume
+changes are persisted to existing workloads, with UID and resourceVersion checks.
 There is no recursive preservation validator, serializer exception list, or
 normalization report. General serialization regression tests belong upstream.
 
@@ -298,7 +322,7 @@ prove that Pods have stopped. Retained PyTorchJob evidence includes running Pods
 at failure with `OnFailure`, and deletion/replacement activity around failure with
 `Never`, despite `cleanPodPolicy: None`. Do not use that policy or a terminal
 condition as a drain guarantee. The active lifecycle tests separately require
-complete Pod drain before instrumentation and resume.
+complete Pod drain before resume.
 
 During a native JobSet restart, normalized `Initializing` and `Running` can overlap
 even with no Ready Pods. Native conditions, Pod observations, and restart counters
@@ -327,5 +351,6 @@ settings on representative Recovery fixtures. Earlier exploration observed that
 typed template round trips can omit explicit empty values; that observation is not
 an upstream preservation guarantee or a local compatibility policy. Serializer
 regressions should be reproduced and tested upstream rather than maintained as a
-parallel validator here. Required node-affinity replacement is qualified offline;
-constraint composition and live enforcement of node exclusions remain unqualified.
+parallel validator here. Admission exclusion-affinity injection is checked against
+representative native fixtures. Actual node exclusion by changing Node labels is
+separate recovery integration work; this suite does not mutate Nodes.

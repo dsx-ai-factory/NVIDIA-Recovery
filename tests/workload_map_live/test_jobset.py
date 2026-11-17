@@ -50,11 +50,13 @@ def running(run: Run[WorkloadMapProbe]) -> Evidence:
     if "old_pods" in run.notes:
         assert run.job.metadata["workload"]["metadata"]["uid"] == run.notes["uid"]
         assert not ({pod["metadata"]["uid"] for pod in pods} & set(run.notes["old_pods"].values()))
-        marker = run.services.identity["owner"]
-        assert all(pod["metadata"]["labels"].get("qualification.nvidia.com/marker") == marker for pod in pods)
         assert all(pod["spec"]["schedulerName"] == run.notes["scheduler"] for pod in pods)
         if run.notes["scheduler"] == "kai-scheduler":
             assert all(pod["metadata"]["labels"].get("kai.scheduler/queue") == run.notes["queue"] for pod in pods)
+    marker = run.services.correlation_marker(run.job.metadata["workload"])
+    assert all(pod["metadata"]["labels"].get("qualification.nvidia.com/marker") == marker for pod in pods)
+    for pod in pods:
+        run.services.check_exclusion(pod, marker)
     if run.notes["scheduler"] == "kai-scheduler" and not run.services.kai_scheduled(run.job):
         return Evidence(False, "waiting for KAI Scheduled events for each owned Pod UID")
     return Evidence(
@@ -88,7 +90,7 @@ def record_qualified_capabilities(run: Run[WorkloadMapProbe]) -> None:
     for capability, detail in {
         "scale": f"SDK count and {run.notes['expected_pods']} Ready owned Pods agree",
         "status": "Running and Suspended observed against Pod evidence; full co-matched sets retained",
-        "instrumentation": "SDK marker reached every replacement Pod while selected scheduling was preserved",
+        "instrumentation": "Admission marker and exclusion affinity reached initial and replacement Pods; selected scheduling preserved",
         "suspend_resume": "original parent UID, complete drain, suspended interval, and new Ready Pod UIDs",
     }.items():
         run.services.capability(capability, "pass", detail)
@@ -139,7 +141,6 @@ def test_jobset_suspend_resume(parallelism: int, expected_pods: int) -> Scenario
             act("suspend through Workload-Map", lambda run: run.services.transition(run.job, "suspend")),
             eventually("all scenario Pods drained", drained, within=120),
             consistently("workload remains suspended", drained, for_seconds=5),
-            act("instrument drained templates through Workload-Map", lambda run: run.services.instrument(run.job)),
             act("resume through Workload-Map", lambda run: run.services.transition(run.job, "resume")),
             eventually("instrumented new Pods under original UID", running, within=180),
             consistently("observe resumed status and readiness", running, for_seconds=5),

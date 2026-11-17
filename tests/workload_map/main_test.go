@@ -13,9 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dsx-ai-factory/workload-map/karta/sdk/pkg/catalog"
-	"github.com/dsx-ai-factory/workload-map/karta/sdk/pkg/resource"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -27,7 +24,8 @@ const jobsetFixture = `{
       "metadata": {"labels": {"user.example/team": "research"}, "annotations": {"user.example/note": "preserve"}},
       "spec": {"restartPolicy": "Never", "schedulerName": "default-scheduler",
         "affinity": {"nodeAffinity": {"requiredDuringSchedulingIgnoredDuringExecution": {"nodeSelectorTerms": [
-          {"matchExpressions": [{"key": "user.example/pool", "operator": "In", "values": ["training"]}]}
+          {"matchExpressions": [{"key": "user.example/pool", "operator": "In", "values": ["training"]}]},
+          {"matchExpressions": [{"key": "user.example/pool", "operator": "In", "values": ["backup"]}]}
         ]}}},
         "containers": [{"name": "worker", "image": "busybox:1.37.0", "env": [{"name": "TOKEN", "value": "private-fixture-value"}],
           "resources": {"requests": {"cpu": "100m", "memory": "32Mi"}}}]
@@ -150,6 +148,13 @@ func TestInstrumentationUpdatesRecoveryFixtureTemplates(t *testing.T) {
 			}
 			for _, path := range tc.paths {
 				assertNativeValue(t, updated.Object, append(path, "metadata", "labels", markerKey), "run-1")
+				// A native expected expression tests the admission contract,
+				// including templates that initially have no affinity.
+				index := "0"
+				if tc.name == "JobSet" && path[2] == "0" {
+					index = "1"
+				}
+				assertNativeValue(t, updated.Object, append(path, "spec", "affinity", "nodeAffinity", "requiredDuringSchedulingIgnoredDuringExecution", "nodeSelectorTerms", "0", "matchExpressions", index), decodeValue(t, `{"key":"recovery.nvidia.com/exclude-4e65d3fbe8ad6535681b021b30785b12","operator":"DoesNotExist"}`))
 			}
 			if tc.name == "JobSet" {
 				worker := tc.paths[0]
@@ -158,7 +163,7 @@ func TestInstrumentationUpdatesRecoveryFixtureTemplates(t *testing.T) {
 				assertNativeValue(t, updated.Object, append(worker, "metadata", "annotations", "user.example/note"), "preserve")
 				assertNativeValue(t, updated.Object, append(worker, "spec", "schedulerName"), "default-scheduler")
 				assertNativeValue(t, updated.Object, append(worker, "spec", "restartPolicy"), "Never")
-				assertNativeValue(t, updated.Object, append(worker, "spec", "affinity"), decodeValue(t, `{"nodeAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"user.example/pool","operator":"In","values":["training"]}]}]}}}`))
+				assertNativeValue(t, updated.Object, append(worker, "spec", "affinity"), decodeValue(t, `{"nodeAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"user.example/pool","operator":"In","values":["training"]},{"key":"recovery.nvidia.com/exclude-4e65d3fbe8ad6535681b021b30785b12","operator":"DoesNotExist"}]},{"matchExpressions":[{"key":"user.example/pool","operator":"In","values":["backup"]},{"key":"recovery.nvidia.com/exclude-4e65d3fbe8ad6535681b021b30785b12","operator":"DoesNotExist"}]}]}}}`))
 				assertNativeValue(t, updated.Object, append(worker, "spec", "containers", "0", "env"), decodeValue(t, `[{"name":"TOKEN","value":"private-fixture-value"}]`))
 				assertNativeValue(t, updated.Object, append(worker, "spec", "containers", "0", "resources"), decodeValue(t, `{"requests":{"cpu":"100m","memory":"32Mi"}}`))
 				assertNativeValue(t, updated.Object, append(coordinator, "metadata", "labels", "user.example/role"), "coordinator")
@@ -174,84 +179,12 @@ func TestInstrumentationUpdatesRecoveryFixtureTemplates(t *testing.T) {
 				}
 			}
 			// Reapplying the same marker is safe; changing its ownership is rejected.
-			_ = transformFixture(t, updated, "instrument")
+			again := transformFixture(t, updated, "instrument")
+			if !reflect.DeepEqual(updated.Object, again.Object) {
+				t.Fatal("repeated admission changed the instrumented workload")
+			}
 			if _, err := evaluate(context.Background(), updated, "instrument", "another-run"); err == nil {
 				t.Fatal("accepted conflicting qualification marker")
-			}
-		})
-	}
-}
-
-// TestNodeConstraintReplacement exercises the template API Recovery uses to
-// change placement before resuming a workload. The caller supplies the complete
-// desired node affinity; this does not qualify merging constraints or scheduling.
-func TestNodeConstraintReplacement(t *testing.T) {
-	for _, tc := range []struct {
-		name, input string
-		paths       [][]string
-	}{
-		{"JobSet", jobsetFixture, [][]string{
-			{"spec", "replicatedJobs", "0", "template", "spec", "template"},
-			{"spec", "replicatedJobs", "1", "template", "spec", "template"},
-		}},
-		{"PyTorchJob", pytorchFixture, [][]string{
-			{"spec", "pytorchReplicaSpecs", "Master", "template"},
-			{"spec", "pytorchReplicaSpecs", "Worker", "template"},
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			object := transformFixture(t, fixture(t, tc.input), "instrument")
-			definition, err := catalog.Get(object.GroupVersionKind())
-			if err != nil {
-				t.Fatal(err)
-			}
-			// Two distinct desired constraints catch an update that appends to,
-			// ignores, or retains the old exclusion instead of replacing it.
-			for _, excluded := range []string{"node-a", "node-b"} {
-				factory := resource.NewComponentFactoryFromObject(definition, object)
-				components, err := factory.GetChildComponents()
-				if err != nil {
-					t.Fatal(err)
-				}
-				for _, component := range components {
-					templates, err := component.GetPodTemplateSpec(context.Background())
-					if err != nil {
-						t.Fatal(err)
-					}
-					for id, template := range templates {
-						if template.Spec.Affinity == nil {
-							template.Spec.Affinity = &corev1.Affinity{}
-						}
-						template.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{
-							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-								NodeSelectorTerms: []corev1.NodeSelectorTerm{{
-									MatchExpressions: []corev1.NodeSelectorRequirement{{
-										Key: "kubernetes.io/hostname", Operator: corev1.NodeSelectorOpNotIn,
-										Values: []string{excluded},
-									}},
-								}},
-							},
-						}
-						templates[id] = template
-					}
-					if err := component.UpdatePodTemplateSpec(context.Background(), templates); err != nil {
-						t.Fatal(err)
-					}
-				}
-				updated, err := factory.GetResource()
-				if err != nil {
-					t.Fatal(err)
-				}
-				encoded, err := json.Marshal(updated)
-				if err != nil {
-					t.Fatal(err)
-				}
-				object = fixture(t, string(encoded))
-				want := decodeValue(t, `{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"kubernetes.io/hostname","operator":"NotIn","values":["`+excluded+`"]}]}]}}`)
-				for _, path := range tc.paths {
-					assertNativeValue(t, object.Object, append(path, "spec", "affinity", "nodeAffinity"), want)
-					assertNativeValue(t, object.Object, append(path, "metadata", "labels", markerKey), "run-1")
-				}
 			}
 		})
 	}

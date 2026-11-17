@@ -31,6 +31,9 @@ from recovery_libs.testing.launch.jobs import Job, JobState
 
 
 class FinishedLauncher:
+    def __init__(self, client=None):
+        pass
+
     def submit(self, spec):
         return self.get(job_id="qualification/owned/original-uid")
 
@@ -46,6 +49,12 @@ class FinishedLauncher:
 
 # Both possible fixture choices use the same cluster-free transport. The test
 # detects missing teardown, rather than failing by accidentally contacting Kubernetes.
+KubernetesJobSetLauncher = FinishedLauncher
+
+@pytest.fixture
+def scenario_services():
+    return None
+
 foundation.launcher_named = lambda _: FinishedLauncher()
 generic.launcher_named = lambda _: FinishedLauncher()
 """

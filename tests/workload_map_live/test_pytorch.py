@@ -4,33 +4,14 @@
 """Qualify PyTorchJob roles and lifecycle against a real Training Operator."""
 
 import os
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from e2e_harness.workload_map import WorkloadMapProbe
-from e2e_kubernetes.conftest import DiagnosticLauncher
 from recovery_libs.testing.launch.jobs import JobSpec, JobState
-from recovery_libs.testing.launch.pytorch import KubectlPyTorchClient, KubernetesPyTorchLauncher
+from recovery_libs.testing.launch.pytorch import KubectlPyTorchClient
 from recovery_libs.testing.scenario import Evidence, Run, Scenario, act, consistently, eventually, remember
 from recovery_libs.testing.scenario_plugin import scenario
-
-
-@pytest.fixture
-def launcher(pytestconfig: pytest.Config, tmp_path: Path) -> Iterator[DiagnosticLauncher]:
-    """Reuse exact-object diagnostics/cleanup with the PyTorch native launcher."""
-    if pytestconfig.getoption("launcher") != "kubernetes-pytorch":
-        raise pytest.UsageError("PyTorch qualification requires --launcher=kubernetes-pytorch")
-    tracked = DiagnosticLauncher(KubernetesPyTorchLauncher.from_environment(), tmp_path)
-    yield tracked
-    errors = []
-    for job_id in tracked.owned:
-        try:
-            tracked.cancel(job_id=job_id)
-        except Exception as error:  # noqa: BLE001 - attempt cleanup for every submitted workload
-            errors.append(error)
-    if errors:
-        raise ExceptionGroup("owned PyTorch workload cleanup failed", errors)
 
 
 @pytest.fixture
@@ -94,10 +75,13 @@ def running(run: Run[WorkloadMapProbe]) -> Evidence:
         )
     if "old_pods" in run.notes:
         assert not {pod["metadata"]["uid"] for pod in pods}.intersection(run.notes["old_pods"].values())
-        assert all(
-            pod["metadata"]["labels"].get("qualification.nvidia.com/marker") == run.services.identity["owner"]
-            for pod in pods
-        )
+    assert all(
+        pod["metadata"]["labels"].get("qualification.nvidia.com/marker")
+        == run.services.correlation_marker(run.job.metadata["workload"])
+        for pod in pods
+    )
+    for pod in pods:
+        run.services.check_exclusion(pod, run.services.correlation_marker(run.job.metadata["workload"]))
     if scheduler == "kai-scheduler" and not run.services.kai_scheduled(run.job):
         return Evidence(False, "waiting for KAI Scheduled events for each owned Pod UID")
     return Evidence(True, f"{phase}: native role counts and three Ready Pods agree; statuses={result['statuses']}")
@@ -125,7 +109,7 @@ def qualified(run: Run[WorkloadMapProbe]) -> None:
         "pytorchjob_live": "one Master and two Worker roles observed through the selected Training Operator",
         "scale": "SDK role scales agree with independently counted Ready Pods",
         "status": "full normalized status sets retained throughout suspension and readiness",
-        "instrumentation": "SDK marker reached all replacement Pods with selected scheduler preserved",
+        "instrumentation": "Admission marker and exclusion affinity reached initial and replacement Pods; selected scheduler preserved",
         "suspend_resume": "same PyTorchJob UID, complete drain, suspended interval, and replacement Pod UIDs",
     }.items():
         run.services.capability(capability, "pass", detail)
@@ -155,7 +139,6 @@ def test_pytorch_suspend_resume() -> Scenario[WorkloadMapProbe]:
             act("suspend through Workload-Map", lambda run: run.services.transition(run.job, "suspend")),
             eventually("all PyTorch Pods drained", drained, within=120),
             consistently("PyTorchJob remains suspended", drained, for_seconds=5),
-            act("instrument drained role templates", lambda run: run.services.instrument(run.job)),
             act("resume through Workload-Map", lambda run: run.services.transition(run.job, "resume")),
             eventually("instrumented replacement roles under original UID", running, within=180),
             consistently("observe resumed statuses", running, for_seconds=5),

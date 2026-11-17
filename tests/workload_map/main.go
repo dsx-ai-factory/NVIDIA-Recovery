@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/dsx-ai-factory/workload-map/karta/sdk/pkg/catalog"
 	"github.com/dsx-ai-factory/workload-map/karta/sdk/pkg/resource"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
@@ -121,6 +123,44 @@ func evaluate(ctx context.Context, object *unstructured.Unstructured, operation,
 					template.Labels = map[string]string{}
 				}
 				template.Labels[markerKey] = marker
+				// Admission preinstalls a per-workload exclusion key. Recovery
+				// later labels Nodes; it does not rewrite running templates.
+				digest := sha256.Sum256([]byte(marker))
+				key := fmt.Sprintf("recovery.nvidia.com/exclude-%x", digest[:16])
+				constraint := corev1.NodeSelectorRequirement{Key: key, Operator: corev1.NodeSelectorOpDoesNotExist}
+				if template.Spec.Affinity == nil {
+					template.Spec.Affinity = &corev1.Affinity{}
+				}
+				if template.Spec.Affinity.NodeAffinity == nil {
+					template.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
+				}
+				affinity := template.Spec.Affinity.NodeAffinity
+				if affinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
+					affinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{{MatchExpressions: []corev1.NodeSelectorRequirement{constraint}}},
+					}
+				} else {
+					// Terms are ORed: constrain each existing alternative. An
+					// empty selector/term matches no nodes and must stay empty.
+					for i := range affinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
+						term := &affinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[i]
+						if len(term.MatchExpressions) == 0 && len(term.MatchFields) == 0 {
+							continue
+						}
+						found := false
+						for _, expression := range term.MatchExpressions {
+							if expression.Key == key {
+								if expression.Operator != corev1.NodeSelectorOpDoesNotExist || len(expression.Values) != 0 {
+									return nil, errors.New("conflicting exclusion constraint")
+								}
+								found = true
+							}
+						}
+						if !found {
+							term.MatchExpressions = append(term.MatchExpressions, constraint)
+						}
+					}
+				}
 				templates[id] = template
 				templateCount++
 			}

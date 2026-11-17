@@ -3,13 +3,53 @@
 
 """Reuse owned launcher fixtures and attach pytest outcomes to capability evidence."""
 
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
 import pytest
 from e2e_harness.workload_map import WorkloadMapProbe
-from e2e_kubernetes.conftest import launcher
+from e2e_kubernetes.conftest import DiagnosticLauncher
+from recovery_libs.testing.launch.kubernetes import KubernetesJobSetLauncher
+from recovery_libs.testing.launch.pytorch import KubernetesPyTorchLauncher
 
-__all__ = ["launcher"]
 
-# Re-export launcher locally so the nested plugin's session-scoped bare launcher
+class AdmissionClient:
+    """Apply the real probe before create; delegate reads and cleanup unchanged."""
+
+    def __init__(self, probe: WorkloadMapProbe) -> None:
+        self.probe = probe
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.probe.client, name)
+
+    def create(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        """Submit only the fully prepared manifest to Kubernetes."""
+        return self.probe.client.create(self.probe.prepare(manifest))
+
+
+@pytest.fixture
+def launcher(
+    pytestconfig: pytest.Config, tmp_path: Path, scenario_services: WorkloadMapProbe
+) -> Iterator[DiagnosticLauncher]:
+    """Instrument before submission and retain diagnostics and exact-UID cleanup."""
+    selected = pytestconfig.getoption("launcher")
+    types = {"kubernetes-jobset": KubernetesJobSetLauncher, "kubernetes-pytorch": KubernetesPyTorchLauncher}
+    if selected not in types:
+        raise pytest.UsageError("qualification requires a Kubernetes workload launcher")
+    tracked = DiagnosticLauncher(types[selected](AdmissionClient(scenario_services)), tmp_path)
+    yield tracked
+    errors = []
+    for job_id in tracked.owned:
+        try:
+            tracked.cancel(job_id=job_id)
+        except Exception as error:  # noqa: BLE001 - attempt cleanup of every owned workload
+            errors.append(error)
+    if errors:
+        raise ExceptionGroup("owned qualification workload cleanup failed", errors)
+
+
+# Define launcher locally so the nested plugin's session-scoped bare launcher
 # cannot override per-test diagnostics and terminal-workload teardown.
 pytest_plugins = ["e2e_kubernetes.conftest"]
 

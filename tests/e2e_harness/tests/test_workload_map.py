@@ -4,11 +4,41 @@
 """Prove live mutation preconditions and retained evidence independently of the SDK."""
 
 import copy
+import hashlib
 import json
 from types import SimpleNamespace
 
 import pytest
 from e2e_harness.workload_map import WorkloadMapProbe
+
+
+def exclusion(marker):
+    """Model the admission exclusion returned by the SDK probe."""
+    return {
+        "nodeAffinity": {
+            "requiredDuringSchedulingIgnoredDuringExecution": {
+                "nodeSelectorTerms": [
+                    {
+                        "matchExpressions": [
+                            {
+                                "key": "recovery.nvidia.com/exclude-"
+                                + hashlib.sha256(marker.encode()).hexdigest()[:32],
+                                "operator": "DoesNotExist",
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    }
+
+
+def uncreated(job):
+    """Return the submitted manifest before server identity/version assignment."""
+    record = copy.deepcopy(job.metadata["workload"])
+    record["metadata"].pop("uid")
+    record["metadata"].pop("resourceVersion")
+    return record
 
 
 class Client:
@@ -39,10 +69,13 @@ class Probe(WorkloadMapProbe):
     def invoke(self, operation, record, *, marker=None):
         if operation == "inspect":
             return {"statuses": record.get("mock_statuses", ["Running"])}
-        updated = copy.deepcopy(record)
+        # The subprocess JSON boundary does not preserve Python object aliases.
+        updated = json.loads(json.dumps(record))
         if operation == "instrument":
-            for job in updated["spec"]["replicatedJobs"]:
-                job["template"]["spec"]["template"]["metadata"]["labels"]["qualification.nvidia.com/marker"] = marker
+            for parent in self._template_parents(updated):
+                template = parent["template"]
+                template["metadata"]["labels"]["qualification.nvidia.com/marker"] = marker
+                template["spec"]["affinity"] = exclusion(marker)
             return updated
         updated.setdefault("spec", {})["suspend"] = operation == "suspend"
         return updated
@@ -192,28 +225,26 @@ def test_observations_retain_status_transitions_and_readiness(fixture, monkeypat
     }
 
 
-def test_instrumentation_requires_drained_suspension(fixture):
+def test_admission_rejects_existing_workload(fixture):
     probe, client, job = fixture
     with pytest.raises(ValueError):
-        probe.instrument(job)
-    job.metadata["workload"]["spec"]["suspend"] = True
-    client.pods = [client.pod]
-    with pytest.raises(ValueError):
-        probe.instrument(job)
+        probe.prepare(job.metadata["workload"])
     assert client.writes == []
 
 
-def test_instrumentation_persists_marked_sdk_templates(fixture):
+def test_admission_prepares_templates_without_cluster_writes(fixture):
     probe, client, job = fixture
-    job.metadata["workload"]["spec"]["suspend"] = True
-    probe.instrument(job)
-    submitted = client.writes[0]
-    assert submitted["metadata"] == job.metadata["workload"]["metadata"]
-    assert submitted["spec"]["replicatedJobs"][0]["template"]["spec"]["template"]["metadata"]["labels"] == {
+    record = uncreated(job)
+    submitted = probe.prepare(record)
+    assert submitted["metadata"] == record["metadata"]
+    template = submitted["spec"]["replicatedJobs"][0]["template"]["spec"]["template"]
+    assert template["metadata"]["labels"] == {
         "user": "preserve",
-        "qualification.nvidia.com/marker": "run",
+        "qualification.nvidia.com/marker": probe.correlation_marker(record),
     }
-    assert probe.capabilities["instrumentation"]["outcome"] == "not_tested"
+    assert template["spec"]["affinity"] == exclusion(probe.correlation_marker(record))
+    assert client.writes == []
+    assert client.selectors == []
 
 
 def test_instrumentation_rejects_changes_outside_templates(fixture, monkeypatch):
@@ -228,7 +259,7 @@ def test_instrumentation_rejects_changes_outside_templates(fixture, monkeypatch)
 
     monkeypatch.setattr(probe, "invoke", change_scale)
     with pytest.raises(AssertionError):
-        probe.instrument(job)
+        probe.prepare(uncreated(job))
     assert client.writes == []
 
 
@@ -289,7 +320,7 @@ def test_pytorch_transition_changes_only_run_policy(fixture, monkeypatch):
     assert "suspend" not in client.writes[0]["spec"]
 
 
-def test_pytorch_instrumentation_validates_every_role_and_scopes_drain(fixture, monkeypatch):
+def test_pytorch_admission_validates_every_role(fixture, monkeypatch):
     probe, client, job = fixture
     record = job.metadata["workload"]
     record["apiVersion"] = "kubeflow.org/v1"
@@ -307,19 +338,20 @@ def test_pytorch_instrumentation_validates_every_role_and_scopes_drain(fixture, 
             for role, count in (("Master", 1), ("Worker", 2))
         },
     }
-    transformed = copy.deepcopy(record)
+    transformed = uncreated(job)
     for replica in transformed["spec"]["pytorchReplicaSpecs"].values():
-        replica["template"]["metadata"]["labels"]["qualification.nvidia.com/marker"] = "run"
+        replica["template"]["metadata"]["labels"]["qualification.nvidia.com/marker"] = probe.correlation_marker(record)
+        replica["template"]["spec"]["affinity"] = exclusion(probe.correlation_marker(record))
     monkeypatch.setattr(probe, "invoke", lambda *_, **__: transformed)
-    probe.instrument(job)
-    assert client.writes == [transformed]
-    assert client.selectors == ["recovery.nvidia.com/scenario-owner=run,training.kubeflow.org/job-name=owned"]
+    assert probe.prepare(uncreated(job)) == transformed
+    assert client.writes == []
+    assert client.selectors == []
     client.writes.clear()
     del transformed["spec"]["pytorchReplicaSpecs"]["Worker"]["template"]["metadata"]["labels"][
         "qualification.nvidia.com/marker"
     ]
     with pytest.raises(AssertionError):
-        probe.instrument(job)
+        probe.prepare(uncreated(job))
     assert client.writes == []
 
 
@@ -341,15 +373,15 @@ def test_pytorch_template_validation_is_independent_of_json_key_order(fixture, m
         },
     }
     # Go serializes map keys in sorted order, unlike an arbitrary input document.
-    transformed = json.loads(json.dumps(record, sort_keys=True))
+    transformed = json.loads(json.dumps(uncreated(job), sort_keys=True))
     for replica in transformed["spec"]["pytorchReplicaSpecs"].values():
-        replica["template"]["metadata"]["labels"]["qualification.nvidia.com/marker"] = "run"
+        replica["template"]["metadata"]["labels"]["qualification.nvidia.com/marker"] = probe.correlation_marker(record)
+        replica["template"]["spec"]["affinity"] = exclusion(probe.correlation_marker(record))
     monkeypatch.setattr(probe, "invoke", lambda *_, **__: transformed)
-    probe.instrument(job)
-    assert client.writes == [transformed]
+    assert probe.prepare(uncreated(job)) == transformed
+    assert client.writes == []
     assert (
-        client.writes[0]["spec"]["pytorchReplicaSpecs"]["Worker"]["template"]["spec"]["containers"][0]["image"]
-        == "Worker"
+        transformed["spec"]["pytorchReplicaSpecs"]["Worker"]["template"]["spec"]["containers"][0]["image"] == "Worker"
     )
 
 
@@ -448,3 +480,54 @@ def test_kai_retains_evidence_and_requires_every_replacement(fixture, monkeypatc
     job.metadata["pods"] = [{"metadata": {"uid": "replacement"}}]
     assert not probe.kai_scheduled(job)
     assert set(json.loads(probe.report.read_text())["scheduling_events"]) == {"one", "two"}
+
+
+@pytest.mark.parametrize("kind", ["jobset", "pytorch"])
+def test_launcher_prepares_manifest_before_create(fixture, monkeypatch, kind):
+    """The actual launcher/client boundary submits instrumentation on first create."""
+    from recovery_libs.testing.launch.jobs import JobSpec
+    from recovery_libs.testing.launch.kubernetes import KubernetesJobSetLauncher
+    from recovery_libs.testing.launch.pytorch import KubernetesPyTorchLauncher
+    from workload_map_live.conftest import AdmissionClient
+
+    probe, client, _ = fixture
+    submitted = []
+
+    def create(manifest):
+        assert "uid" not in manifest["metadata"]
+        assert "resourceVersion" not in manifest["metadata"]
+        submitted.append(copy.deepcopy(manifest))
+        record = copy.deepcopy(manifest)
+        record["metadata"].update(uid="new-uid", creationTimestamp="2026-11-17T00:00:00Z")
+        return record
+
+    monkeypatch.setattr(client, "create", create, raising=False)
+    launcher_type = KubernetesJobSetLauncher if kind == "jobset" else KubernetesPyTorchLauncher
+    launcher = launcher_type(AdmissionClient(probe))
+    job = launcher.submit(JobSpec(name="admission", workload={"image": "fixture", "command": ["sleep", "60"]}))
+    assert len(submitted) == 1
+    manifest = submitted[0]
+    assert job.job_id.endswith("/new-uid")
+    marker = probe.correlation_marker(manifest)
+    for parent in probe._template_parents(manifest):
+        template = parent["template"]
+        assert template["metadata"]["labels"]["qualification.nvidia.com/marker"] == marker
+        assert template["spec"]["affinity"] == exclusion(marker)
+    assert client.writes == []  # No post-create replace.
+
+
+def test_failed_admission_never_creates(fixture, monkeypatch):
+    """A failed transformation cannot submit an uninstrumented workload."""
+    from workload_map_live.conftest import AdmissionClient
+
+    probe, client, job = fixture
+    created = []
+    monkeypatch.setattr(client, "create", created.append, raising=False)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("probe failed")
+
+    monkeypatch.setattr(probe, "invoke", fail)
+    with pytest.raises(RuntimeError):
+        AdmissionClient(probe).create(uncreated(job))
+    assert created == []

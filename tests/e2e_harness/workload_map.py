@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import subprocess
 import time
@@ -222,20 +223,16 @@ class WorkloadMapProbe:
             raise AssertionError("SDK lifecycle mutation changed fields beyond the native suspend field")
         self.client.command("replace", "-f", "-", "-o", "json", body=updated)
 
-    def instrument(self, job: Job) -> None:
-        """Instrument owned, drained templates through the SDK.
+    def prepare(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Instrument a new manifest before create, without any Kubernetes writes.
 
-        Check the requested marker and the write's scope before persisting it.
-        SDK serialization inside the templates is not validated or normalized here.
+        This models the admission transformation, not a deployed webhook. Native
+        paths independently check the labels, exclusion rule, and mutation scope.
         """
-        record = self._validate(job, writing=True)
-        native_policy = record.get("spec", {})
-        if record.get("kind") == "PyTorchJob":
-            native_policy = native_policy.get("runPolicy", {})
-        if native_policy.get("suspend") is not True or self.scoped_pods(job):
-            raise ValueError("instrumentation requires a suspended, completely drained workload")
+        if record["metadata"].get("uid") or record["metadata"].get("resourceVersion"):
+            raise ValueError("admission instrumentation requires an uncreated workload")
+        marker = self.correlation_marker(record)
         self.begin_capability("instrumentation")
-        marker = self.identity["owner"]
         updated = self.invoke("instrument", record, marker=marker)
         outside_templates = copy.deepcopy(updated)
         old_jobs = self._template_parents(record)
@@ -246,10 +243,33 @@ class WorkloadMapProbe:
             template = candidate["template"]
             if template.get("metadata", {}).get("labels", {}).get(_MARKER) != marker:
                 raise AssertionError("instrumentation did not label every native Pod template")
+            self.check_exclusion(template, marker)
             candidate["template"] = original["template"]
         if outside_templates != record:
             raise AssertionError("instrumentation changed fields outside Pod templates")
-        self.client.command("replace", "-f", "-", "-o", "json", body=updated)
+        return updated
+
+    @staticmethod
+    def correlation_marker(record: dict[str, Any]) -> str:
+        """Use a stable fixture correlation value, not a production identity contract."""
+        metadata = record["metadata"]
+        identity = "/".join(
+            (record.get("apiVersion", ""), record.get("kind", ""), metadata["namespace"], metadata["name"])
+        )
+        return hashlib.sha256(identity.encode()).hexdigest()[:32]
+
+    @staticmethod
+    def check_exclusion(template: dict[str, Any], marker: str) -> None:
+        """Require the admission exclusion in each scheduling alternative."""
+        key = "recovery.nvidia.com/exclude-" + hashlib.sha256(marker.encode()).hexdigest()[:32]
+        terms = template["spec"]["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"][
+            "nodeSelectorTerms"
+        ]
+        assert terms, "fixture has no eligible scheduling alternatives"
+        for term in terms:
+            assert {"key": key, "operator": "DoesNotExist"} in term.get("matchExpressions", []), (
+                "missing exclusion rule"
+            )
 
     @staticmethod
     def _native_settings(record: dict[str, Any]) -> dict[str, Any]:
