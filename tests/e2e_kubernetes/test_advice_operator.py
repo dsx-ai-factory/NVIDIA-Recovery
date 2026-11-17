@@ -71,6 +71,7 @@ def test_advice_owner_guard(owner: str) -> Scenario[AdviceOperatorServices]:
             invalidate,
             eventually("orphan Advice removed after source polls", lambda run: run.services.absent(), within=45),
             consistently("orphan Advice is not recreated", lambda run: run.services.absent(), for_seconds=3),
+            act("finish invalid-owner observation", lambda run: run.services.finish_owner_guard()),
         ),
     )
 

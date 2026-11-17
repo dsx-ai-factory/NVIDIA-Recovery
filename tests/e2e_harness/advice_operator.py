@@ -35,6 +35,7 @@ class AdviceOperatorServices:
         self.watch_events: list[dict[str, Any]] = []
         self.watch_error: str | None = None
         self.allowed_owner: tuple[str, str, str, str] | None = None
+        self.allowed_spec: dict[str, Any] | None = None
 
     @traced("advice.fixture.publish")
     def publish(self, job: Job, state: str, *, owner: str = "valid") -> None:
@@ -134,12 +135,13 @@ class AdviceOperatorServices:
             raise AssertionError("Advice LIST did not provide a watch resourceVersion")
         items = listing["items"]
         self.allowed_owner = self._owner(items[0]) if items else None
+        self.allowed_spec = items[0].get("spec", {}) if items else None
         self.watch_events.append({"type": "BASELINE", "object": listing})
         self._drain_watch()
 
     @traced("advice.watch.end")
     def finish_owner_guard(self) -> None:
-        """Check remaining invalid-owner events before allowing the positive control."""
+        """Check remaining invalid-owner events before positive control or teardown."""
         self._drain_watch()
         self.watch_version = None
 
@@ -179,7 +181,12 @@ class AdviceOperatorServices:
                     raise AssertionError(f"unknown Advice watch event: {kind}")
                 if kind != "BOOKMARK" and record["metadata"]["name"] != self.advice_id:
                     raise AssertionError("Advice watch returned an unexpected resource")
-                if kind == "ADDED" or (kind == "MODIFIED" and self._owner(record) != self.allowed_owner):
+                # Deletion can change metadata, but must not change the owner's
+                # identity or recommendation while the source owner is invalid.
+                if kind == "ADDED" or (
+                    kind == "MODIFIED"
+                    and (self._owner(record) != self.allowed_owner or record.get("spec", {}) != self.allowed_spec)
+                ):
                     raise AssertionError(f"operator wrote Advice for an invalid owner: {event}")
                 self.watch_version = record["metadata"]["resourceVersion"]
                 if not self.watch_version:

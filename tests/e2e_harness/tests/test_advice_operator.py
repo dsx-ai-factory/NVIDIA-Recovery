@@ -4,13 +4,17 @@
 """Ensure deployed evidence cannot pass for another owner or an unpolled backend."""
 
 import json
+from copy import deepcopy
 from datetime import UTC, datetime
+from itertools import count
 from unittest.mock import Mock
 
 import pytest
 from e2e_harness.advice_operator import AdviceOperatorServices
+from e2e_kubernetes import test_advice_operator as scenarios
 from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_id
 from recovery_libs.testing.launch.jobs import Job, JobState
+from recovery_libs.testing.scenario import Evidence, Stage, run_scenario
 
 
 @pytest.fixture
@@ -136,6 +140,37 @@ def test_watch_allows_deletion_of_preexisting_valid_advice(services):
     assert services.watch_version == "11"
 
 
+@pytest.mark.parametrize("change_spec", [False, True])
+def test_watch_checks_spec_even_when_original_owner_is_preserved(services, job, change_spec):
+    """Deletion metadata is valid; a changed recommendation followed by GC is not."""
+    baseline = watch_event(services, "ADDED", version="10")["object"]
+    baseline["spec"] = {"advice": {"state": "ADVICE_STATE_RESTARTED"}}
+    services.client.command.side_effect = [
+        json.dumps({"metadata": {"resourceVersion": "10"}, "items": [baseline]}),
+        "",
+    ]
+    services.guard_owner(job)
+    modified = deepcopy(baseline)
+    modified["metadata"].update(resourceVersion="11", deletionTimestamp="2026-11-16T00:00:00Z")
+    if change_spec:
+        modified["spec"]["advice"]["state"] = "ADVICE_STATE_TERMINATED"
+    services.client.command.side_effect = None
+    services.client.command.return_value = "\n".join(
+        json.dumps(event)
+        for event in (
+            {"type": "MODIFIED", "object": modified},
+            watch_event(services, "DELETED", version="12"),
+        )
+    )
+    services.client.get.return_value = None
+    if change_spec:
+        with pytest.raises(AssertionError, match="invalid owner"):
+            services.absent()
+    else:
+        assert services.absent().observed
+        assert services.watch_version == "12"
+
+
 @pytest.mark.parametrize(
     "output",
     [
@@ -198,3 +233,46 @@ def test_finishing_guard_checks_pending_events_before_positive_control(services,
     else:
         services.finish_owner_guard()
         assert services.watch_version is None
+
+
+@pytest.mark.parametrize("owner", ["missing", "wrong-uid", "deleted"])
+@pytest.mark.parametrize("late_write", [False, True])
+def test_existing_owner_scenario_drains_events_before_cleanup(services, job, owner, late_write):
+    """A transient write after the last absence poll must still fail qualification."""
+    baseline = watch_event(services, "ADDED", version="10")["object"]
+    responses = iter([json.dumps({"metadata": {"resourceVersion": "10"}, "items": [baseline]})])
+    services.client.command.side_effect = lambda *args: next(responses, "")
+    services.matches = Mock(return_value=Evidence(True, "valid Advice exists"))
+    services.client.get.return_value = None
+    launcher = Mock()
+    launcher.submit.return_value = job
+    launcher.get.return_value = job
+    scenario = scenarios.test_advice_owner_guard(owner)
+    final_observation = next(stage for stage in reversed(scenario.stages) if isinstance(stage, Stage))
+
+    def after_stage(result):
+        if result.name == final_observation.name and late_write:
+            services.client.command.side_effect = None
+            services.client.command.return_value = "\n".join(
+                json.dumps(watch_event(services, kind, version=str(version)))
+                for kind, version in (("ADDED", 11), ("DELETED", 12))
+            )
+
+    def run():
+        run_scenario(
+            scenario,
+            launcher=launcher,
+            services=services,
+            clock=lambda: next(ticks),
+            sleep=lambda _: None,
+            on_stage=after_stage,
+        )
+
+    ticks = count(step=0.25)
+    if late_write:
+        with pytest.raises(AssertionError, match="invalid owner"):
+            run()
+    else:
+        run()
+        assert services.watch_version is None
+    launcher.cancel.assert_called_with(job_id=job.job_id)
