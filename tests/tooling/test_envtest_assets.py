@@ -15,7 +15,8 @@ REPO_ROOT = Path(__file__).parents[2]
 
 @pytest.mark.parametrize("relative", [True, False])
 @pytest.mark.parametrize("missing", [None, "etcd", "kube-apiserver", "kubectl"])
-def test_preinstalled_assets_survive_directory_change(tmp_path, relative, missing):
+@pytest.mark.parametrize("cdpath", ["", "root", "shadow"])
+def test_preinstalled_assets_survive_directory_change(tmp_path, relative, missing, cdpath):
     """Run the setup entry point and use its result after changing into the module."""
     scripts = tmp_path / "scripts/ci"
     scripts.mkdir(parents=True)
@@ -30,6 +31,8 @@ def test_preinstalled_assets_survive_directory_change(tmp_path, relative, missin
         command.chmod(0o755)
     assets = tmp_path / "preinstalled assets"
     assets.mkdir()
+    shadow = tmp_path / "shadow"
+    (shadow / assets.name).mkdir(parents=True)
     for name in ("etcd", "kube-apiserver", "kubectl"):
         if name != missing:
             binary = assets / name
@@ -45,6 +48,7 @@ def test_preinstalled_assets_survive_directory_change(tmp_path, relative, missin
             "PATH": f"{commands}{os.pathsep}{os.environ['PATH']}",
             "TEST_REPO_ROOT": str(tmp_path),
             "KUBEBUILDER_ASSETS": str(assets.relative_to(tmp_path) if relative else assets),
+            "CDPATH": {"": "", "root": str(tmp_path), "shadow": str(shadow)}[cdpath],
         },
         capture_output=True,
         text=True,
@@ -57,5 +61,6 @@ def test_preinstalled_assets_survive_directory_change(tmp_path, relative, missin
     assert result.returncode == 0, result.stderr
     selected = Path(result.stdout.strip())
     assert selected.is_absolute()
+    assert selected == assets.resolve()
     for name in ("etcd", "kube-apiserver", "kubectl"):
         subprocess.run([str(selected / name)], cwd=module, check=True)
