@@ -96,7 +96,8 @@ func TestLogLinkTargetsAreDeterministicAndLimitedToManagedActiveNonIgnoredJobs(t
 
 func TestControllerLogLinkErrorsDoNotBlockUpsertOrSchedulerAction(t *testing.T) {
 	observedAt := time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
-	job := logLinkJob("12345", 7, "12000", true, []string{"/work/12345/stdout.log"})
+	job := logLinkJob("12000_0", 7, "12000", true, []string{"/work/12345/stdout.log"})
+	job.ArrayTaskID = "0"
 	job.WorkflowID = "workflow-12345"
 	job.State = cluster.JobStateRunning
 	job.ModeRequest = cluster.JobModeRequest{
