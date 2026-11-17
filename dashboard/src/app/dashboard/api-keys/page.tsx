@@ -4,11 +4,11 @@
 "use server";
 
 import { apiKeysServiceListApiKeys, createClient } from "~/gen/api-gateway";
-import { getBearerToken } from "~/lib/apiGatewaySession";
+import { getGatewayBearerToken } from "~/server/gatewayToken";
 import { ApiKeyPageContent } from "./components/PageContent";
 
 export default async function ApiKeysPage() {
-  const bearerToken = await getBearerToken();
+  const bearerToken = await getGatewayBearerToken();
 
   const { keys } = await apiKeysServiceListApiKeys({
     client: createClient({

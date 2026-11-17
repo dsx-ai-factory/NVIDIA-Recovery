@@ -32,6 +32,9 @@ const config = {
       fullUrl: process.env.ENABLE_NEXT_FETCH_LOGGING === "true",
     },
   },
+  // Allow dev resources (JS chunks, HMR) when the dev server is reached through a proxy/host mapping.
+  allowedDevOrigins:
+    process.env.ALLOWED_DEV_ORIGINS?.split(",").filter(Boolean) ?? [],
   serverExternalPackages: ["pino", "pino-pretty", "ldapjs", "prom-client"],
   productionBrowserSourceMaps: APP_ENV !== "production",
   output: "standalone",

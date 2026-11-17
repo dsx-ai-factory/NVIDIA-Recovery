@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageLayout } from "~/app/dashboard/components/PageLayout";
-import { AuthGateway } from "~/components/AuthGateway";
-import { getBearerToken } from "~/lib/apiGatewaySession";
-import { getApiGatewayUrl } from "~/lib/baseUrls";
+import { env } from "~/env";
+import { withBasePath } from "~/lib/base-path";
+import { getGatewayBearerToken } from "~/server/gatewayToken";
 import { getAuthConfiguration } from "~/utils/auth";
 import { isApiKeysEnabled } from "~/utils/config";
 
@@ -17,12 +17,17 @@ export default async function ApiKeysLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (!getAuthConfiguration().available || !isApiKeysEnabled()) {
+  if (getAuthConfiguration().provider !== "gateway" || !isApiKeysEnabled()) {
     notFound();
   }
 
-  const bearerToken = await getBearerToken();
-  return bearerToken ? (
+  // The dashboard is already behind login, so a missing bearer means the gateway
+  // session lapsed and could not be refreshed: sign in again.
+  if (!(await getGatewayBearerToken())) {
+    redirect(withBasePath("/auth/signin", env.BASE_PATH));
+  }
+
+  return (
     <PageLayout
       breadcrumbs={[
         { children: <Link href="/dashboard/api-keys">API Keys</Link> },
@@ -31,10 +36,5 @@ export default async function ApiKeysLayout({
     >
       {children}
     </PageLayout>
-  ) : (
-    <AuthGateway
-      apiGatewayUrl={getApiGatewayUrl()}
-      message="Login to API Gateway to access API Keys"
-    />
   );
 }

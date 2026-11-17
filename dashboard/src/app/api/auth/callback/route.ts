@@ -1,27 +1,32 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-"use server";
-
 import { redirect } from "next/navigation";
 import type { NextRequest } from "next/server";
 import { env } from "~/env";
-import { getBearerTokenAndRefresh } from "~/lib/apiGatewaySession";
 import { withBasePath } from "~/lib/base-path";
 import { isAuthAvailable } from "~/utils/auth";
 
-export async function GET(req: NextRequest) {
+/**
+ * Landing point for the API Gateway after login. The gateway has just set its
+ * session cookies on this host; NextAuth v4 can only start a session from a
+ * `signIn()` POST, which a route handler cannot issue, so hand off to a page
+ * that does.
+ */
+export function GET(req: NextRequest) {
   if (!isAuthAvailable()) {
     return new Response("Not Found", { status: 404 });
   }
 
-  // this whole route is necessary to modify a cookie in a next server action
-  await getBearerTokenAndRefresh();
   const requestedReturnPath = req.nextUrl.searchParams.get("returnPath");
+  // Only same-site relative paths, so the callback cannot be used as an open redirect.
   const returnPath =
     requestedReturnPath?.startsWith("/") &&
     !requestedReturnPath.startsWith("//")
       ? requestedReturnPath
       : "/dashboard/workflow";
-  redirect(withBasePath(returnPath, env.BASE_PATH));
+  const complete = new URLSearchParams({ returnPath });
+  redirect(
+    withBasePath(`/auth/complete?${complete.toString()}`, env.BASE_PATH),
+  );
 }

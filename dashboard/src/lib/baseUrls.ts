@@ -7,6 +7,14 @@ export const getApiGatewayUrl = () => {
   return env.API_GATEWAY_URL;
 };
 
+/**
+ * Gateway URL the browser is sent to for login. Falls back to API_GATEWAY_URL; set API_GATEWAY_LOGIN_URL
+ * when server-side API calls use a different address (e.g. a local kubectl port-forward).
+ */
+export const getApiGatewayLoginUrl = () => {
+  return env.API_GATEWAY_LOGIN_URL ?? env.API_GATEWAY_URL;
+};
+
 export const getJobManagerHost = () => {
   return env.JOB_MANAGER_HOST;
 };

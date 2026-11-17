@@ -73,7 +73,7 @@ export function SearchBar({
       <TextInput
         className="flex-grow"
         value={val}
-        placeholder="Search for your workflow/job name"
+        placeholder="Search for your workflow/job name 111c"
         slotEnd={
           <Popover
             side="bottom"

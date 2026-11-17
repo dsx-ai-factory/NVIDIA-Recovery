@@ -4,15 +4,38 @@
 "use client";
 import { Button, Flex, TextInput } from "@nvidia/foundations-react-core";
 import { CircleTick } from "@nvidia/react-gui-icons/icons";
+import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import React, { useState } from "react";
 import { withBasePath } from "~/lib/base-path";
+import {
+  buildGatewayLoginUrl,
+  returnPathFromCallbackUrl,
+} from "~/lib/gatewayLogin";
 
-export function SignIn({ useLdapAuth = false }: { useLdapAuth: boolean }) {
+export function SignIn({
+  useLdapAuth = false,
+  apiGatewayLoginUrl,
+}: {
+  useLdapAuth: boolean;
+  /** Set when the API Gateway owns login; the button then leaves for the gateway instead of calling NextAuth. */
+  apiGatewayLoginUrl?: string;
+}) {
+  const searchParams = useSearchParams();
   const [clicked, setClicked] = React.useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const onSignIn = (username: string, password: string) => {
+    if (apiGatewayLoginUrl) {
+      const returnPath = returnPathFromCallbackUrl(
+        searchParams.get("callbackUrl"),
+        window.location.origin,
+      );
+      window.location.assign(
+        buildGatewayLoginUrl(apiGatewayLoginUrl, returnPath),
+      );
+      return;
+    }
     const options = useLdapAuth
       ? {
           username,

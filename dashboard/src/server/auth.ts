@@ -7,6 +7,7 @@ import {
   type DefaultSession,
   getServerSession,
   type NextAuthOptions,
+  type User,
 } from "next-auth";
 import AzureADProvider from "next-auth/providers/azure-ad";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -15,6 +16,13 @@ import { env } from "~/env";
 import { withBasePath } from "~/lib/base-path";
 import { logger } from "~/pino";
 import { getAuthConfiguration } from "~/utils/auth";
+import {
+  type GatewaySession,
+  isGatewaySessionExpiring,
+  parseGatewayCookies,
+  refreshGatewaySession,
+  userFromIdToken,
+} from "./gateway-auth";
 
 const DEFAULT_STARFLEET_SCOPES = "openid profile email authz";
 
@@ -39,7 +47,57 @@ declare module "next-auth" {
   }
 }
 
-function getProvider(provider: "starfleet" | "azure" | "ldap"): Provider {
+declare module "next-auth/jwt" {
+  interface JWT {
+    /** API Gateway session; server-only, never copied into the client `Session`. */
+    gateway?: GatewaySession;
+    /** Set when the gateway session could not be refreshed; the user must log in again. */
+    error?: "GatewaySessionExpired";
+  }
+}
+
+/**
+ * Sign-in provider that completes a login already performed at the API Gateway.
+ *
+ * The browser is sent to the gateway's `/v1/auth/login`, which sets its session
+ * cookies on this hostname and redirects back. This provider turns those
+ * cookies into the NextAuth session, so the dashboard has a single session
+ * rather than a NextAuth one beside a separate gateway one.
+ */
+function getGatewayProvider(): Provider {
+  return CredentialsProvider({
+    id: "nvlogin",
+    name: "nvlogin",
+    credentials: {},
+    async authorize(_credentials, req) {
+      const cookies = parseGatewayCookies(req.headers?.cookie);
+      if (!cookies) {
+        logger.debug("No API Gateway session cookies on sign-in request");
+        return null;
+      }
+
+      try {
+        const gateway = await refreshGatewaySession(cookies);
+        // `User` only allows string props, so the gateway session rides along
+        // untyped and is moved into the JWT by the `jwt` callback.
+        return {
+          ...userFromIdToken(gateway.idToken),
+          gateway,
+        } as unknown as User;
+      } catch (err) {
+        logger.error(`API Gateway sign-in failed: ${String(err)}`);
+        return null;
+      }
+    },
+  });
+}
+
+function getProvider(
+  provider: "gateway" | "starfleet" | "azure" | "ldap",
+): Provider {
+  if (provider === "gateway") {
+    return getGatewayProvider();
+  }
   if (provider === "starfleet") {
     return {
       id: "nvlogin",
@@ -234,7 +292,26 @@ export function getAuthOptions(): NextAuthOptions {
       signIn: async () => {
         return true;
       },
-      jwt: async ({ token, profile }) => {
+      jwt: async ({ token, user, profile }) => {
+        const signedInGateway = (
+          user as { gateway?: GatewaySession } | undefined
+        )?.gateway;
+        if (signedInGateway) {
+          token.gateway = signedInGateway;
+          delete token.error;
+        } else if (token.gateway && isGatewaySessionExpiring(token.gateway)) {
+          // Refresh ahead of expiry so server-side gateway calls keep a valid
+          // bearer. A failure drops the credential instead of keeping a stale
+          // one; `token.error` makes the session count as signed out.
+          try {
+            token.gateway = await refreshGatewaySession(token.gateway.cookies);
+          } catch (err) {
+            logger.warn(`API Gateway session refresh failed: ${String(err)}`);
+            delete token.gateway;
+            token.error = "GatewaySessionExpired";
+          }
+        }
+
         // expose nid, nan, idpId to the token on login
         if (profile && typeof profile === "object") {
           const prof = profile as Record<string, unknown>;
@@ -256,6 +333,10 @@ export function getAuthOptions(): NextAuthOptions {
       },
 
       session: async ({ session, token }) => {
+        if (token.error) {
+          // Surface the failure so server code can treat the user as signed out.
+          session.user.error = token.error;
+        }
         // add nid, nan, idpId to the session
         session.user.nid = token.nid as string;
         session.user.nan = token.nan as string;
@@ -285,5 +366,7 @@ export async function getServerAuthSession() {
   if (!getAuthConfiguration().available) {
     return null;
   }
-  return getServerSession(getAuthOptions());
+  const session = await getServerSession(getAuthOptions());
+  // A session whose gateway credential could not be refreshed is signed out.
+  return session?.user.error ? null : session;
 }
