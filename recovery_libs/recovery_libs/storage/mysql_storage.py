@@ -416,7 +416,12 @@ class MySQLStorage(BaseStorage):
         try:
             _normalize_job_upsert_timestamps(job_record)
             self._fill_heimdall_job_id(job_record)
-            return self._upsert_job_record_once(job_record, populate_heimdall_id_log_path, job_record.log_file_paths)
+            return self._upsert_job_record_once(
+                job_record,
+                populate_heimdall_id_log_path,
+                job_record.log_file_paths,
+                deepcopy(job_record.scheduler_metadata),
+            )
         except RecoveryStorageInputValidationError:
             raise
         except Exception as e:
@@ -424,7 +429,7 @@ class MySQLStorage(BaseStorage):
             raise RecoveryStorageException(f"Failed to upsert job record: {e}") from e
 
     @retry_on_conflict(
-        describe=lambda job_record, populate_heimdall_id_log_path, original_log_file_paths: (
+        describe=lambda job_record, populate_heimdall_id_log_path, original_log_file_paths, original_scheduler_metadata: (
             f"job {job_record.job_id}, attempt index {job_record.job_attempt_index}"
         )
     )
@@ -433,6 +438,7 @@ class MySQLStorage(BaseStorage):
         job_record: SlurmJobExecutionRecord,
         populate_heimdall_id_log_path: bool,
         original_log_file_paths: list | None,
+        original_scheduler_metadata: dict[str, Any] | None,
     ) -> UpsertJobResult:
         """Single-attempt body of upsert_job_record(), run fresh for each conflict retry.
 
@@ -447,8 +453,11 @@ class MySQLStorage(BaseStorage):
         failed create attempt (below) may have mutated it to a placeholder, and job_record is
         reused across retries, so that stale value would otherwise leak into a retry's UPDATE and
         overwrite real log paths the winning transaction already committed.
+        Scheduler metadata is likewise reset before identity preservation so a retry
+        merges against the newly locked row, not metadata copied by a failed attempt.
         """
         job_record.log_file_paths = original_log_file_paths
+        job_record.scheduler_metadata = deepcopy(original_scheduler_metadata)
         with self.connection.write_session() as session:
             if not self.connection.write_pool_enabled:
                 session.connection(execution_options={"isolation_level": "READ COMMITTED"})

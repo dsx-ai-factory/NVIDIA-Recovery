@@ -7,6 +7,7 @@ Date: 2026-11-03
 > **Implementation note (2026-11-16):** The task identity phase is implemented;
 > task recovery, checkpoint association, and end-to-end qualification remain
 > outstanding in the [delivery plan](../architecture/job-array-support-plan.md).
+> Evidence: [PR #62](https://github.com/dsx-ai-factory/NVIDIA-Recovery/pull/62).
 
 ## Context
 

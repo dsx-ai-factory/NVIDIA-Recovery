@@ -16,6 +16,7 @@ import (
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
 )
 
 type UpsertRequestOptions struct {
@@ -262,9 +263,10 @@ func validateArrayMetadata(jobID string, metadata map[string]any) error {
 	if !arrayOK || !taskOK || jobID != arrayID+"_"+taskID {
 		return errors.New("Slurm array metadata conflicts with canonical job ID")
 	}
-	for index, value := range []string{arrayID, taskID} {
+	for pos, value := range []string{arrayID, taskID} {
 		number, err := strconv.ParseUint(value, 10, 32)
-		if err != nil || number >= 4294967294 || (index == 0 && number == 0) || strconv.FormatUint(number, 10) != value {
+		// The array ID must be positive; task zero is a valid array member.
+		if err != nil || number >= jobidentity.SlurmNoValue32 || (pos == 0 && number == 0) || strconv.FormatUint(number, 10) != value {
 			return errors.New("invalid Slurm array identity")
 		}
 	}

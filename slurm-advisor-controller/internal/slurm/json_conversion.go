@@ -11,6 +11,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
 )
 
 type numberField struct {
@@ -22,6 +23,8 @@ type numberField struct {
 type identityNumberField numberField
 
 // UnmarshalJSON accepts concrete integers and explicitly flagged Slurm identities.
+// Unlike timestampField, wrapped identities require an explicit set flag and,
+// when set, a number so omitted fields cannot silently establish task zero.
 func (field *identityNumberField) UnmarshalJSON(data []byte) error {
 	var value timestampField
 	if err := json.Unmarshal(data, &value); err != nil {
@@ -322,16 +325,16 @@ func jobIdentityFromSqueue(job SlurmJob) (jobID, arrayJobID, arrayTaskID string,
 }
 
 func slurmJobIdentity(rawID int, arrayID, taskID identityNumberField) (jobID, arrayJobID, arrayTaskID string, include bool, err error) {
-	if rawID <= 0 || uint64(rawID) >= 4294967294 {
+	if rawID <= 0 || uint64(rawID) >= jobidentity.SlurmNoValue32 {
 		return "", "", "", false, errors.New("invalid Slurm raw job ID")
 	}
-	if arrayID.Infinite || (arrayID.Set && (arrayID.Number < 0 || uint64(arrayID.Number) >= 4294967294)) {
+	if arrayID.Infinite || (arrayID.Set && (arrayID.Number < 0 || uint64(arrayID.Number) >= jobidentity.SlurmNoValue32)) {
 		return "", "", "", false, errors.Newf("invalid Slurm array job ID for job %d", rawID)
 	}
 	if !arrayID.Set || arrayID.Number == 0 {
 		return strconv.Itoa(rawID), "", "", true, nil
 	}
-	if taskID.Infinite || (taskID.Set && (taskID.Number < 0 || uint64(taskID.Number) >= 4294967294)) {
+	if taskID.Infinite || (taskID.Set && (taskID.Number < 0 || uint64(taskID.Number) >= jobidentity.SlurmNoValue32)) {
 		return "", "", "", false, errors.Newf("invalid Slurm array task ID for job %d", rawID)
 	}
 	if !taskID.Set {
