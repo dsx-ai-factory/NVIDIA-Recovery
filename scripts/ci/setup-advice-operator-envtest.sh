@@ -20,8 +20,9 @@ if [[ -n "${KUBEBUILDER_ASSETS:-}" ]]; then
             exit 1
         fi
     done
+    # Ignore CDPATH so cd selects the validated directory without printing it.
     # Consumers change into the module directory before starting envtest.
-    (cd "$KUBEBUILDER_ASSETS" && pwd -P)
+    (CDPATH= cd "$KUBEBUILDER_ASSETS" && pwd -P)
 else
     go run "sigs.k8s.io/controller-runtime/tools/setup-envtest@$SETUP_ENVTEST_VERSION" \
         use --bin-dir "$PWD/.cache/envtest" -p path "$ENVTEST_K8S_VERSION"
