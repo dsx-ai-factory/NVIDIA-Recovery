@@ -116,6 +116,30 @@ with incomplete accounting history or qualify supported Slurm versions. Its
 two-task harness scenario is additional integration coverage, not a substitute
 for phase 5 qualification. Checkpoint ingestion changes remain phase 4.
 
+### Generic recovery hardening follow-up
+
+Phase 3b is a separate change from recovery reuse. Both standalone jobs and array
+tasks use the same successor-aware accounting query, active-state precedence at
+equal attempts, bootstrap/Advice identity validation, and unambiguous log-owner
+selection. These changes protect the existing recovery sequence against stale or
+conflicting observations; they do not introduce another recovery policy.
+Controller tests exercise delayed Advice and active/accounting precedence for
+both standalone jobs and array tasks.
+
+The accounting reconstruction change has a narrower compatibility boundary:
+array accounting and JSON log enrichment require explicit `restart_cnt` values
+and reject missing or conflicting counts. Standalone accounting retains its
+existing timestamp-group numbering; incomplete standalone history is not fixed
+by this change. Legacy text array log discovery defers paths without an attempt
+count. This asymmetry is retained from the original hardening work, not a claim
+that accounting reconstruction is fully hardened for both job forms.
+
+Log hardening also rejects conflicting `scontrol` identity, ambiguous owners,
+and array-parent-only filename matches. As required by ADR 0046, an accounting
+error still blocks scheduler mutations for the tick. Supported-version and live
+array qualification remain outstanding; these safeguards alone do not enable
+production array recovery.
+
 For each concrete array task, use the array submission ID as `job_group_id`,
 `<array_job_id>_<array_task_id>` as `job_id`, and that task's attempt index as
 `job_attempt_index`. Carry the Slurm IDs in `scheduler_metadata`; project only

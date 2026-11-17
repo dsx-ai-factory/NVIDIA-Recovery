@@ -230,7 +230,9 @@ func latestJobsByIDFromSnapshot(snapshot ControllerSnapshot) map[string]cluster.
 		addLatestJob(out, job)
 	}
 	for _, job := range snapshot.ActiveJobs {
-		addLatestJob(out, job)
+		if current, ok := out[job.JobID]; !ok || job.AttemptIndex >= current.AttemptIndex {
+			out[job.JobID] = job
+		}
 	}
 
 	return out

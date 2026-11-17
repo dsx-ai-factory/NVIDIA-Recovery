@@ -11,6 +11,7 @@ import (
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/heimdall"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/state"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -389,6 +390,12 @@ func (c *Controller) buildBaseSnapshot(ctx context.Context, observation *SyncObs
 		addActiveJob(&snapshot, job)
 	}
 	for _, job := range heimdallJobs {
+		if err := jobidentity.Validate(job.GetJobId(), job.GetSchedulerMetadata().AsMap()); err != nil {
+			if c.Logger != nil {
+				c.Logger.Warn("reject bootstrap job identity", zap.String("job_id", job.GetJobId()), zap.Error(err))
+			}
+			continue
+		}
 		// Reject historical candidates before bootstrap retains their keys or
 		// accounting queries Slurm. Do not record a scheduler rejection here:
 		// a stale backend value must not block a fresh, independently admitted job.

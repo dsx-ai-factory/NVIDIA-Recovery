@@ -6,6 +6,8 @@ package slurm
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
+	"slices"
 	"strconv"
 
 	"github.com/cockroachdb/errors"
@@ -22,7 +24,9 @@ type SacctJob struct {
 	databaseIndex   uint64
 	AllocationNodes int `json:"allocation_nodes"`
 	JobID           int `json:"job_id"`
-	Array           struct {
+	// RestartCount identifies retained attempts without assuming complete history.
+	RestartCount identityNumberField `json:"restart_cnt"`
+	Array        struct {
 		JobID  identityNumberField `json:"job_id"`
 		TaskID identityNumberField `json:"task_id"`
 	} `json:"array"`
@@ -127,6 +131,10 @@ func (e *sacctDecodeError) Error() string { return e.err.Error() }
 func (e *sacctDecodeError) Unwrap() error { return e.err }
 
 func observedJobsFromSacct(data []byte) ([]cluster.JobExecutionRecord, error) {
+	return observedJobsFromSacctForJob(data, "")
+}
+
+func observedJobsFromSacctForJob(data []byte, requestedJobID string) ([]cluster.JobExecutionRecord, error) {
 	parsed, err := parseSacctOutput(data)
 	if err != nil {
 		return nil, err
@@ -139,7 +147,7 @@ func observedJobsFromSacct(data []byte) ([]cluster.JobExecutionRecord, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !include {
+		if !include || (requestedJobID != "" && jobID != requestedJobID) {
 			continue
 		}
 		if _, ok := grouped[jobID]; !ok {
@@ -150,8 +158,13 @@ func observedJobsFromSacct(data []byte) ([]cluster.JobExecutionRecord, error) {
 
 	jobs := make([]cluster.JobExecutionRecord, 0, len(parsed.Jobs))
 	for _, jobID := range groupOrder {
-		for attemptIndex, attempt := range groupSacctAttempts(grouped[jobID]) {
-			job, err := observedJobFromSacct(attempt[0], int32(attemptIndex))
+		attempts, err := resolveSacctAttempts(grouped[jobID])
+		if err != nil {
+			return nil, errors.Wrapf(err, "resolve accounting attempts for %s", jobID)
+		}
+		for _, attemptIndex := range slices.Sorted(maps.Keys(attempts)) {
+			attempt := attempts[attemptIndex]
+			job, err := observedJobFromSacct(attempt[0], attemptIndex)
 			if err != nil {
 				return nil, err
 			}
@@ -274,4 +287,43 @@ func groupSacctAttempts(rawJobs []SacctJob) [][]SacctJob {
 		groups = append(groups, []SacctJob{raw})
 	}
 	return groups
+}
+
+// resolveSacctAttempts uses scheduler restart counts rather than the number of
+// retained rows. Older standalone accounting retains its compatibility path;
+// array history without authoritative attempt identity must remain unresolved.
+// Status and log discovery share this mapping so paths cannot cross attempts.
+func resolveSacctAttempts(rawJobs []SacctJob) (map[int32][]SacctJob, error) {
+	result := make(map[int32][]SacctJob)
+	counted := false
+	for _, raw := range rawJobs {
+		_, arrayID, _, _, err := jobIdentityFromSacct(raw)
+		if err != nil {
+			return nil, err
+		}
+		if arrayID == "" {
+			continue
+		}
+		count := raw.RestartCount
+		// Slurm stores restart_cnt as uint16; its top two values are sentinels.
+		if count.Infinite || (count.Set && (count.Number < 0 || count.Number >= 65534)) {
+			return nil, errors.New("invalid accounting restart count")
+		}
+		if !count.Set {
+			return nil, errors.New("array accounting lacks restart count; attempt identity is unresolved")
+		}
+		counted = true
+		index := int32(count.Number)
+		if previous := result[index]; len(previous) > 0 && previous[0].Time != raw.Time {
+			return nil, errors.New("conflicting accounting rows for one restart count")
+		}
+		result[index] = append(result[index], raw)
+	}
+	if counted {
+		return result, nil
+	}
+	for index, attempt := range groupSacctAttempts(rawJobs) {
+		result[int32(index)] = attempt
+	}
+	return result, nil
 }

@@ -54,9 +54,8 @@ func TestLegacyLogMetadataOlderSlurmFixture(t *testing.T) {
 	}
 }
 
-// Legacy discovery must use one metadata query, separate reused IDs after a
-// requeue, derive array expansion values without JSON, and ignore historical
-// parsing failures. A fresh cache prevents another query on later ticks.
+// Legacy accounting cannot establish an array attempt from retained row order.
+// Keep the authoritative active parent path, without attaching historical steps.
 func TestLegacyActiveLogMetadataUsesOneQuery(t *testing.T) {
 	text := "9002.0|902|41|41||9000_2.0|train|srun --disable-status --vendor-flag -o %A-%a-%04j-%02s-%x.out train --output=/application/model\n" +
 		"9002|901|10|20|/old|9000_2|training|sbatch -o parent-%u.out script\n" +
@@ -86,9 +85,7 @@ func TestLegacyActiveLogMetadataUsesOneQuery(t *testing.T) {
 	waitForLogMetadataIdle(t, s)
 	for range 3 {
 		jobs = s.EnrichActiveJobs(context.Background(), jobs)
-		requireLogPaths(t, jobs, []string{
-			"/application/model", "/logs/parent.out", "/work/9000-2-9002-00-training.out",
-		})
+		requireLogPaths(t, jobs, []string{"/logs/parent.out"})
 	}
 	if jobs[0].JobID != "9000_2" || jobs[0].AttemptIndex != 1 || jobs[0].State != cluster.JobStateRunning {
 		t.Fatalf("active attempt changed: %#v", jobs[0])

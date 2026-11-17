@@ -79,15 +79,20 @@ func TestRedactedSacctCorpusParsesRealOutputShapes(t *testing.T) {
 			assertRedactedFixturePayload(t, fixture, data)
 			assertJSONNumberAtPath(t, fixture, data, "jobs", "0", "job_id")
 
-			jobs, err := observedJobsFromSacct(data)
+			parsed, err := parseSacctOutput(data)
 			if err != nil {
-				t.Fatalf("observedJobsFromSacct(%s) failed: %v", fixture, err)
+				t.Fatal(err)
 			}
-			if len(jobs) == 0 {
-				t.Fatalf("observedJobsFromSacct(%s) returned no jobs", fixture)
+			if len(parsed.Jobs) == 0 {
+				t.Fatalf("parseSacctOutput(%s) returned no jobs", fixture)
 			}
 
-			for _, job := range jobs {
+			for _, raw := range parsed.Jobs {
+				// This corpus covers field shapes, not retained attempt numbering.
+				job, err := observedJobFromSacct(raw, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
 				switch job.RawState {
 				case "COMPLETED":
 					sawCompleted = true
@@ -118,6 +123,13 @@ func TestRedactedSacctCorpusParsesRealOutputShapes(t *testing.T) {
 	}
 	if !sawFailedNode {
 		t.Fatal("redacted sacct corpus did not include a failed node")
+	}
+}
+
+func TestLegacyArrayCorpusDoesNotEstablishAttemptIdentity(t *testing.T) {
+	data := readFixture(t, "testdata/redacted/sacct/targeted_jobs.json")
+	if jobs, err := observedJobsFromSacct(data); err == nil || len(jobs) != 0 {
+		t.Fatalf("legacy array history produced actionable attempts: %v, %v", jobs, err)
 	}
 }
 

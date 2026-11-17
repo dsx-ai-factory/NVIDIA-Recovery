@@ -517,7 +517,7 @@ func (s *slurmCluster) runActiveLogMetadataWork(
 		s.logMetadata.logFailure(work.ref, "scontrol_parent", err)
 		return true, false
 	}
-	stdout, attemptIndex, stdoutFound, attemptFound := logMetadataFromScontrol(output.stdout)
+	stdout, attemptIndex, stdoutFound, attemptFound := logMetadataFromScontrol(output.stdout, work.ref.JobID)
 	if !attemptFound || attemptIndex != work.ref.AttemptIndex {
 		return failed, true
 	}
@@ -1397,27 +1397,62 @@ func normalizeSlurmLogFilePaths(paths []string) ([]string, error) {
 	return normalized, nil
 }
 
-// logMetadataFromScontrol returns both the parent path and Slurm's restart
-// counter. Workers must validate the counter before writing the exact-attempt
-// cache because a requeue can occur while the command is in flight.
-func logMetadataFromScontrol(data []byte) (
+// logMetadataFromScontrol selects one record with the requested canonical identity.
+// Fields must come from the same record, and duplicate matching records are
+// ambiguous. Workers also check the restart counter against in-flight requeues.
+func logMetadataFromScontrol(data []byte, jobID string) (
 	stdout string,
 	attemptIndex int32,
 	stdoutFound bool,
 	attemptFound bool,
 ) {
-	for _, field := range strings.Fields(string(data)) {
-		if value, ok := strings.CutPrefix(field, "StdOut="); ok {
-			stdout = value
-			stdoutFound = true
+	matched := false
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := make(map[string]string)
+		for _, field := range strings.Fields(line) {
+			key, value, ok := strings.Cut(field, "=")
+			if !ok {
+				continue
+			}
+			switch key {
+			case "JobId", "ArrayJobId", "ArrayTaskId", "Restarts", "StdOut":
+				if _, duplicate := fields[key]; duplicate {
+					return "", 0, false, false
+				}
+				fields[key] = value
+			}
+		}
+		rawID, err := strconv.Atoi(fields["JobId"])
+		if err != nil {
 			continue
 		}
-		if value, ok := strings.CutPrefix(field, "Restarts="); ok {
-			parsed, err := strconv.ParseInt(value, 10, 32)
-			if err == nil {
-				attemptIndex = int32(parsed)
-				attemptFound = true
+		var arrayID, taskID identityNumberField
+		arrayValue, hasArray := fields["ArrayJobId"]
+		taskValue, hasTask := fields["ArrayTaskId"]
+		if hasArray != hasTask {
+			continue
+		}
+		if hasArray {
+			arrayNumber, arrayErr := strconv.Atoi(arrayValue)
+			taskNumber, taskErr := strconv.Atoi(taskValue)
+			if arrayErr != nil || taskErr != nil || arrayNumber <= 0 {
+				continue
 			}
+			arrayID = identityNumberField{Set: true, Number: arrayNumber}
+			taskID = identityNumberField{Set: true, Number: taskNumber}
+		}
+		canonicalID, _, _, include, err := slurmJobIdentity(rawID, arrayID, taskID)
+		if err != nil || !include || canonicalID != jobID {
+			continue
+		}
+		if matched {
+			return "", 0, false, false
+		}
+		matched = true
+		stdout, stdoutFound = fields["StdOut"]
+		parsed, err := strconv.ParseInt(fields["Restarts"], 10, 32)
+		if err == nil && parsed >= 0 {
+			attemptIndex, attemptFound = int32(parsed), true
 		}
 	}
 	return stdout, attemptIndex, stdoutFound, attemptFound

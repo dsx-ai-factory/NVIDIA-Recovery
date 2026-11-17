@@ -11,6 +11,7 @@ import (
 	"github.com/cockroachdb/errors"
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -47,7 +48,9 @@ type AdviceSkip struct {
 type AdviceSkipReason string
 
 const (
-	AdviceSkipNotOwned                   AdviceSkipReason = "not_owned"
+	AdviceSkipNotOwned AdviceSkipReason = "not_owned"
+	// AdviceSkipInvalidIdentity identifies Advice with missing or conflicting scheduler identity.
+	AdviceSkipInvalidIdentity            AdviceSkipReason = "invalid_identity"
 	AdviceSkipEnvironmentMismatch        AdviceSkipReason = "environment_mismatch"
 	AdviceSkipMissingSnapshotJob         AdviceSkipReason = "missing_observed_job"
 	AdviceSkipMissingFreshSchedulerState AdviceSkipReason = "missing_fresh_scheduler_state"
@@ -383,6 +386,9 @@ func (c *Controller) logAdviceRelease(advice *pb.Advice, job cluster.JobExecutio
 
 func (c *Controller) ownershipSkip(advice *pb.Advice) (AdviceSkipReason, bool) {
 	metadata := advice.GetSchedulerMetadata()
+	if err := jobidentity.Validate(advice.GetJobId(), metadata.AsMap()); err != nil {
+		return AdviceSkipInvalidIdentity, true
+	}
 	if metadata.GetFields()["scheduler"].GetStringValue() != cluster.SchedulerSlurm {
 		return AdviceSkipNotOwned, true
 	}
