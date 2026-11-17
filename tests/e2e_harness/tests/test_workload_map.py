@@ -51,15 +51,7 @@ class Probe(WorkloadMapProbe):
         if operation == "instrument":
             for job in updated["spec"]["replicatedJobs"]:
                 job["template"]["spec"]["template"]["metadata"]["labels"]["qualification.nvidia.com/marker"] = marker
-            return {
-                "object": updated,
-                "changes": [
-                    {
-                        "kind": "marker",
-                        "path": "/spec/replicatedJobs/0/template/spec/template/metadata/labels/qualification.nvidia.com~1marker",
-                    }
-                ],
-            }
+            return updated
         updated.setdefault("spec", {})["suspend"] = operation == "suspend"
         return updated
 
@@ -219,7 +211,7 @@ def test_instrumentation_requires_drained_suspension(fixture):
     assert client.writes == []
 
 
-def test_instrumentation_persists_sdk_templates_and_reports_changes(fixture):
+def test_instrumentation_persists_marked_sdk_templates(fixture):
     probe, client, job = fixture
     job.metadata["workload"]["spec"]["suspend"] = True
     probe.instrument(job)
@@ -229,7 +221,6 @@ def test_instrumentation_persists_sdk_templates_and_reports_changes(fixture):
         "user": "preserve",
         "qualification.nvidia.com/marker": "run",
     }
-    assert probe.transformations[0]["changes"][0]["kind"] == "marker"
     assert probe.capabilities["instrumentation"]["outcome"] == "not_tested"
 
 
@@ -240,7 +231,7 @@ def test_instrumentation_rejects_changes_outside_templates(fixture, monkeypatch)
 
     def change_scale(*args, **kwargs):
         result = invoke(*args, **kwargs)
-        result["object"]["spec"]["replicatedJobs"][0]["replicas"] = 9
+        result["spec"]["replicatedJobs"][0]["replicas"] = 9
         return result
 
     monkeypatch.setattr(probe, "invoke", change_scale)
@@ -327,7 +318,7 @@ def test_pytorch_instrumentation_validates_every_role_and_scopes_drain(fixture, 
     transformed = copy.deepcopy(record)
     for replica in transformed["spec"]["pytorchReplicaSpecs"].values():
         replica["template"]["metadata"]["labels"]["qualification.nvidia.com/marker"] = "run"
-    monkeypatch.setattr(probe, "invoke", lambda *_, **__: {"object": transformed, "changes": []})
+    monkeypatch.setattr(probe, "invoke", lambda *_, **__: transformed)
     probe.instrument(job)
     assert client.writes == [transformed]
     assert client.selectors == ["recovery.nvidia.com/scenario-owner=run,training.kubeflow.org/job-name=owned"]
@@ -361,7 +352,7 @@ def test_pytorch_template_validation_is_independent_of_json_key_order(fixture, m
     transformed = json.loads(json.dumps(record, sort_keys=True))
     for replica in transformed["spec"]["pytorchReplicaSpecs"].values():
         replica["template"]["metadata"]["labels"]["qualification.nvidia.com/marker"] = "run"
-    monkeypatch.setattr(probe, "invoke", lambda *_, **__: {"object": transformed, "changes": []})
+    monkeypatch.setattr(probe, "invoke", lambda *_, **__: transformed)
     probe.instrument(job)
     assert client.writes == [transformed]
     assert (

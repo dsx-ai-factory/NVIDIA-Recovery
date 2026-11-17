@@ -9,7 +9,8 @@ Date: 2026-11-16
 > the initial exploratory coverage described below, and read-only inspection
 > additionally distinguishes inconclusive observations.
 > Qualification targets Recovery's CRD operations without a PodGroup-topology
-> requirement; placement-constraint mutation and full recovery remain unqualified.
+> requirement or a generic SDK serialization validator; placement-constraint
+> mutation and full recovery remain unqualified.
 
 ## Context
 

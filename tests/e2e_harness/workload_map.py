@@ -32,7 +32,6 @@ class WorkloadMapProbe:
         self.report = report
         self.identity: dict[str, str] | None = None
         self.observations: list[dict[str, Any]] = []
-        self.transformations: list[dict[str, Any]] = []
         self.scheduling_events: dict[str, list[dict[str, str]]] = {}
         self.status_timing: dict[str, dict[str, Any]] = {}
         self.capabilities = {
@@ -59,7 +58,7 @@ class WorkloadMapProbe:
         """Run the actual SDK without giving the subprocess cluster access."""
         args = [str(self.executable), "--operation", operation]
         if marker is not None:
-            args.extend(["--marker", marker, "--report"])
+            args.extend(["--marker", marker])
         result = subprocess.run(
             args,
             input=json.dumps(record),
@@ -246,11 +245,10 @@ class WorkloadMapProbe:
         self.client.command("replace", "-f", "-", "-o", "json", body=updated)
 
     def instrument(self, job: Job) -> None:
-        """Instrument drained templates through the SDK and retain its normalization evidence.
+        """Instrument owned, drained templates through the SDK.
 
-        The Go probe rejects loss and unexpected template additions. This bridge
-        independently verifies the marker at every native JobSet template path and
-        rejects changes outside those templates before applying the full object.
+        Check the requested marker and the write's scope before persisting it.
+        SDK serialization inside the templates is not validated or normalized here.
         """
         record = self._validate(job, writing=True)
         native_policy = record.get("spec", {})
@@ -260,8 +258,7 @@ class WorkloadMapProbe:
             raise ValueError("instrumentation requires a suspended, completely drained workload")
         self.begin_capability("instrumentation")
         marker = self.identity["owner"]
-        result = self.invoke("instrument", record, marker=marker)
-        updated = result["object"]
+        updated = self.invoke("instrument", record, marker=marker)
         outside_templates = copy.deepcopy(updated)
         old_jobs = self._template_parents(record)
         new_jobs = self._template_parents(outside_templates)
@@ -275,10 +272,6 @@ class WorkloadMapProbe:
         if outside_templates != record:
             raise AssertionError("instrumentation changed fields outside Pod templates")
         self.client.command("replace", "-f", "-", "-o", "json", body=updated)
-        self.transformations.append(
-            {"operation": "instrument", "observed_at": datetime.now(UTC).isoformat(), "changes": result["changes"]}
-        )
-        self._write_report()
 
     @staticmethod
     def _native_settings(record: dict[str, Any]) -> dict[str, Any]:
@@ -343,13 +336,12 @@ class WorkloadMapProbe:
         self.report.write_text(
             json.dumps(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "scenario_outcome": self.outcome,
                     "workload_identity": self.identity,
                     "capabilities": self.capabilities,
                     "status_timing": self.status_timing,
                     "observations": self.observations,
-                    "transformations": self.transformations,
                     "scheduling_events": self.scheduling_events,
                 },
                 indent=2,

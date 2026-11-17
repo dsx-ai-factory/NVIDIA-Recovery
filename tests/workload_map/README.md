@@ -38,8 +38,10 @@ Missing suspend support is reported explicitly. `associate-pods` instead accepts
 those caller-supplied candidates.
 
 `instrument` adds `qualification.nvidia.com/marker` through the SDK's template
-API, preserving existing values and refusing a conflicting marker or a lossy
-template round trip. `suspend` and `resume` exercise the SDK root lifecycle API.
+API, refusing a conflicting qualification marker. Focused fixture assertions
+check the settings used by Recovery; the probe does not validate arbitrary
+template preservation or SDK serialization. `suspend` and `resume` exercise the
+SDK root lifecycle API.
 Transformations return the full object on stdout but never contact Kubernetes;
 treat that output with the same care as the input manifest. Terminal and deleting
 workloads are rejected for lifecycle transformations.
@@ -172,8 +174,8 @@ selected scheduling, new Pod UIDs, and unchanged parent UID. These are CPU
 fixtures; no GPU utilization or training progress is inferred.
 
 Reports retain append-only UTC and elapsed-time observations, all co-matched
-statuses, native retry settings and counters, Pod readiness, and typed-template
-normalization paths. Readiness-to-status lag is bounded by observations; a short
+statuses, native retry settings and counters, and Pod readiness. Readiness-to-status
+lag is bounded by observations; a short
 observation window does not prove eventual convergence. Each scenario reports
 capabilities as `pass`, `fail`, `unsupported`, or `not_tested`; JUnit remains the
 source for overall test and cleanup outcomes.
@@ -190,7 +192,7 @@ offline. Namespace-wide workload discovery is not qualified by this operation.
 | JobSet and PyTorchJob extraction, marker mutation, native suspend fields, terminal rejection | Cluster-free checks against SDK built-ins and independent fixture expectations. |
 | JobSet/default and KAI schedulers | Two- and six-Pod same-object lifecycle, live marker propagation, and native retry exhaustion scenarios. Exact observed results are recorded separately. |
 | Pod association | SDK classification checked on independently owned candidates; namespace-wide discovery remains not tested. |
-| Correlation labels and placement constraints | Template preservation checked offline; marker propagation and scheduler/queue preservation checked live. Node exclusion remains not tested. |
+| Correlation labels and placement constraints | Selected settings of representative fixtures checked offline; marker propagation and scheduler/queue preservation checked live. Node exclusion remains not tested. |
 | PyTorchJob/default and KAI schedulers | Master/Worker lifecycle, marker propagation, terminal-state and native retry scenarios. Exact observed results are recorded separately. |
 | OOM, eviction, gang preemption | Not tested; separate failure and scheduler qualification remains necessary. |
 | Checkpoint restore, training progress, recovery latency | Not tested; requires the subsequent full recovery path. |
@@ -257,12 +259,11 @@ ShellCheck must be available. The cluster-free job in
 an explicit local/existing-cluster selection and are not automatically run in CI.
 
 Inspection retains per-capability errors: a failed scale expression does not erase
-successful status or template extraction. Instrumentation accepts only the marker
-and narrowly understood serialization rewrites (equal resource quantities, selected
-omitted typed zeros/empty lists, and explicit empty defaults). `--report` returns
-`{object, changes}`; changes contain JSON Pointer paths and classifications without
-copying field values. Ordinary transformation output remains the full workload
-object. Unknown loss, changed values, and unexpected additions are rejected.
+successful status or template extraction. Transformations return the full workload
+object. Live instrumentation requires an owned, suspended and drained workload,
+checks the marker on every expected template, and rejects changes outside templates.
+There is no recursive preservation validator, serializer exception list, or
+normalization report. General serialization regression tests belong upstream.
 
 ## Native retry settings
 
@@ -311,11 +312,10 @@ settings are listed above. Training Operator also injects an `init-pytorch`
 container using `alpine:3.10`. These are release/tag pins, not an immutable
 supply-chain lock; recorded image IDs identify observed controller binaries.
 
-Instrumentation coverage establishes marker propagation and preservation for the
-fixtures tested. The SDK's typed template round trip can omit explicit empty
-values (for example empty arguments, tolerations, or annotations). The probe
-fails closed on rewrites outside its documented normalization allowlist. Such
-refusals are compatibility findings to resolve before admitting those manifests,
-not evidence that their contents are invalid. Placement-constraint mutation
-remains unqualified; preserving existing constraints does not qualify composing
-new ones through the SDK.
+Instrumentation coverage establishes marker propagation and checks selected user
+settings on representative Recovery fixtures. Earlier exploration observed that
+typed template round trips can omit explicit empty values; that observation is not
+an upstream preservation guarantee or a local compatibility policy. Serializer
+regressions should be reproduced and tested upstream rather than maintained as a
+parallel validator here. Placement-constraint mutation remains unqualified;
+preserving fixture constraints does not qualify composing new ones through the SDK.

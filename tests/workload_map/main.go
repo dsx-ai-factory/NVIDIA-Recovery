@@ -55,7 +55,6 @@ func run(args []string, input io.Reader, output io.Writer) error {
 	flags.SetOutput(io.Discard)
 	operation := flags.String("operation", "inspect", "inspect, instrument, suspend, resume, or associate-pods")
 	marker := flags.String("marker", "", "qualification Pod label value for instrument")
-	withReport := flags.Bool("report", false, "return instrumentation object and change classifications")
 	if err := flags.Parse(args); err != nil {
 		return errors.Wrap(err, "parse flags")
 	}
@@ -68,9 +67,6 @@ func run(args []string, input io.Reader, output io.Writer) error {
 	}
 	if len(data) > 4<<20 {
 		return errors.New("workload exceeds 4 MiB input limit")
-	}
-	if *withReport && *operation != "instrument" {
-		return errors.New("--report is supported only for instrument")
 	}
 	if *operation == "associate-pods" {
 		result, err := associatePods(context.Background(), data)
@@ -87,14 +83,6 @@ func run(args []string, input io.Reader, output io.Writer) error {
 	result, err := evaluate(context.Background(), object, *operation, *marker)
 	if err != nil {
 		return err
-	}
-	if *withReport {
-		updated := result.(*unstructured.Unstructured)
-		changes, err := checkInstrumentation(object, updated, *marker)
-		if err != nil {
-			return err
-		}
-		result = instrumentationReport{Object: updated, Changes: changes}
 	}
 	return errors.Wrap(json.NewEncoder(output).Encode(result), "encode result")
 }
@@ -181,13 +169,6 @@ func evaluate(ctx context.Context, object *unstructured.Unstructured, operation,
 	candidate := &unstructured.Unstructured{}
 	if err := json.Unmarshal(encoded, candidate); err != nil {
 		return nil, errors.Wrap(err, "decode transformed workload")
-	}
-	// Typed template round trips can discard fields unknown to the SDK's pinned
-	// Kubernetes types. Refuse that loss rather than emit a destructive mutation.
-	if operation == "instrument" {
-		if _, err := checkInstrumentation(object, candidate, marker); err != nil {
-			return nil, err
-		}
 	}
 	return candidate, nil
 }
