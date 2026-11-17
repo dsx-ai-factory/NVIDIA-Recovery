@@ -13,6 +13,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dsx-ai-factory/workload-map/karta/sdk/pkg/catalog"
+	"github.com/dsx-ai-factory/workload-map/karta/sdk/pkg/resource"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -174,6 +177,81 @@ func TestInstrumentationUpdatesRecoveryFixtureTemplates(t *testing.T) {
 			_ = transformFixture(t, updated, "instrument")
 			if _, err := evaluate(context.Background(), updated, "instrument", "another-run"); err == nil {
 				t.Fatal("accepted conflicting qualification marker")
+			}
+		})
+	}
+}
+
+// TestNodeConstraintReplacement exercises the template API Recovery uses to
+// change placement before resuming a workload. The caller supplies the complete
+// desired node affinity; this does not qualify merging constraints or scheduling.
+func TestNodeConstraintReplacement(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		paths       [][]string
+	}{
+		{"JobSet", jobsetFixture, [][]string{
+			{"spec", "replicatedJobs", "0", "template", "spec", "template"},
+			{"spec", "replicatedJobs", "1", "template", "spec", "template"},
+		}},
+		{"PyTorchJob", pytorchFixture, [][]string{
+			{"spec", "pytorchReplicaSpecs", "Master", "template"},
+			{"spec", "pytorchReplicaSpecs", "Worker", "template"},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			object := transformFixture(t, fixture(t, tc.input), "instrument")
+			definition, err := catalog.Get(object.GroupVersionKind())
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Two distinct desired constraints catch an update that appends to,
+			// ignores, or retains the old exclusion instead of replacing it.
+			for _, excluded := range []string{"node-a", "node-b"} {
+				factory := resource.NewComponentFactoryFromObject(definition, object)
+				components, err := factory.GetChildComponents()
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, component := range components {
+					templates, err := component.GetPodTemplateSpec(context.Background())
+					if err != nil {
+						t.Fatal(err)
+					}
+					for id, template := range templates {
+						if template.Spec.Affinity == nil {
+							template.Spec.Affinity = &corev1.Affinity{}
+						}
+						template.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+									MatchExpressions: []corev1.NodeSelectorRequirement{{
+										Key: "kubernetes.io/hostname", Operator: corev1.NodeSelectorOpNotIn,
+										Values: []string{excluded},
+									}},
+								}},
+							},
+						}
+						templates[id] = template
+					}
+					if err := component.UpdatePodTemplateSpec(context.Background(), templates); err != nil {
+						t.Fatal(err)
+					}
+				}
+				updated, err := factory.GetResource()
+				if err != nil {
+					t.Fatal(err)
+				}
+				encoded, err := json.Marshal(updated)
+				if err != nil {
+					t.Fatal(err)
+				}
+				object = fixture(t, string(encoded))
+				want := decodeValue(t, `{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"kubernetes.io/hostname","operator":"NotIn","values":["`+excluded+`"]}]}]}}`)
+				for _, path := range tc.paths {
+					assertNativeValue(t, object.Object, append(path, "spec", "affinity", "nodeAffinity"), want)
+					assertNativeValue(t, object.Object, append(path, "metadata", "labels", markerKey), "run-1")
+				}
 			}
 		})
 	}
