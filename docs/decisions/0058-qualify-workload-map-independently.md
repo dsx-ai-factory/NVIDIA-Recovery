@@ -10,7 +10,9 @@ Date: 2026-11-16
 > additionally distinguishes inconclusive observations.
 > Qualification targets Recovery's CRD operations without a PodGroup-topology
 > requirement or a generic SDK serialization validator; placement-constraint
-> mutation and full recovery remain unqualified.
+> mutation and full recovery remain unqualified; Pod association qualification is
+> narrowed to template-label propagation, with unused SDK component inference
+> removed and job-controller Pod/node publishing left to integration work.
 
 ## Context
 

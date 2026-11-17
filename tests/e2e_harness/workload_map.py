@@ -39,7 +39,6 @@ class WorkloadMapProbe:
             for name in (
                 "scale",
                 "status",
-                "pod_classification",
                 "instrumentation",
                 "suspend_resume",
                 "terminal_boundary",
@@ -203,27 +202,6 @@ class WorkloadMapProbe:
                 return False
         return True
 
-    def classify_pods(self, job: Job, expected: dict[str, tuple[str, str]] | None = None) -> None:
-        """Compare SDK classification against independently owned candidate Pods."""
-        record = self._validate(job)
-        pods = job.metadata["pods"]
-        self.begin_capability("pod_classification")
-        result = self.invoke("associate-pods", {"workload": record, "pods": pods})
-        if expected is None:
-            expected = {pod["metadata"]["uid"]: ("replicatedjob", "workers") for pod in pods}
-        assert result["scope"] == "caller_supplied_candidates"
-        assert len(result["pods"]) == len(expected)
-        assert {pod["uid"] for pod in result["pods"]} == set(expected)
-        assert all(
-            not pod.get("error") and (pod["component"], pod["instance_id"]) == expected[pod["uid"]]
-            for pod in result["pods"]
-        )
-        self.capability(
-            "pod_classification",
-            "pass",
-            "SDK classifies independently owner-scoped Pods; namespace-wide discovery is not tested",
-        )
-
     def transition(self, job: Job, operation: str) -> None:
         """Persist only an SDK suspend-field change, retaining UID and resourceVersion.
 
@@ -336,7 +314,7 @@ class WorkloadMapProbe:
         self.report.write_text(
             json.dumps(
                 {
-                    "schema_version": 2,
+                    "schema_version": 3,
                     "scenario_outcome": self.outcome,
                     "workload_identity": self.identity,
                     "capabilities": self.capabilities,

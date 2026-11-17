@@ -39,14 +39,6 @@ class Probe(WorkloadMapProbe):
     def invoke(self, operation, record, *, marker=None):
         if operation == "inspect":
             return {"statuses": record.get("mock_statuses", ["Running"])}
-        if operation == "associate-pods":
-            return {
-                "scope": "caller_supplied_candidates",
-                "pods": [
-                    {"uid": pod["metadata"]["uid"], "component": "replicatedjob", "instance_id": "workers"}
-                    for pod in record["pods"]
-                ],
-            }
         updated = copy.deepcopy(record)
         if operation == "instrument":
             for job in updated["spec"]["replicatedJobs"]:

@@ -53,7 +53,7 @@ func main() {
 func run(args []string, input io.Reader, output io.Writer) error {
 	flags := flag.NewFlagSet("workload-map-probe", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	operation := flags.String("operation", "inspect", "inspect, instrument, suspend, resume, or associate-pods")
+	operation := flags.String("operation", "inspect", "inspect, instrument, suspend, or resume")
 	marker := flags.String("marker", "", "qualification Pod label value for instrument")
 	if err := flags.Parse(args); err != nil {
 		return errors.Wrap(err, "parse flags")
@@ -67,13 +67,6 @@ func run(args []string, input io.Reader, output io.Writer) error {
 	}
 	if len(data) > 4<<20 {
 		return errors.New("workload exceeds 4 MiB input limit")
-	}
-	if *operation == "associate-pods" {
-		result, err := associatePods(context.Background(), data)
-		if err != nil {
-			return err
-		}
-		return errors.Wrap(json.NewEncoder(output).Encode(result), "encode Pod classifications")
 	}
 	// UnmarshalJSON on Unstructured preserves integer values needed by Kubernetes.
 	object := &unstructured.Unstructured{}

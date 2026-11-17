@@ -119,18 +119,8 @@ def drained(run: Run[WorkloadMapProbe]) -> Evidence:
     return Evidence(observed, f"remaining scenario Pods={len(remaining)}; statuses={result['statuses']}")
 
 
-def classify(run: Run[WorkloadMapProbe]) -> None:
-    """Use controller-emitted role labels as the independent classification expectation."""
-    expected = {
-        pod["metadata"]["uid"]: (pod["metadata"]["labels"]["training.kubeflow.org/replica-type"], "")
-        for pod in run.job.metadata["pods"]
-    }
-    run.services.classify_pods(run.job, expected)
-
-
 def qualified(run: Run[WorkloadMapProbe]) -> None:
     """Mark only observed capabilities; retry exhaustion remains separate."""
-    classify(run)
     for capability, detail in {
         "pytorchjob_live": "one Master and two Worker roles observed through the selected Training Operator",
         "scale": "SDK role scales agree with independently counted Ready Pods",
@@ -155,7 +145,6 @@ def test_pytorch_suspend_resume() -> Scenario[WorkloadMapProbe]:
             act("pin native identity", lambda run: run.services.bind(run.job)),
             act("remember native UID", remember("uid", lambda run: run.job.metadata["workload"]["metadata"]["uid"])),
             eventually("SDK matches running PyTorchJob", running, within=180),
-            act("classify independently owned roles", classify),
             act(
                 "remember original Pods",
                 remember(

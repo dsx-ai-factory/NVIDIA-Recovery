@@ -33,9 +33,7 @@ it omits container commands, environment and the full manifest. This is an
 observation, not a qualification verdict. Unknown definitions and malformed input
 fail the command. Extraction errors appear in `capability_errors` alongside usable
 results; callers must check that map even when the process exits successfully.
-Missing suspend support is reported explicitly. `associate-pods` instead accepts
-`{"workload": <object>, "pods": [<objects>]}` and reports SDK classification for
-those caller-supplied candidates.
+Missing suspend support is reported explicitly.
 
 `instrument` adds `qualification.nvidia.com/marker` through the SDK's template
 API, refusing a conflicting qualification marker. Focused fixture assertions
@@ -76,8 +74,8 @@ make test-workload-map-live K8S_TEST_ARGS='-n 2'
 ```
 
 The scenarios use the existing staged runner and JobSet launcher. Lifecycle cases
-create uniquely named JobSets with two or six CPU Pods and compare SDK scale and
-classification with independently owned resources. They suspend through the SDK,
+create uniquely named JobSets with two or six CPU Pods and compare SDK scale with
+independently owned resources. They suspend through the SDK,
 wait for complete Pod drain, and observe a suspended interval. After SDK template
 instrumentation and resume, they require new Ready Pod UIDs carrying the marker
 under the original JobSet name and UID. A successful API write is not a passed
@@ -180,10 +178,12 @@ observation window does not prove eventual convergence. Each scenario reports
 capabilities as `pass`, `fail`, `unsupported`, or `not_tested`; JUnit remains the
 source for overall test and cleanup outcomes.
 
-The SDK's `associate-pods` operation classifies caller-supplied Pods. Its selectors
-do not establish workload ownership. Live candidates are independently scoped
-through controller owner UIDs, and foreign same-label Pod behavior is covered
-offline. Namespace-wide workload discovery is not qualified by this operation.
+Recovery's telemetry path uses correlation labels injected into Pod templates;
+the collector reads those labels without SDK component inference. Qualification
+checks template-label propagation onto replacement Pods. SDK Pod classification
+is outside this suite's scope. The harness retains controller-owner UID checks
+for independent evidence and safe cleanup. Publishing Pod/node associations in
+the job controller remains separate integration work.
 
 ## Coverage boundary
 
@@ -191,7 +191,7 @@ offline. Namespace-wide workload discovery is not qualified by this operation.
 | --- | --- |
 | JobSet and PyTorchJob extraction, marker mutation, native suspend fields, terminal rejection | Cluster-free checks against SDK built-ins and independent fixture expectations. |
 | JobSet/default and KAI schedulers | Two- and six-Pod same-object lifecycle, live marker propagation, and native retry exhaustion scenarios. Exact observed results are recorded separately. |
-| Pod association | SDK classification checked on independently owned candidates; namespace-wide discovery remains not tested. |
+| Pod/node association publishing | Not tested; separate job-controller integration work. SDK Pod classification is outside scope. |
 | Correlation labels and placement constraints | Selected settings of representative fixtures checked offline; marker propagation and scheduler/queue preservation checked live. Node exclusion remains not tested. |
 | PyTorchJob/default and KAI schedulers | Master/Worker lifecycle, marker propagation, terminal-state and native retry scenarios. Exact observed results are recorded separately. |
 | OOM, eviction, gang preemption | Not tested; separate failure and scheduler qualification remains necessary. |
@@ -223,7 +223,10 @@ of the recorded baseline, not guarantees for other versions.
 
 All 12 live cases passed again after removal of the generic serialization validator
 and its report envelope, using the rebuilt probe and current Python bridge. The
-reports use schema 2. The disposable Kind cluster ran Kubernetes v1.35.0,
+reports use schema 2. New active reports use schema 3 after removal of the
+unused SDK Pod-classification capability; the retained live runs predate that
+removal. They continue to document the unchanged lifecycle and label-propagation
+checks. The disposable Kind cluster ran Kubernetes v1.35.0,
 Workload-Map SDK v0.3.0, JobSet v0.12.0, Training Operator v1.9.0
 (`kubeflow/training-operator:v1-5170a36`), and KAI v0.12.0.
 

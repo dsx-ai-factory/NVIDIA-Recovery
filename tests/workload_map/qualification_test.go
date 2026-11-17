@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"reflect"
@@ -101,58 +100,4 @@ func TestTerminatingWorkloadRefusesBothTransitions(t *testing.T) {
 			t.Fatalf("accepted %s while deleting", operation)
 		}
 	}
-}
-
-func TestPodClassificationDoesNotEstablishParentOwnership(t *testing.T) {
-	workload := fixture(t, jobsetFixture)
-	pods := []any{
-		map[string]any{"metadata": map[string]any{"name": "owned", "uid": "owned-uid", "labels": map[string]any{"jobset.sigs.k8s.io/replicatedjob-name": "workers", "jobset.sigs.k8s.io/jobset-name": "training"}}},
-		map[string]any{"metadata": map[string]any{"name": "foreign", "uid": "foreign-uid", "labels": map[string]any{"jobset.sigs.k8s.io/replicatedjob-name": "workers", "jobset.sigs.k8s.io/jobset-name": "unrelated"}}},
-		map[string]any{"metadata": map[string]any{"name": "unknown", "uid": "unknown-uid", "labels": map[string]any{"jobset.sigs.k8s.io/replicatedjob-name": "unknown"}}},
-	}
-	result := classifyFixtures(t, workload, pods)
-	if result.Scope != "caller_supplied_candidates" || len(result.Pods) != 3 {
-		t.Fatalf("unexpected report: %#v", result)
-	}
-	for _, item := range result.Pods[:2] {
-		if item.Component != "replicatedjob" || item.InstanceID != "workers" || item.Error != "" {
-			t.Fatalf("unexpected classification: %#v", item)
-		}
-	}
-	if result.Pods[2].Error == "" {
-		t.Fatal("unknown replicated job must not silently match")
-	}
-}
-
-func TestPyTorchPodClassificationUsesReplicaRole(t *testing.T) {
-	pods := []any{}
-	for _, role := range []string{"master", "worker", "unrecognized"} {
-		pods = append(pods, map[string]any{"metadata": map[string]any{"name": role, "labels": map[string]any{"training.kubeflow.org/replica-type": role}}})
-	}
-	result := classifyFixtures(t, fixture(t, pytorchFixture), pods)
-	for i, want := range []string{"master", "worker"} {
-		if result.Pods[i].Component != want || result.Pods[i].InstanceID != "" || result.Pods[i].Error != "" {
-			t.Fatalf("unexpected role classification: %#v", result.Pods[i])
-		}
-	}
-	if result.Pods[2].Error == "" {
-		t.Fatal("unrecognized Pod role silently matched")
-	}
-}
-
-func classifyFixtures(t *testing.T, workload *unstructured.Unstructured, pods []any) associationReport {
-	t.Helper()
-	data, err := json.Marshal(map[string]any{"workload": workload, "pods": pods})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var output bytes.Buffer
-	if err := run([]string{"--operation", "associate-pods"}, bytes.NewReader(data), &output); err != nil {
-		t.Fatal(err)
-	}
-	var result associationReport
-	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
-		t.Fatal(err)
-	}
-	return result
 }

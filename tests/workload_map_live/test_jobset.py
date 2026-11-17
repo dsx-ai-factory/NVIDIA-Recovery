@@ -85,7 +85,6 @@ def drained(run: Run[WorkloadMapProbe]) -> Evidence:
 
 def record_qualified_capabilities(run: Run[WorkloadMapProbe]) -> None:
     """Mark only capabilities established by all preceding lifecycle stages."""
-    run.services.classify_pods(run.job)
     for capability, detail in {
         "scale": f"SDK count and {run.notes['expected_pods']} Ready owned Pods agree",
         "status": "Running and Suspended observed against Pod evidence; full co-matched sets retained",
@@ -130,7 +129,6 @@ def test_jobset_suspend_resume(parallelism: int, expected_pods: int) -> Scenario
                 remember("uid", lambda run: run.job.metadata["workload"]["metadata"]["uid"]),
             ),
             eventually("SDK matches running JobSet", running, within=180),
-            act("classify independently owned Pods", lambda run: run.services.classify_pods(run.job)),
             act(
                 "remember original Pods",
                 remember(
