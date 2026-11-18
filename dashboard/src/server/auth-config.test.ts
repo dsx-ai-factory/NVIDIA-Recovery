@@ -92,12 +92,15 @@ describe("resolveAuthConfiguration", () => {
       LDAP_URI: "ldaps://ldap.example.test",
       LDAP_BIND_DN: "cn=bind,dc=example,dc=test",
     },
-  ])("fails clearly when enabled without a complete provider", (configuration) => {
-    expect(() =>
-      resolveAuthConfiguration({
-        NEXTAUTH_ENABLED: "true",
-        ...configuration,
-      }),
-    ).toThrow(AuthConfigurationError);
-  });
+  ])(
+    "fails clearly when enabled without a complete provider",
+    (configuration) => {
+      expect(() =>
+        resolveAuthConfiguration({
+          NEXTAUTH_ENABLED: "true",
+          ...configuration,
+        }),
+      ).toThrow(AuthConfigurationError);
+    },
+  );
 });

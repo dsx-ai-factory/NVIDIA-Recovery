@@ -8,6 +8,7 @@ import { logger } from "~/pino";
 import { getServerAuthSession } from "~/server/auth";
 import { isAuthAvailable } from "~/utils/auth";
 
+/** Return node analysis or a JSON error when the job-manager request fails. */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     if (isAuthAvailable()) {
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(nodeAnalysisData);
   } catch (_error) {
-    const error = _error as AxiosError;
+    const error = _error as AxiosError<{ detail?: string }>;
     const publicErrorDetails = {
       code: error.code,
       name: error.name,
@@ -54,10 +55,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     );
     return NextResponse.json(
       {
-        detail:
-          "detail" in (error.response?.data as { detail?: string })
-            ? (error.response?.data as { detail: string }).detail
-            : "",
+        detail: error.response?.data?.detail ?? "",
       },
       { status: error.response?.status || 500 },
     );

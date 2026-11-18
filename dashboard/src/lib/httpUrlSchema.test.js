@@ -5,12 +5,12 @@ import { describe, expect, it } from "vitest";
 import { httpUrlSchema } from "./httpUrlSchema.js";
 
 describe("httpUrlSchema", () => {
-  it.each([
-    "http://agent:8111",
-    "https://agent.example.test/base",
-  ])("accepts %s", (value) => {
-    expect(httpUrlSchema.safeParse(value).success).toBe(true);
-  });
+  it.each(["http://agent:8111", "https://agent.example.test/base"])(
+    "accepts %s",
+    (value) => {
+      expect(httpUrlSchema.safeParse(value).success).toBe(true);
+    },
+  );
 
   it.each([
     "ftp://agent.example.test",

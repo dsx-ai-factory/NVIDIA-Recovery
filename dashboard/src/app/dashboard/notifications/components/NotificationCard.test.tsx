@@ -59,20 +59,21 @@ function renderNotification(templateData: unknown): string {
 }
 
 describe("notification job links", () => {
-  it.each([
-    0, 2,
-  ])("links target attempt %i under the configured dashboard base path", (attemptIndex) => {
-    const html = renderNotification({
-      ...jobData,
-      job_attempt_index: attemptIndex,
-    });
+  it.each([0, 2])(
+    "links target attempt %i under the configured dashboard base path",
+    (attemptIndex) => {
+      const html = renderNotification({
+        ...jobData,
+        job_attempt_index: attemptIndex,
+      });
 
-    expect(html).toContain(
-      `href="/mission-control/recovery-engine/dashboard/workflow/job/456/${attemptIndex}/details"`,
-    );
-    expect(html).toContain("View Job Details");
-    expect(html).toContain("Stored notification body");
-  });
+      expect(html).toContain(
+        `href="/mission-control/recovery-engine/dashboard/workflow/job/456/${attemptIndex}/details"`,
+      );
+      expect(html).toContain("View Job Details");
+      expect(html).toContain("Stored notification body");
+    },
+  );
 
   it("encodes job identity as one route segment", () => {
     const html = renderNotification({ ...jobData, job_id: "job/1?#" });

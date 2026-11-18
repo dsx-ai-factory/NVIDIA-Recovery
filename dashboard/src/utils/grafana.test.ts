@@ -45,10 +45,13 @@ describe("Grafana configuration", () => {
     "https://user:password@grafana.example.com",
     "https://user@grafana.example.com",
     "https://:password@grafana.example.com",
-  ])("rejects credentials before exposing configuration or links: %s", (value) => {
-    expect(grafanaUrlSchema.optional().safeParse(value).success).toBe(false);
-    expect(buildGrafanaTraceUrl("trace", "tempo", value)).toBe("");
-  });
+  ])(
+    "rejects credentials before exposing configuration or links: %s",
+    (value) => {
+      expect(grafanaUrlSchema.optional().safeParse(value).success).toBe(false);
+      expect(buildGrafanaTraceUrl("trace", "tempo", value)).toBe("");
+    },
+  );
   it("accepts absent configuration and credential-free HTTP endpoints", () => {
     expect(grafanaUrlSchema.optional().safeParse(undefined).success).toBe(true);
     expect(grafanaUrlSchema.safeParse("http://localhost:3000").success).toBe(

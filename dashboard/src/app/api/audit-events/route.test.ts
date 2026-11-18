@@ -128,23 +128,19 @@ describe("GET /api/audit-events", () => {
     });
   });
 
-  it.each([
-    "",
-    " ",
-    "-1",
-    "1.5",
-    "1e2",
-    "9007199254740992",
-  ])("rejects malformed explicit attempt index %j", async (attemptIndex) => {
-    const response = await GET(
-      new NextRequest(
-        `http://dashboard.test/api/audit-events?job_id=12345&attempt_index=${encodeURIComponent(attemptIndex)}`,
-      ),
-    );
+  it.each(["", " ", "-1", "1.5", "1e2", "9007199254740992"])(
+    "rejects malformed explicit attempt index %j",
+    async (attemptIndex) => {
+      const response = await GET(
+        new NextRequest(
+          `http://dashboard.test/api/audit-events?job_id=12345&attempt_index=${encodeURIComponent(attemptIndex)}`,
+        ),
+      );
 
-    expect(response.status).toBe(422);
-    expect(auditEventsGetMock).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(422);
+      expect(auditEventsGetMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("preserves a Notifications validation error", async () => {
     auditEventsGetMock.mockRejectedValue(
