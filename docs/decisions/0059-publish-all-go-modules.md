@@ -1,4 +1,4 @@
-# ADR 0057: Publish All Go Modules and Include Advice Operator in Releases
+# ADR 0059: Publish All Go Modules and Include Advice Operator in Releases
 
 Status: accepted
 
