@@ -1,9 +1,30 @@
 # Job Array Support Implementation Plan
 
-This is the proposed delivery plan for
+This is the delivery plan for
 [ADR 0054](../decisions/0054-recover-slurm-array-tasks-independently.md), not a
 claim that array support is implemented. The ADR owns identity, policy, and
 scope; this document keeps implementation sequencing outside the decision.
+
+## Implementation Progress
+
+The task identity phase normalizes plain and wrapped Slurm array IDs, preserves
+task zero, skips synthetic ranges, and rejects malformed or conflicting identity.
+Job Manager projects the array ID into `job_group_id`; storage preserves known
+identity across partial upserts and checks conflicts under the existing row lock.
+HTTP/MySQL tests cover sibling grouping, distinct attempts, metadata round trips,
+and rejected updates. No schema migration is required.
+
+Task recovery, checkpoint association, and end-to-end qualification remain the
+subsequent phases. In particular, accounting attempt reconciliation and scheduler
+action qualification are still required before enabling array recovery.
+
+Focused verification:
+
+```bash
+make GO_PACKAGES=slurm-advisor-controller verify-go
+scripts/ci/test-python.sh --package job-manager --package recovery-libs
+uv run --locked --package job-manager pytest -q job_manager/tests/integration/test_array_identity.py
+```
 
 ## Starting Point
 
@@ -19,6 +40,10 @@ Repository inspection at `8cb8739` found reusable partial support:
   and incomplete history.
 - [Job publication](../../slurm-advisor-controller/internal/heimdall/upsert.go)
   already carries the four Slurm identity keys in scheduler metadata.
+- [Job Manager metadata projection](../../job_manager/job_manager/job_scheduler_metadata.py)
+  projects Slurm metadata into existing typed fields, but does not yet project
+  `slurm_array_job_id` into `job_group_id`. Job records and `/job_groups` already
+  support the generic grouping relationship.
 - [Retry policy](../../recovery_libs/recovery_libs/advice/requeue.py) evaluates
   the attempt index and checkpoint history selected by `job_id`. Correct task
   identity can reuse this policy without a new array budget.
@@ -36,7 +61,8 @@ The Warthog reference inspected for this proposal is
 `warthog_libs/warthog_libs/storage/dataclass.py`: `parse_slurm_int`,
 `parse_slurm_array_task_id`, and the `squeue`/`sacct` identity parsers. Reuse the
 plain/wrapped numeric parsing, task-zero handling, and synthetic-row distinction.
-Do not import its job-group persistence, in-job cycles, or orchestrator lifecycle.
+Reuse this repository's existing job-group persistence; do not import the
+reference's in-job cycles or orchestrator lifecycle.
 Add sanitized local fixtures; implementation and tests must not require a
 checkout of that reference repository.
 
@@ -49,7 +75,7 @@ remote branches or PRs.
 | PR | Scope | Evidence required |
 | --- | --- | --- |
 | 1: Decision | Review ADR 0054 and this plan; record acceptance when selected. | Identity, retry, checkpoint, audit, and scope choices reviewed together. |
-| 2: Task identity | Normalize SAC `squeue`/`sacct` parsing, preserve metadata through publication and backend round trips, and validate conflicting identity at the owning boundary. | Both numeric representations produce the same task ID; task zero survives; synthetic ranges and invalid identities produce no actionable job; standalone IDs remain unchanged. |
+| 2: Task identity | Normalize SAC `squeue`/`sacct` parsing, preserve metadata through publication and backend round trips, and validate conflicting identity at the owning boundary. Extend Job Manager's `project_job_scheduler_fields()` to project `slurm_array_job_id` into the existing `job_group_id` field. | Both numeric representations produce the same task ID; task zero survives; synthetic ranges and invalid identities produce no actionable job; array tasks share their array ID as group ID while standalone IDs remain unchanged. |
 | 3: Task recovery | Complete task-scoped accounting/attempt reconciliation, bootstrap, Advice, recovery bookkeeping, scheduler selectors, log enrichment, and watchdog handling. Reuse backend retry policy. | Two siblings recover independently; one exhausts its allowance without affecting the other; restart/bootstrap preserves budgets; commands and convergence remain task-specific. |
 | 4: Checkpoint association | Normalize event identity at Slurm ingestion and backend compatibility boundaries before Watcher lookups/deduplication and JM matching/writes. Add explicit checkpoint-association audits. | Save/load events and their audits resolve to the same task attempt; delayed registration retries; ambiguous events do not alter progress; sibling checkpoints cannot postpone another task's stop decision. |
 | 5: End-to-end qualification | Close audit propagation/query gaps across producers, update the release audit catalog, add isolated array scenarios, and update current support/operations documentation. | Real task failures, checkpoint ingestion, persisted audit reads, and unaffected siblings are demonstrated through production interfaces. |
@@ -57,6 +83,14 @@ remote branches or PRs.
 Tests that prove a change belong in its owning PR; the final PR adds integration
 evidence rather than deferring correctness checks. If a seam already satisfies
 the contract, retain it and add only justified behavioral coverage.
+
+For each concrete array task, use the array submission ID as `job_group_id`,
+`<array_job_id>_<array_task_id>` as `job_id`, and that task's attempt index as
+`job_attempt_index`. Carry the Slurm IDs in `scheduler_metadata`; project only
+the array ID into the existing Job Manager group field. Keep group-level listing
+and filtering available for siblings, while Advice, retries, checkpoints, and
+audits continue to use the task's `job_id` and attempt. No additional array
+identity fields or new persistence model are needed.
 
 ## Behavioral Acceptance
 
@@ -74,6 +108,12 @@ the contract, retain it and add only justified behavioral coverage.
 - Cover array IDs and task IDs in supported plain/wrapped forms, task zero,
   unset wrappers, negative or sentinel values, invalid types, and a concrete
   task appearing after a synthetic pending-range observation.
+- Upsert two tasks from one array and a standalone job through the existing
+  API. Verify the tasks persist with the same `job_group_id`, distinct
+  composite `job_id` values and independent attempt indices; group-filtered
+  reads include both tasks and exclude the standalone job. Partial metadata
+  updates must preserve the established group, and conflicting array identity
+  must be rejected.
 - Ingest checkpoints through the existing production log/event path using a
   canonical task ID, explicit array/task metadata, and an unambiguous raw-ID
   mapping with explicit raw-ID provenance. Test conflicting identity, array-only
@@ -105,8 +145,9 @@ captured, sanitized output. Roll out arrays with eager requeue disabled so
 backend retry and checkpoint stop policy precedes creation of a successor.
 Retained eager compatibility behavior is not evidence for that guarantee.
 
-No new array-specific database columns or tables are planned. Before enabling
-array recovery, inspect existing array-related records for raw-ID/composite-ID
+Reuse the existing `job_group_id` column and group queries; no new array-specific
+database columns or tables are planned. Before enabling array recovery, inspect
+existing array-related records for raw-ID/composite-ID
 duplicates and missing identity metadata. Preserve historical IDs and audit
 records; if reconciliation is needed, design and review it separately instead
 of guessing a migration. Resolve how incomplete retained accounting can confirm

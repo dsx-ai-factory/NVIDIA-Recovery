@@ -10,6 +10,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// SlurmNoValue32 is Slurm's unset uint32 sentinel. Identity values must be below
+// it, excluding both this sentinel and the larger infinite sentinel.
+const SlurmNoValue32 = 4294967294
+
 // HeimdallJobID returns the deterministic UUID used for a scheduler job attempt.
 func HeimdallJobID(jobID string, attemptIndex int32) string {
 	return uuid.NewSHA1(

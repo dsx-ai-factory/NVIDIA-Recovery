@@ -1512,6 +1512,13 @@ def test_upsert_job_record_preserves_existing_fields_when_update_has_none(mysql_
     assert existing_job.user == "test_user"
     assert existing_job.node_count == 5
     assert existing_job.partition == "recovery"
+    existing_job.scheduler_metadata = {
+        "scheduler": "slurm",
+        "slurm_job_id": "20000",
+        "managed_by": "slurm-advisor-controller",
+        "environment": "test",
+        "slurm_state": "RUNNING",
+    }
 
     incoming_update = SlurmJobExecutionRecord(
         job_id="20000",
@@ -1538,6 +1545,13 @@ def test_upsert_job_record_preserves_existing_fields_when_update_has_none(mysql_
     assert updated_record.command == "sbatch test.sh"
     assert updated_record.reservation == "recovery_prod"
     assert updated_record.heimdall_job_id == generate_heimdall_job_id("20000", 0)
+    assert updated_record.scheduler_metadata == {
+        "scheduler": "slurm",
+        "slurm_job_id": "20000",
+        "managed_by": "slurm-advisor-controller",
+        "environment": "test",
+        "slurm_state": "RUNNING",
+    }
     session.commit.assert_called_once()
     session.refresh.assert_called_once_with(existing_job)
 
@@ -1876,6 +1890,45 @@ def test_upsert_job_record_duplicate_key_retry_does_not_clobber_winners_log_path
     assert updated_record.log_file_paths == winner_log_paths
     session.rollback.assert_called_once_with()
     assert _transaction_method_names(session) == ["scalars", "commit", "rollback", "scalars", "commit"]
+
+
+@pytest.mark.parametrize("incoming_metadata", [None, {"slurm_state": "CANCELLED"}])
+def test_upsert_job_record_deadlock_retry_uses_fresh_scheduler_metadata(mysql_storage, session, incoming_metadata):
+    """Retry a partial update without overwriting metadata committed by another writer."""
+    now = datetime.now(UTC)
+    identity = {
+        "scheduler": "slurm",
+        "slurm_job_id": "4200_0",
+        "slurm_array_job_id": "4200",
+        "slurm_array_task_id": "0",
+    }
+    first = create_example_slurm_job_record(job_id="4200_0", attempt_index=0, submit_time=now, last_updated_at=now)
+    first.scheduler_metadata = {**identity, "slurm_state": "RUNNING"}
+    first.job_group_id = "4200"
+    winner = create_example_slurm_job_record(job_id="4200_0", attempt_index=0, submit_time=now, last_updated_at=now)
+    winner.scheduler_metadata = {**identity, "slurm_state": "COMPLETED", "slurm_reason": "None"}
+    winner.job_group_id = "4200"
+    incoming = SlurmJobExecutionRecord(
+        job_id="4200_0",
+        job_attempt_index=0,
+        workflow_id="array",
+        last_updated_at=now,
+        scheduler_metadata=incoming_metadata,
+    )
+    session.scalars.return_value.first.side_effect = [first, winner]
+    session.commit.side_effect = [OperationalError("UPDATE ...", {}, Exception(1213, "Deadlock")), None]
+
+    with patch("recovery_libs.storage.mysql_storage.time.sleep"):
+        result = mysql_storage.upsert_job_record(incoming)
+
+    expected_metadata = {**identity, "slurm_state": "COMPLETED", "slurm_reason": "None"}
+    if incoming_metadata is not None:
+        expected_metadata = {**identity, **incoming_metadata}
+    assert result.inserted_record.scheduler_metadata == expected_metadata
+    assert result.old_record.scheduler_metadata == {**identity, "slurm_state": "COMPLETED", "slurm_reason": "None"}
+    assert result.inserted_record.job_group_id == "4200"
+    session.rollback.assert_called_once_with()
+    assert session.commit.call_count == 2
 
 
 def test_upsert_advice_rejects_replacing_absorbing_terminated_state(mysql_storage, session):
