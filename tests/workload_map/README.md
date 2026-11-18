@@ -90,12 +90,23 @@ lifecycle check. A separate failing workload exercises the native restart budget
 Writes preserve the original UID and resourceVersion, and cleanup uses the
 launcher's exact-object ownership checks. The runner creates no cluster or
 namespace and installs no controllers. Use a dedicated test namespace with
-permission to create/delete JobSets, list their Jobs and Pods, update owned
-JobSets, and read diagnostics. KAI lifecycle runs also require listing namespace
-Events to establish scheduler provenance. The environment collector defaults to
-`jobset-controller-manager` in `jobset-system`; override
-`WORKLOAD_MAP_CONTROLLER_NAMESPACE` and `WORKLOAD_MAP_CONTROLLER_DEPLOYMENT`
-for other installations. Restricted read-only inspection uses its separate command.
+permission to create/delete/update the selected JobSets or PyTorchJobs, list their
+Jobs and Pods, and read diagnostics. KAI lifecycle runs also require listing
+Events in that test namespace to establish scheduler provenance.
+
+Before pytest starts, the runner also requires:
+
+- `get` on the controller Deployment and `list` on ReplicaSets and Pods in the
+  controller namespace. Defaults are `jobset-controller-manager` in
+  `jobset-system` for JobSet and `training-operator` in `kubeflow` for PyTorchJob;
+  override `WORKLOAD_MAP_CONTROLLER_NAMESPACE` and
+  `WORKLOAD_MAP_CONTROLLER_DEPLOYMENT` for other installations.
+- For KAI runs, `list` on Deployments, ReplicaSets and Pods in
+  `WORKLOAD_MAP_KAI_NAMESPACE` (default `kai-scheduler`), plus `get` on the selected
+  cluster-scoped `queues.scheduling.run.ai` resource (`WORKLOAD_MAP_QUEUE`).
+- Access to the Kubernetes version endpoint for provenance.
+
+Restricted read-only inspection uses its separate command.
 
 Each invocation writes a fresh `reports/workload-map/run-*` directory containing
 Kubernetes version, installed JobSet controller configuration, JUnit outcomes,

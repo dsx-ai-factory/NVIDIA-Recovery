@@ -28,6 +28,8 @@ kubectl --context "$context" wait --for=condition=Established \
 kubectl --context "$context" -n kubeflow rollout status \
   deployment/training-operator --timeout=300s
 
+scheduler_account_uid="$(kubectl --context "$context" --request-timeout=15s -n kai-scheduler \
+  get serviceaccount kai-scheduler-default --ignore-not-found -o jsonpath='{.metadata.uid}')"
 helm upgrade --install kai-scheduler oci://ghcr.io/nvidia/kai-scheduler/kai-scheduler \
   --kube-context "$context" --namespace kai-scheduler --create-namespace \
   --version v0.12.0 --timeout 10m
@@ -40,6 +42,19 @@ for deployment in kai-operator pod-grouper podgroup-controller binder queue-cont
     # v0.12.0 recreates its Config hook and owned ServiceAccount on upgrade,
     # but retains the SchedulingShard-owned scheduler Pod. Refresh the Pod's
     # bound token after the account UID changes; other operands are recreated.
+    deadline=$((SECONDS + 120))
+    while true; do
+      current_uid="$(kubectl --context "$context" --request-timeout=15s -n kai-scheduler \
+        get serviceaccount kai-scheduler-default --ignore-not-found -o jsonpath='{.metadata.uid}')"
+      if [[ -n "$current_uid" && "$current_uid" != "$scheduler_account_uid" ]]; then
+        break
+      fi
+      if (( SECONDS >= deadline )); then
+        echo 'Timed out waiting for the scheduler ServiceAccount replacement' >&2
+        exit 1
+      fi
+      sleep 2
+    done
     kubectl --context "$context" -n kai-scheduler rollout restart "deployment/$deployment"
   fi
   kubectl --context "$context" -n kai-scheduler rollout status "deployment/$deployment" --timeout=300s

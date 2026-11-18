@@ -255,7 +255,7 @@ WORKLOAD_MAP_PYTHON_FILES := tests/e2e_harness/workload_map*.py tests/workload_m
 .PHONY: build-workload-map-probe verify-workload-map test-workload-map-live inspect-workload-map
 build-workload-map-probe:
 	mkdir -p "$(dir $(WORKLOAD_MAP_PROBE))"
-	go -C tests/workload_map build -o "$(WORKLOAD_MAP_PROBE)" .
+	go -C tests/workload_map build -o "$(abspath $(WORKLOAD_MAP_PROBE))" .
 
 verify-workload-map:
 	test -z "$$(gofmt -l tests/workload_map)"

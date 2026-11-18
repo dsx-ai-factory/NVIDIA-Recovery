@@ -119,7 +119,10 @@ Use MockGen from `go.uber.org/mock/mockgen` for interaction mocks of interfaces.
 The root Makefile is the public developer interface. Before using a direct
 `go`, `golangci-lint`, `mockgen`, or generation command, check for an owning
 Make target. For a change confined to one module, finish with
-`make GO_PACKAGES=<module> verify-go`. For shared Go tooling, API contracts
+`make GO_PACKAGES=<module> verify-go`. For changes confined to the test-only
+`tests/workload_map/` module, use `make verify-workload-map` instead: it includes
+the probe and Python harness checks, and the standard generated-artifact check
+does not support this module. For shared Go tooling, API contracts
 consumed across modules, or other cross-module changes, finish with unscoped
 `make verify-go`.
 
