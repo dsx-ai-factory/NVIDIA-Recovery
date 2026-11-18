@@ -123,7 +123,6 @@
       "additionalProperties": false,
       "required": [
         "enabled",
-        "renameEnabled",
         "destination",
         "sources",
         "applicationPatterns",
@@ -140,7 +139,7 @@
         "maxOwnedLinks"
       ],
       "allOf": [{
-        "if": { "properties": { "renameEnabled": { "const": true } } },
+        "if": { "required": ["renameEnabled"], "properties": { "renameEnabled": { "const": true } } },
         "then": { "properties": { "enabled": { "const": true } } }
       }],
       "properties": {

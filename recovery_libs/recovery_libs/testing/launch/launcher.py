@@ -180,6 +180,8 @@ class SlurmWorkload:
     script: str
     working_directory: str = "/tmp"
     hold: bool = False
+    # Explicit stdout destination shared by command and HTTP submission.
+    standard_output: str | None = None
 
     @classmethod
     def of(cls, spec: JobSpec) -> SlurmWorkload:
@@ -200,6 +202,8 @@ def slurm_job_description(spec: JobSpec) -> dict[str, Any]:
         "current_working_directory": workload.working_directory,
         "hold": workload.hold,
     }
+    if workload.standard_output is not None:
+        description["standard_output"] = workload.standard_output
     if spec.time_limit_minutes is not None:
         description["time_limit"] = {"set": True, "number": spec.time_limit_minutes}
     if spec.metadata:

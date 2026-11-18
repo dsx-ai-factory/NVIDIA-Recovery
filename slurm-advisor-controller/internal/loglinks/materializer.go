@@ -156,14 +156,13 @@ func (m *Materializer) Sync(ctx context.Context, now time.Time, targets []Target
 		ctx = context.Background()
 	}
 	now = now.UTC()
-	original := cloneRecords(m.owned)
 	state := syncState{
 		owned: cloneRecords(m.owned),
 		dirty: m.manifestNeedsRewrite,
 	}
 
 	m.refreshActiveOwned(ctx, now, targets, &state)
-	primaries := m.collectPrimaryCandidates(ctx, targets, &state)
+	primaries, scanSeeds := m.collectPrimaryCandidates(ctx, targets, &state)
 	for _, primary := range primaries {
 		if ctx.Err() != nil {
 			state.reportContextError()
@@ -174,7 +173,7 @@ func (m *Materializer) Sync(ctx context.Context, now time.Time, targets []Target
 
 	if len(m.patterns) > 0 && cadenceDue(now, m.lastScan, m.config.ScanInterval) {
 		m.lastScan = now
-		m.scan(ctx, now, primaries, &state)
+		m.scan(ctx, now, scanSeeds, &state)
 	}
 	if ctx.Err() == nil && cadenceDue(now, m.lastCleanup, m.config.CleanupInterval) {
 		m.lastCleanup = now
@@ -189,7 +188,9 @@ func (m *Materializer) Sync(ctx context.Context, now time.Time, targets []Target
 				m.owned = state.owned
 				m.manifestNeedsRewrite = false
 			} else {
-				m.owned = original
+				// These records describe links created or checked by this process.
+				// Retain them for retry; unrelated existing links remain unowned.
+				m.owned = state.owned
 				m.manifestNeedsRewrite = true
 			}
 		} else {
@@ -275,7 +276,8 @@ func (m *Materializer) collectPrimaryCandidates(
 	ctx context.Context,
 	targets []Target,
 	state *syncState,
-) []candidate {
+) ([]candidate, []candidate) {
+	var scanSeeds []candidate
 	primaries := make([]candidate, 0, min(m.config.MaxPathsPerSync, len(targets)))
 	seen := make(map[string]struct{}, min(m.config.MaxPathsPerSync, len(targets)))
 	processed := 0
@@ -312,7 +314,7 @@ func (m *Materializer) collectPrimaryCandidates(
 					state.observation.Rejected,
 					len(target.Paths)-pathIndex+remainingPathCount(targets, targetIndex+1),
 				)
-				return primaries
+				return primaries, scanSeeds
 			}
 			processed++
 
@@ -321,9 +323,15 @@ func (m *Materializer) collectPrimaryCandidates(
 				state.observation.Rejected = saturatingIncrement(state.observation.Rejected)
 				continue
 			}
+			// Directory discovery depends on source validation, not whether this
+			// primary has enough identity to receive a generated filename.
+			scanSeeds = append(scanSeeds, candidate{
+				jobID: target.JobID, attemptIndex: target.AttemptIndex,
+				arrayJobID: target.ArrayJobID, target: normalized,
+			})
 			name, renamed, err := Name(target, normalized, m.config.RenameEnabled)
-			if err != nil || (m.config.RenameEnabled && (len(name) > m.config.MaxPathLength ||
-				len(filepath.Join(m.config.Destination, name)) > m.config.MaxPathLength)) {
+			if err != nil || (m.config.RenameEnabled && len(name) > m.config.MaxPathLength) ||
+				(renamed && len(filepath.Join(m.config.Destination, name)) > m.config.MaxPathLength) {
 				state.observation.Rejected = saturatingIncrement(state.observation.Rejected)
 				continue
 			}
@@ -352,7 +360,7 @@ func (m *Materializer) collectPrimaryCandidates(
 			})
 		}
 	}
-	return primaries
+	return primaries, scanSeeds
 }
 
 func (m *Materializer) materialize(value candidate, now time.Time, state *syncState) {

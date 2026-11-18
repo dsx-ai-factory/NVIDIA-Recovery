@@ -105,6 +105,66 @@ func TestManifestUpgradeRetainsOwnershipAndRetiresExtendedFormat(t *testing.T) {
 	}
 }
 
+// TestVersionOneManifestDropsOnlyGeneratedRecords proves that a version-1
+// manifest cannot carry generated ownership, and that refusing those records
+// does not cost the ordinary links recorded beside them their ownership. A
+// whole-file rejection would leave every such link without cleanup.
+func TestVersionOneManifestDropsOnlyGeneratedRecords(t *testing.T) {
+	t.Parallel()
+	_, source, destination := testDirectories(t)
+	config := testConfig(source, destination)
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+
+	ordinary := filepath.Join(source, "train_42_date_26-11-17_time_12-00-00.log")
+	arbitrary := filepath.Join(source, "output")
+	writeFile(t, ordinary)
+	writeFile(t, arbitrary)
+	generatedName, _, err := Name(Target{JobID: "43", SubmitTime: now}, arbitrary, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ordinaryName := filepath.Base(ordinary)
+	for name, target := range map[string]string{ordinaryName: ordinary, generatedName: arbitrary} {
+		if err := os.Symlink(target, filepath.Join(destination, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Both links are valid on disk; only the envelope version makes the second
+	// record impossible. The fixture states the original on-disk contract
+	// independently of the current manifest structs.
+	fixture := map[string]any{
+		"version": 1,
+		"links": []map[string]any{
+			{
+				"name": ordinaryName, "target": ordinary, "job_id": "42", "attempt_index": 0,
+				"origin": "primary", "last_observed_at": now,
+			},
+			{
+				"name": generatedName, "target": arbitrary, "job_id": "43", "attempt_index": 0,
+				"origin": "primary", "submit_time": now, "last_observed_at": now,
+			},
+		},
+	}
+	contents, err := json.Marshal(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, manifestFilename), contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	materializer, report, err := New(config, nil)
+	if err != nil || report != (RecoveryReport{Owned: 1, InvalidEntries: 1}) {
+		t.Fatalf("recovery report = %+v, err = %v; want the ordinary record kept and one record refused", report, err)
+	}
+	if _, owned := materializer.owned[ordinaryName]; !owned {
+		t.Fatal("ordinary link lost its ownership because of an unrelated refused record")
+	}
+	if _, owned := materializer.owned[generatedName]; owned {
+		t.Fatal("generated record was accepted from a version-1 manifest")
+	}
+}
+
 func assertManifestFormatVersion(t *testing.T, path string, want int) {
 	t.Helper()
 	contents, err := os.ReadFile(path)

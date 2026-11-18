@@ -431,11 +431,12 @@ Manifests containing generated records use format version 2; the controller
 continues to read version 1 and writes version 1 when no extended records remain.
 Older binaries reject the entire version-2 file, including ownership of ordinary
 basename links. Turning off renaming alone does not make that file compatible.
-Before a binary downgrade, stop the writer, back up the manifest and link
-directory, and leave materialization disabled. Re-enable the older materializer
-only after the newer writer has retired extended records and rewritten version 1,
-or after restoring a verified matching version-1 manifest-and-link snapshot with
-writers stopped. Never relabel the version or strip fields to force a downgrade.
+Before a binary downgrade, disable renaming and keep the newer materializer
+running until normal cleanup retires generated records. Stop all writers, back
+up the manifest and link directory, and verify that the on-disk manifest is
+version 1 before enabling the older materializer. If cleanup cannot finish first,
+leave the older materializer disabled or restore a verified matching version-1
+manifest-and-link snapshot while all writers are stopped. Never relabel the version or strip fields to force a downgrade.
 
 Generated names have the form
 `<stem>-<digest>-a<attempt>_<job-id>_date_<YY-MM-DD>_time_<HH-MM-SS>.log`.
@@ -535,8 +536,8 @@ Treat link changes as eventually consistent when validating a rollout. Confirm
 log-link metrics or a known destination entry rather than assuming a successful
 controller poll has already materialized its snapshot.
 
-To roll back, set `controller.logLinks.enabled=false` and perform a normal Helm
-upgrade. The replacement Pod has no external log-link mounts. Disabling does
+To roll back, set both `controller.logLinks.renameEnabled=false` and
+`controller.logLinks.enabled=false`, then perform a normal Helm upgrade. The replacement Pod has no external log-link mounts. Disabling does
 not remove existing links or the ownership manifest; inspect those records and
 the collector configuration before any deliberate filesystem cleanup.
 

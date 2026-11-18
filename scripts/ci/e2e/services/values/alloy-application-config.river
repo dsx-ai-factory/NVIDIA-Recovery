@@ -22,16 +22,23 @@ loki.process "slurm_logs" {
 	forward_to = [loki.write.default.receiver]
 
 	stage.regex {
+		// The generated branch keeps canonical array IDs whole. Legacy date
+		// names retain both previously accepted separators.
+		expression = "(?:(?:.*/)?[A-Za-z0-9-]{1,64}-[0-9a-f]{16}-a\\d+_|.*[_-])(?P<job_id>\\d+(?:_\\d+)?)_date_.*$"
+		source     = "filename"
+	}
+
+	stage.regex {
+		// Prefer an ordinary numeric suffix over date-like text in the stem.
+		// The following timestamp rule corrects date-shaped suffixes.
 		expression = "(?:.*)[_-](?P<job_id>\\d+)\\.(?:out|log)$"
 		source     = "filename"
 	}
 
 	stage.regex {
-		// Date-shaped names override the ordinary basename extraction above;
-		// its trailing timestamp digits are not the job ID. Generated names
-		// have a digest and attempt boundary so array parent_task IDs stay whole
-		// without mistaking a legacy job-name suffix for generated identity.
-		expression = "(?:(?:.*/)?[A-Za-z0-9-]{1,64}-[0-9a-f]{16}-a\\d+_|.*_)(?P<job_id>\\d+(?:_\\d+)?)_date_.*$"
+		// Recognized timestamp names override the ordinary suffix's seconds.
+		// The generated prefix keeps a parent_task identity intact.
+		expression = "(?:(?:.*/)?[A-Za-z0-9-]{1,64}-[0-9a-f]{16}-a\\d+_|.*[_-])(?P<job_id>\\d+(?:_\\d+)?)_date_\\d{2}-\\d{2}-\\d{2}_time_\\d{2}-\\d{2}-\\d{2}\\.(?:out|log)$"
 		source     = "filename"
 	}
 

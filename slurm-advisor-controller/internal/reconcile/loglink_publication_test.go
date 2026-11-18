@@ -14,8 +14,10 @@ import (
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/heimdall/heimdallmock"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/loglinks"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/state"
+	"go.uber.org/mock/gomock"
 )
 
 // This proves publication and filesystem creation agree through SyncOnce and
@@ -49,10 +51,15 @@ func TestControllerPublishesCollectorPathsForActiveAndFinalAttempts(t *testing.T
 	}
 	processCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	client := &fakeControllerClient{
-		getJobsResponses:    map[string]*pb.GetJobsResponse{"": {}},
-		listAdviceResponses: map[string]*pb.ListAdviceResponse{"": {}},
-	}
+	client := heimdallmock.NewMockHeimdallClient(gomock.NewController(t))
+	client.EXPECT().GetJobs(gomock.Any(), gomock.Any()).Return(nil, nil)
+	client.EXPECT().ListAdvice(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+	var upserts []*pb.CreateOrUpdateJobRequest
+	client.EXPECT().CreateOrUpdateJob(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, request *pb.CreateOrUpdateJobRequest) (*pb.CreateOrUpdateJobResponse, error) {
+			upserts = append(upserts, request)
+			return &pb.CreateOrUpdateJobResponse{}, nil
+		}).Times(2)
 	reader := newMockJobReader(t)
 	expectActiveJobs(reader, []cluster.JobExecutionRecord{job})
 	materializer := NewAsyncLogLinkMaterializer(processCtx, syncer)
@@ -64,10 +71,10 @@ func TestControllerPublishesCollectorPathsForActiveAndFinalAttempts(t *testing.T
 	if _, err := controller.SyncOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(client.upsertRequests) != 1 {
-		t.Fatalf("upserts = %d, want 1", len(client.upsertRequests))
+	if len(upserts) != 1 {
+		t.Fatalf("upserts = %d, want 1", len(upserts))
 	}
-	metadata := client.upsertRequests[0].SchedulerMetadata.AsMap()
+	metadata := upserts[0].SchedulerMetadata.AsMap()
 	paths := metadata["slurm_log_file_paths"].([]any)
 	if len(paths) != 1 {
 		t.Fatalf("published paths = %v", paths)
@@ -104,7 +111,7 @@ func TestControllerPublishesCollectorPathsForActiveAndFinalAttempts(t *testing.T
 	if err := controller.upsertJob(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	finalMetadata := client.upsertRequests[1].SchedulerMetadata.AsMap()
+	finalMetadata := upserts[1].SchedulerMetadata.AsMap()
 	if !reflect.DeepEqual(finalMetadata["slurm_log_file_paths"], paths) {
 		t.Fatalf("final accounting reverted collector path: %v", finalMetadata)
 	}

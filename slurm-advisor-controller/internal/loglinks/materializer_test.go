@@ -670,7 +670,7 @@ func TestSyncReportsDestinationPermissionFailureWhereEnforced(t *testing.T) {
 	assertNotExist(t, filepath.Join(destination, filepath.Base(target)))
 }
 
-func TestManifestFailureLeavesCreatedLinkUnmanaged(t *testing.T) {
+func TestManifestFailureRetainsInProcessOwnershipWithoutRestartAdoption(t *testing.T) {
 	t.Parallel()
 
 	_, source, destination := testDirectories(t)
@@ -686,7 +686,7 @@ func TestManifestFailureLeavesCreatedLinkUnmanaged(t *testing.T) {
 	observation := materializer.Sync(context.Background(), time.Now(), []Target{{
 		JobID: "42", Paths: []string{target},
 	}})
-	assertObservationCounts(t, observation, Observation{Created: 1, Errors: 1, Owned: 0})
+	assertObservationCounts(t, observation, Observation{Created: 1, Errors: 1, Owned: 1})
 	assertSymlink(t, filepath.Join(destination, filepath.Base(target)), target)
 
 	if err := os.Remove(manifestPath); err != nil {

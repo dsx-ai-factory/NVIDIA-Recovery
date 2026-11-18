@@ -155,6 +155,19 @@ func decodeManifest(
 	if version != legacyManifestVersion && version != manifestVersion {
 		return nil, report, errors.New("manifest version is unsupported")
 	}
+	// Records are decoded before the envelope version is necessarily known.
+	// Validate the declared schema only after both fields have been read. A
+	// version-1 file cannot legitimately carry generated records, so refuse just
+	// those, like any other invalid record. Rejecting the whole file would also
+	// strip ownership, and therefore cleanup, from every ordinary link in it.
+	if version == legacyManifestVersion {
+		for name, record := range owned {
+			if !record.SubmitTime.IsZero() {
+				delete(owned, name)
+				report.InvalidEntries = saturatingIncrement(report.InvalidEntries)
+			}
+		}
+	}
 	if err := requireJSONEOF(decoder); err != nil {
 		return nil, report, err
 	}
@@ -231,6 +244,9 @@ func validateManifestRecord(config Config, record manifestRecord) error {
 	}
 	if target != record.Target {
 		return errors.New("manifest entry target is not normalized")
+	}
+	if filepath.Base(target) == record.Name && !record.SubmitTime.IsZero() {
+		return errors.New("basename manifest entry contains a submission time")
 	}
 	if filepath.Base(target) != record.Name {
 		name, renamed, err := Name(Target{

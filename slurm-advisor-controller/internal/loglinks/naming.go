@@ -42,7 +42,7 @@ func Name(target Target, path string, renameEnabled bool) (name string, renamed 
 	}
 	if target.JobName != "" {
 		for _, jobID := range []string{target.JobID, target.ArrayJobID} {
-			if jobID != "" && strings.HasPrefix(base, target.JobName+"_"+jobID+"_date") {
+			if jobID != "" && strings.HasPrefix(base, target.JobName+"_"+jobID+"_date_") {
 				return base, false, nil
 			}
 		}

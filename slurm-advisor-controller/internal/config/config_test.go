@@ -659,25 +659,32 @@ func TestFromEnvLoadsLogLinksConfiguration(t *testing.T) {
 // opt-in and cannot be configured without the filesystem materializer.
 func TestFromEnvLogLinkRenameOptIn(t *testing.T) {
 	for _, test := range []struct {
-		name    string
-		value   string
+		name  string
+		value string
+		// omit leaves the variable unset, which differs from setting it to "".
+		omit    bool
 		enabled bool
 		want    bool
 		wantErr bool
 	}{
+		{name: "absent", omit: true, enabled: true},
 		{name: "explicit false", value: "false", enabled: true},
 		{name: "explicit true", value: "true", enabled: true, want: true},
 		{name: "requires materialization", value: "true", wantErr: true},
 		{name: "invalid boolean", value: "sometimes", enabled: true, wantErr: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			setConfigEnv(t, map[string]string{
+			env := map[string]string{
 				"HEIMDALL_ENDPOINT":                         "127.0.0.1:8080",
 				"SLURM_ADVISOR_LOG_LINKS_ENABLED":           strconv.FormatBool(test.enabled),
 				"SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED":    test.value,
 				"SLURM_ADVISOR_LOG_LINKS_DESTINATION":       "/var/log/heimdall/links",
 				"SLURM_ADVISOR_LOG_LINKS_SOURCE_ROOTS_JSON": `["/work"]`,
-			})
+			}
+			if test.omit {
+				delete(env, "SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED")
+			}
+			setConfigEnv(t, env)
 			cfg, err := FromEnv()
 			if err == nil {
 				err = cfg.Validate()

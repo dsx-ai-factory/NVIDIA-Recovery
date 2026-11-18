@@ -64,12 +64,13 @@ version-1 schema. An older controller rejects the **entire** version-2 manifest,
 losing ownership of legacy links as well as generated links; disabling renaming
 does not restore compatibility while extended records remain.
 
-Before downgrading the binary with a version-2 manifest, stop the writer, back up
-the manifest and dedicated link directory, and keep materialization disabled in
-the older deployment. Re-enabling the older materializer requires a consistent
-version-1 manifest and matching links: either retire the extended records through
-the newer controller's normal cleanup and confirm it rewrote version 1, or restore
-a verified version-1 manifest-and-link snapshot while all writers are stopped.
+Before downgrading the binary with a version-2 manifest, disable renaming and
+keep the newer materializer running until normal cleanup retires the generated
+records. Then stop all writers, back up the manifest and dedicated link directory,
+and verify that the on-disk manifest is version 1 before enabling the older
+materializer. If waiting for cleanup is not possible, keep materialization
+disabled in the older deployment, or restore a verified matching version-1
+manifest-and-link snapshot while all writers are stopped.
 Do not merely change the version number or strip fields. These procedures concern
 links and ownership metadata, never deletion of source logs.
 This proposal records the implemented opt-in contract for review and does not

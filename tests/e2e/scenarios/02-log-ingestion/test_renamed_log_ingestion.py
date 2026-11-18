@@ -11,8 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from e2e_harness.actions import shared_directory
-from e2e_harness.checks import job_state
+from e2e_harness.actions import SLURM_LOGIN_POD, shared_directory
 from e2e_harness.config import E2EConfig
 from e2e_harness.dag import parse_job_status_response
 from e2e_harness.ingestion import evaluate_ingestion_records
@@ -20,7 +19,7 @@ from e2e_harness.log_backend import decode_log_response
 from e2e_harness.services import E2EServices
 from e2e_harness.workloads import HEALTHY_OBSERVE, JOB_LOG_DIRECTORY, recovery_metadata
 from recovery_libs.testing.kubernetes import StackControl
-from recovery_libs.testing.launch.jobs import JobSpec, JobState
+from recovery_libs.testing.launch.jobs import JobSpec
 from recovery_libs.testing.scenario import (
     Action,
     Check,
@@ -39,11 +38,12 @@ pytestmark = pytest.mark.exclusive
 
 
 @unsafe
-def _enable_renamed_links(stack: StackControl) -> Action[E2EServices]:
+def _enable_renamed_links(stack: StackControl, destination: str) -> Action[E2EServices]:
     """Temporarily enable the controller's normal rename option and restore its exact prior environment."""
 
     deployment = "slurm-advisor-controller"
     option = "SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED"
+    destination_option = "SLURM_ADVISOR_LOG_LINKS_DESTINATION"
 
     def action(run: Run[E2EServices]) -> Run[E2EServices]:
         containers = stack.get("deployment", deployment)["spec"]["template"]["spec"]["containers"]
@@ -60,17 +60,28 @@ def _enable_renamed_links(stack: StackControl) -> Action[E2EServices]:
             stack.patch("deployment", deployment, {"spec": {"template": {"spec": {"containers": current}}}})
             stack.restart(deployment, wait_for_old_pods=True)
 
-        enabled = [item for item in original_env or [] if item["name"] != option]
-        enabled.append({"name": option, "value": "true"})
+        enabled = [item for item in original_env or [] if item["name"] not in (option, destination_option)]
+        enabled.extend(({"name": option, "value": "true"}, {"name": destination_option, "value": destination}))
+
+        def cleanup() -> None:
+            # If restoration or the old-pod wait fails, retain this directory:
+            # the previous writer may still be using its manifest and links.
+            apply(original_env)
+            stack.exec(SLURM_LOGIN_POD, "rm", "-rf", "--", destination)
+            stack.exec(SLURM_LOGIN_POD, "test", "!", "-e", destination)
+
+        stack.exec(SLURM_LOGIN_POD, "mkdir", "--", destination)
         try:
+            stack.exec(SLURM_LOGIN_POD, "chown", "401:401", destination)
+            stack.exec(SLURM_LOGIN_POD, "chmod", "0750", destination)
             apply(enabled)
         except BaseException as error:
             try:
-                apply(original_env)
+                cleanup()
             except Exception as rollback_error:  # noqa: BLE001
                 error.add_note(f"restoring controller environment also failed: {rollback_error!r}")
             raise
-        return run.with_cleanup("restore log-link naming", lambda: apply(original_env))
+        return run.with_cleanup("restore log-link naming and remove disposable storage", cleanup)
 
     return action
 
@@ -121,7 +132,9 @@ def test_same_arbitrary_basename_is_collected_for_each_job(
     No log-store push or fabricated job metadata can bypass discovery, materialization, or collection.
     """
 
-    directory = f"{JOB_LOG_DIRECTORY}/rename-{uuid4().hex}"
+    run_id = uuid4().hex
+    directory = f"{JOB_LOG_DIRECTORY}/rename-{run_id}"
+    destination = f"/home/log-links/rename-{run_id}"
     roles = ("first", "second")
     sources = {role: f"{directory}-{role}/output" for role in roles}
     markers = {role: f"HEIMDALL_E2E_RENAMED_{uuid4().hex}" for role in roles}
@@ -130,28 +143,27 @@ def test_same_arbitrary_basename_is_collected_for_each_job(
     return Scenario(
         name="02-log-ingestion",
         setup=(
-            act("enable deterministic log names", _enable_renamed_links(slurm_stack)),
+            act("enable deterministic log names", _enable_renamed_links(slurm_stack, destination)),
             *(act(f"prepare {role} output directory", shared_directory(f"{directory}-{role}")) for role in roles),
         ),
         jobs={
             role: JobSpec(
                 name=f"renamed-{role}",
                 workload={
-                    "script": f"#!/bin/bash\n#SBATCH --output={sources[role]}\n{body}",
+                    "script": body,
+                    "standard_output": sources[role],
                     "working_directory": JOB_LOG_DIRECTORY,
                 },
                 environment={"MARKER": markers[role]},
+                time_limit_minutes=5,
                 metadata=recovery_metadata(HEALTHY_OBSERVE),
             )
             for role in roles
         },
         stages=(
-            eventually(
-                "both jobs running",
-                *(on(role, job_state(JobState.RUNNING)) for role in roles),
-                within=e2e_config.validation_timeout(300),
-            ),
-            eventually("named logs ingested and published", *checks, within=90),
+            # Jobs may execute sequentially on a single-slot cluster. Retained
+            # links and backend records must let both markers coexist afterward.
+            eventually("named logs ingested and published", *checks, within=e2e_config.validation_timeout(300)),
             consistently("each marker remains exactly once", *checks, for_seconds=15),
         ),
     )
