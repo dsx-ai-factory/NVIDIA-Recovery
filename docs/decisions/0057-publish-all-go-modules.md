@@ -4,7 +4,7 @@ Status: accepted
 
 Date: 2026-11-11
 
-> **Implementation note (2026-11-11):** Release packaging and Go module publication remain pending, including published sibling dependencies and external-consumer qualification; operator build/CI qualification also remains pending.
+> **Implementation note (2026-11-11):** Release packaging and Go module publication remain pending, including published sibling dependencies; operator build/CI qualification also remains pending.
 
 ## Context
 
@@ -55,16 +55,13 @@ replace their placeholder `v0.0.0` requirements with the released version.
 Optional local workspaces may support coordinated development, but must not be
 required by consumers.
 
-Qualify each module from a separate consumer module with workspace mode disabled
-and no local replacements, resolving published dependencies and compiling the
-exported packages intended for consumers. Module tagging, dependency
-reconciliation, and build/CI qualification must be completed before claiming a
-qualified Go module release. Publishing a module does not expose its `internal/`
-packages; reusable APIs must be deliberately exported.
+Complete module tagging, dependency reconciliation, and build and CI checks
+before treating a Go module release as ready. Publishing a module does not
+expose its `internal/` packages; reusable APIs must be deliberately exported.
 
-Module publication requires protected, immutable tags and module-specific
-qualification; the existing root-tag source/chart workflow does not qualify
-module releases. Existing maintainer publication controls continue to apply.
+Module publication requires protected, immutable tags. The existing root-tag
+source/chart workflow does not publish Go modules. Existing maintainer publication
+controls continue to apply.
 
 ## Alternatives Rejected
 
