@@ -876,8 +876,8 @@ func readManifest(t *testing.T, destination string) []manifestRecord {
 	if err := json.Unmarshal(contents, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Version != manifestVersion {
-		t.Fatalf("manifest version = %d, want %d", manifest.Version, manifestVersion)
+	if manifest.Version != legacyManifestVersion && manifest.Version != manifestVersion {
+		t.Fatalf("manifest version = %d, want a supported format", manifest.Version)
 	}
 	return manifest.Links
 }

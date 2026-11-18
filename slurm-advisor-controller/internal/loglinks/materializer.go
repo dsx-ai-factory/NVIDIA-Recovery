@@ -27,6 +27,8 @@ const (
 // Config controls filesystem access and bounds all work performed by a
 // Materializer.
 type Config struct {
+	// RenameEnabled gives non-APS primary logs deterministic collector-compatible names.
+	RenameEnabled          bool
 	Destination            string
 	SourceRoots            []string
 	ApplicationPatterns    []string
@@ -45,6 +47,10 @@ type Config struct {
 
 // Target associates exact-attempt Slurm log paths with their owning job.
 type Target struct {
+	// JobName is the scheduler name used to recognize existing APS filenames.
+	JobName string
+	// SubmitTime is the exact attempt submission time; synthesis requires it.
+	SubmitTime   time.Time
 	JobID        string
 	AttemptIndex int32
 	ArrayJobID   string
@@ -91,6 +97,8 @@ type Materializer struct {
 }
 
 type candidate struct {
+	name         string
+	submitTime   time.Time
 	jobID        string
 	attemptIndex int32
 	arrayJobID   string
@@ -313,11 +321,29 @@ func (m *Materializer) collectPrimaryCandidates(
 				state.observation.Rejected = saturatingIncrement(state.observation.Rejected)
 				continue
 			}
-			if _, ok := seen[normalized]; ok {
+			name, renamed, err := Name(target, normalized, m.config.RenameEnabled)
+			if err != nil || (m.config.RenameEnabled && (len(name) > m.config.MaxPathLength ||
+				len(filepath.Join(m.config.Destination, name)) > m.config.MaxPathLength)) {
+				state.observation.Rejected = saturatingIncrement(state.observation.Rejected)
 				continue
 			}
-			seen[normalized] = struct{}{}
+			key := normalized
+			if m.config.RenameEnabled {
+				// Distinct jobs may intentionally share a source while requiring separate
+				// collector identities. Keep conflicting targets for collision reporting.
+				key = name + "\x00" + normalized
+			}
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			var submitTime time.Time
+			if renamed {
+				submitTime = target.SubmitTime.UTC()
+			}
 			primaries = append(primaries, candidate{
+				name:         name,
+				submitTime:   submitTime,
 				jobID:        target.JobID,
 				attemptIndex: target.AttemptIndex,
 				arrayJobID:   target.ArrayJobID,
@@ -330,7 +356,7 @@ func (m *Materializer) collectPrimaryCandidates(
 }
 
 func (m *Materializer) materialize(value candidate, now time.Time, state *syncState) {
-	name := filepath.Base(value.target)
+	name := value.linkName()
 	destination := filepath.Join(m.config.Destination, name)
 
 	info, err := os.Lstat(destination)
@@ -507,13 +533,23 @@ func (state *syncState) reportContextError() {
 
 func newManifestRecord(value candidate, now time.Time) manifestRecord {
 	return manifestRecord{
-		Name:           filepath.Base(value.target),
+		Name:           value.linkName(),
+		SubmitTime:     value.submitTime,
 		Target:         value.target,
 		JobID:          value.jobID,
 		AttemptIndex:   value.attemptIndex,
 		Origin:         value.origin,
 		LastObservedAt: now,
 	}
+}
+
+// linkName leaves adjacent application-log discovery on the existing basename
+// convention; only planned primary paths carry a synthesized name.
+func (value candidate) linkName() string {
+	if value.name != "" {
+		return value.name
+	}
+	return filepath.Base(value.target)
 }
 
 func normalizeLinkTarget(destination, target string) string {

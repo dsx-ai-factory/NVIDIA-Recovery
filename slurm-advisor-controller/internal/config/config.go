@@ -58,7 +58,10 @@ type MilestoneReportingConfig struct {
 	ShutdownTimeout time.Duration
 }
 
+// LogLinksConfig configures optional filesystem links for Slurm application logs.
 type LogLinksConfig struct {
+	// RenameEnabled gives otherwise arbitrary Slurm output names a collector-compatible identity.
+	RenameEnabled          bool
 	Enabled                bool
 	Destination            string
 	SourceRoots            []string
@@ -189,6 +192,7 @@ type environmentConfig struct {
 	AcknowledgeSchedulerActions    bool               `envconfig:"SLURM_ADVISOR_ACKNOWLEDGE_SCHEDULER_ACTIONS"`
 	OTLPTraceEndpoint              string             `envconfig:"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"`
 	OTLPTraceProtocol              string             `envconfig:"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"`
+	LogLinksRenameEnabled          bool               `envconfig:"SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED"`
 	LogLinksEnabled                bool               `envconfig:"SLURM_ADVISOR_LOG_LINKS_ENABLED"`
 	LogLinksDestination            string             `envconfig:"SLURM_ADVISOR_LOG_LINKS_DESTINATION"`
 	LogLinksSourceRoots            jsonStringArray    `envconfig:"SLURM_ADVISOR_LOG_LINKS_SOURCE_ROOTS_JSON"`
@@ -277,6 +281,7 @@ func FromEnv() (Config, error) {
 		},
 		LogLinks: LogLinksConfig{
 			Enabled:                      settings.LogLinksEnabled,
+			RenameEnabled:                settings.LogLinksRenameEnabled,
 			Destination:                  settings.LogLinksDestination,
 			SourceRoots:                  []string(settings.LogLinksSourceRoots),
 			ApplicationPatterns:          []string(settings.LogLinksApplicationPatterns),
@@ -764,6 +769,9 @@ func (cfg Config) Validate() error {
 }
 
 func (cfg LogLinksConfig) validate() error {
+	if cfg.RenameEnabled && !cfg.Enabled {
+		return errors.New("log link renaming requires log links to be enabled")
+	}
 	if !cfg.Enabled {
 		return nil
 	}

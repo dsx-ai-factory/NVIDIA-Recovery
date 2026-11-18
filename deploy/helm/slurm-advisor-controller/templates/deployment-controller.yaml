@@ -120,6 +120,8 @@ spec:
             - name: SLURM_ADVISOR_LOG_LINKS_ENABLED
               value: {{ .Values.controller.logLinks.enabled | quote }}
             {{- if .Values.controller.logLinks.enabled }}
+            - name: SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED
+              value: {{ .Values.controller.logLinks.renameEnabled | quote }}
             - name: SLURM_ADVISOR_LOG_LINKS_DESTINATION
               value: {{ .Values.controller.logLinks.destination.mountPath | quote }}
             - name: SLURM_ADVISOR_LOG_LINKS_SOURCE_ROOTS_JSON

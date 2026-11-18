@@ -46,6 +46,12 @@ func (m *Materializer) scan(
 	scanCtx, cancel := context.WithTimeout(ctx, m.config.ScanTimeout)
 	defer cancel()
 
+	primaryPaths := make(map[string]struct{}, len(primaries))
+	if m.config.RenameEnabled {
+		for _, primary := range primaries {
+			primaryPaths[primary.target] = struct{}{}
+		}
+	}
 	directories := m.scanDirectories(scanCtx, primaries, state)
 	if scanCtx.Err() != nil {
 		state.reportContextError()
@@ -59,7 +65,7 @@ func (m *Materializer) scan(
 		if state.observation.ScanMatches >= m.config.MaxMatchesPerScan {
 			return
 		}
-		m.scanOneDirectory(scanCtx, now, directory, state)
+		m.scanOneDirectory(scanCtx, now, directory, primaryPaths, state)
 	}
 }
 
@@ -165,6 +171,7 @@ func (m *Materializer) scanOneDirectory(
 	ctx context.Context,
 	now time.Time,
 	directory scanDirectory,
+	primaryPaths map[string]struct{},
 	state *syncState,
 ) {
 	if err := validateExistingDirectoryBoundary(directory.path); err != nil {
@@ -203,6 +210,10 @@ func (m *Materializer) scanOneDirectory(
 		}
 
 		entryPath := filepath.Join(directory.path, entry.Name())
+		if _, primary := primaryPaths[entryPath]; primary {
+			// Do not expose a renamed primary a second time under its old basename.
+			continue
+		}
 		info, err := os.Lstat(entryPath)
 		if err != nil {
 			state.observation.Errors = saturatingIncrement(state.observation.Errors)

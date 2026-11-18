@@ -22,7 +22,16 @@ loki.process "slurm_logs" {
 	forward_to = [loki.write.default.receiver]
 
 	stage.regex {
-		expression = "(?:.*)[_-](?P<job_id>\\d+)(?:_date_.*|\\.(?:out|log))$"
+		expression = "(?:.*)[_-](?P<job_id>\\d+)\\.(?:out|log)$"
+		source     = "filename"
+	}
+
+	stage.regex {
+		// Date-shaped names override the ordinary basename extraction above;
+		// its trailing timestamp digits are not the job ID. Generated names
+		// have a digest and attempt boundary so array parent_task IDs stay whole
+		// without mistaking a legacy job-name suffix for generated identity.
+		expression = "(?:(?:.*/)?[A-Za-z0-9-]{1,64}-[0-9a-f]{16}-a\\d+_|.*_)(?P<job_id>\\d+(?:_\\d+)?)_date_.*$"
 		source     = "filename"
 	}
 

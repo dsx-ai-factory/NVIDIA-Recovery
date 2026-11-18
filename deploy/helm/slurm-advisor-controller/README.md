@@ -415,6 +415,45 @@ controller:
       - '^worker-{job_id}[.]log$'
 ```
 
+`controller.logLinks.renameEnabled` defaults to `false` and requires
+`controller.logLinks.enabled=true`. With renaming enabled, Slurm stdout files
+whose names do not follow the APS convention receive deterministic link names
+containing a source-path digest, the exact attempt, job ID, and UTC submission
+time. Existing APS-convention names retain their basenames. The generated names
+use `.log` so collectors can discover otherwise arbitrary output filenames.
+Renamed Slurm paths are published under their collector-visible link paths;
+`scheduler_metadata.app_log_link_targets` retains the original source paths.
+The same setting is `SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED` for standalone
+processes. Disabling it restores basename planning for subsequent observations;
+it does not remove links already present or reset collector positions.
+
+Manifests containing generated records use format version 2; the controller
+continues to read version 1 and writes version 1 when no extended records remain.
+Older binaries reject the entire version-2 file, including ownership of ordinary
+basename links. Turning off renaming alone does not make that file compatible.
+Before a binary downgrade, stop the writer, back up the manifest and link
+directory, and leave materialization disabled. Re-enable the older materializer
+only after the newer writer has retired extended records and rewritten version 1,
+or after restoring a verified matching version-1 manifest-and-link snapshot with
+writers stopped. Never relabel the version or strip fields to force a downgrade.
+
+Generated names have the form
+`<stem>-<digest>-a<attempt>_<job-id>_date_<YY-MM-DD>_time_<HH-MM-SS>.log`.
+The stem contains at most 64 ASCII letters, digits, or hyphens; the digest is
+the first 16 hexadecimal characters of the source path's SHA-256. The job ID
+is the canonical Slurm ID, including `<array-id>_<task-id>` for array tasks.
+Collectors must extract that complete ID. A missing submission time or a path
+outside the source roots keeps its original published path and gets no generated
+link. Published names are plans: filesystem creation may lag or fail while job
+publication continues. Final accounting preserves the same naming plan.
+
+Earlier-attempt generated links are not removed immediately in this first
+implementation. Keep this option disabled for requeued workloads that reuse
+source files until the follow-up replacement policy and collector replay
+behavior are qualified. Enabling or disabling naming can expose old and new
+links to the same source; plan the collector transition before rollout. See
+[the proposed naming contract](../../../docs/decisions/0058-plan-collector-visible-slurm-log-paths.md).
+
 The chart renders source-root and application-pattern values as JSON arrays so
 commas in paths or regular expressions are preserved. The controller container
 mounts sources read-only and the destination writable. Its `sackd` sidecar,

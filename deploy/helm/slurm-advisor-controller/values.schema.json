@@ -123,6 +123,7 @@
       "additionalProperties": false,
       "required": [
         "enabled",
+        "renameEnabled",
         "destination",
         "sources",
         "applicationPatterns",
@@ -138,8 +139,13 @@
         "maxMatchesPerScan",
         "maxOwnedLinks"
       ],
+      "allOf": [{
+        "if": { "properties": { "renameEnabled": { "const": true } } },
+        "then": { "properties": { "enabled": { "const": true } } }
+      }],
       "properties": {
         "enabled": { "type": "boolean" },
+        "renameEnabled": { "type": "boolean" },
         "destination": {
           "oneOf": [
             {

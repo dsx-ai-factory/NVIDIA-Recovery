@@ -288,7 +288,13 @@ func newController(
 		ActionExecutor:      actionExecutor,
 		SeenJobs:            seenJobs,
 		LogLinkMaterializer: logLinkMaterializer,
-		Environment:         cfg.Environment,
+		LogLinkNaming: &loglinks.Config{
+			RenameEnabled: cfg.LogLinks.Enabled && cfg.LogLinks.RenameEnabled,
+			Destination:   cfg.LogLinks.Destination,
+			SourceRoots:   slices.Clone(cfg.LogLinks.SourceRoots),
+			MaxPathLength: cfg.LogLinks.MaxPathLength,
+		},
+		Environment: cfg.Environment,
 		Options: reconcile.ControllerOptions{
 			AdvicePageLimit:                100,
 			JobPageLimit:                   100,
@@ -327,6 +333,7 @@ func newLogLinkMaterializer(
 	}
 
 	materializer, recovery, err := loglinks.New(loglinks.Config{
+		RenameEnabled:          cfg.LogLinks.RenameEnabled,
 		Destination:            cfg.LogLinks.Destination,
 		SourceRoots:            slices.Clone(cfg.LogLinks.SourceRoots),
 		ApplicationPatterns:    slices.Clone(cfg.LogLinks.ApplicationPatterns),
