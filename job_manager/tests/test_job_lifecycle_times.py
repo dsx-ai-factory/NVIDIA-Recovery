@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from job_manager.job_lifecycle_times import (
     INVALID_SLURM_LIFECYCLE_TIMES_DETAIL,
     SlurmLifecycleTimesValidationError,
-    normalize_slurm_lifecycle_time,
+    normalize_lifecycle_time,
     project_job_lifecycle_times,
 )
 from job_manager.main import app
@@ -17,23 +17,23 @@ from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_
 from recovery_libs.storage.mysql_storage import MySQLStorage
 
 
-def test_normalize_slurm_lifecycle_time_parses_timezone_aware_iso_8601():
-    assert normalize_slurm_lifecycle_time(
+def test_normalize_lifecycle_time_parses_timezone_aware_iso_8601():
+    assert normalize_lifecycle_time(
         "2026-07-31T19:21:06Z",
         metadata_key="slurm_end_time",
     ) == datetime(2026, 7, 31, 19, 21, 6, tzinfo=UTC)
 
 
 @pytest.mark.parametrize("raw_time", [None, "", 1, True, [], {}, "not-a-time", "2026-07-31T19:21:06"])
-def test_normalize_slurm_lifecycle_time_rejects_malformed_or_naive_values(raw_time):
+def test_normalize_lifecycle_time_rejects_malformed_or_naive_values(raw_time):
     with pytest.raises(SlurmLifecycleTimesValidationError):
-        normalize_slurm_lifecycle_time(raw_time, metadata_key="slurm_end_time")
+        normalize_lifecycle_time(raw_time, metadata_key="slurm_end_time")
 
 
 @pytest.mark.parametrize("raw_time", ["1969-12-31T23:59:59Z", "2106-02-07T06:28:14Z"])
-def test_normalize_slurm_lifecycle_time_rejects_values_outside_storage_range(raw_time):
+def test_normalize_lifecycle_time_rejects_values_outside_storage_range(raw_time):
     with pytest.raises(SlurmLifecycleTimesValidationError, match="outside the supported MySQL TIMESTAMP range"):
-        normalize_slurm_lifecycle_time(raw_time, metadata_key="slurm_start_time")
+        normalize_lifecycle_time(raw_time, metadata_key="slurm_start_time")
 
 
 def test_project_job_lifecycle_times_projects_present_slurm_metadata():

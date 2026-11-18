@@ -11,6 +11,9 @@ Slurm-on-Kubernetes through Slinky.
   Advisor API; Slurm and Slinky are adapters to that contract.
 - Test through production interfaces. Do not add hidden test-only ingress.
 - Keep changes scoped to the requested outcome and avoid unrelated refactors.
+- Keep shared APIs and workflows scheduler-neutral. Introduce scheduler-specific
+  branches only when required by scheduler data, capabilities, or policy.
+  Apply the difference at the point that needs it and reuse the shared flow.
 - Do not include internal issue or ticket tracker links in pull request
   descriptions or repository documentation.
 - Do not silently preserve internal hostnames, package indexes, registries,

@@ -2416,3 +2416,74 @@ func TestMapStateToAdviceStateReleased(t *testing.T) {
 		t.Fatalf("mapStateToAdviceState(Released) = %v, want RELEASED", got)
 	}
 }
+
+// Discovery acknowledges a terminal write from GetJob and upsert responses.
+// For direct Kubernetes rows only the canonical states that Job Manager keeps
+// final may read as terminal; other producers keep the Slurm aliases.
+func TestJobClientSourceReportsOnlyCanonicalStatesForDirectKubernetesRows(t *testing.T) {
+	direct := map[string]any{"scheduler": "kubernetes", "workload_uid": "workload-uid"}
+	legacy := map[string]any{"scheduler": "kubernetes"}
+	for _, tc := range []struct {
+		state      string
+		wantDirect v1.JobStatus
+		wantLegacy v1.JobStatus
+	}{
+		{"PENDING", v1.JobStatus_JOB_STATUS_PENDING, v1.JobStatus_JOB_STATUS_PENDING},
+		{"RUNNING", v1.JobStatus_JOB_STATUS_RUNNING, v1.JobStatus_JOB_STATUS_RUNNING},
+		{"STOPPED", v1.JobStatus_JOB_STATUS_STOPPED, v1.JobStatus_JOB_STATUS_STOPPED},
+		{"COMPLETED", v1.JobStatus_JOB_STATUS_COMPLETED, v1.JobStatus_JOB_STATUS_COMPLETED},
+		{"FAILED", v1.JobStatus_JOB_STATUS_FAILED, v1.JobStatus_JOB_STATUS_FAILED},
+		{"CANCELLED", v1.JobStatus_JOB_STATUS_CANCELLED, v1.JobStatus_JOB_STATUS_CANCELLED},
+		{"DELETED", v1.JobStatus_JOB_STATUS_DELETED, v1.JobStatus_JOB_STATUS_DELETED},
+		{"SUSPENDED", v1.JobStatus_JOB_STATUS_UNSPECIFIED, v1.JobStatus_JOB_STATUS_STOPPED},
+		{"PREEMPTED", v1.JobStatus_JOB_STATUS_UNSPECIFIED, v1.JobStatus_JOB_STATUS_STOPPED},
+		{"BOOT_FAIL", v1.JobStatus_JOB_STATUS_UNSPECIFIED, v1.JobStatus_JOB_STATUS_FAILED},
+		{"TIMEOUT", v1.JobStatus_JOB_STATUS_UNSPECIFIED, v1.JobStatus_JOB_STATUS_FAILED},
+	} {
+		for _, row := range []struct {
+			name     string
+			metadata map[string]any
+			want     v1.JobStatus
+		}{{"direct", direct, tc.wantDirect}, {"legacy", legacy, tc.wantLegacy}} {
+			t.Run(tc.state+"/"+row.name, func(t *testing.T) {
+				stored := map[string]any{
+					"job_id": "job-1", "job_attempt_index": 0, "workflow_id": "job-1",
+					"heimdall_job_id": "00000000-0000-0000-0000-000000000001",
+					"state":           tc.state, "schedulerMetadata": row.metadata,
+				}
+				backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					if r.Method == http.MethodGet {
+						_ = json.NewEncoder(w).Encode(map[string]any{"statuses": []any{stored}, "item_count": 1})
+						return
+					}
+					_ = json.NewEncoder(w).Encode(stored)
+				}))
+				defer backend.Close()
+				source := NewJobClientSource(backend.URL)
+
+				read, err := source.GetJob(context.Background(), &v1.GetJobRequest{
+					HeimdallJobId: "00000000-0000-0000-0000-000000000001", UseHeimdallId: new(true),
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if read.GetJob().GetState() != row.want {
+					t.Fatalf("GetJob state = %v, want %v", read.GetJob().GetState(), row.want)
+				}
+				if row.name != "direct" {
+					return
+				}
+				upserted, err := source.CreateOrUpdateJob(context.Background(), &v1.CreateOrUpdateJobRequest{
+					JobId: "job-1", WorkflowId: "job-1",
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if upserted.GetJob().GetState() != row.want {
+					t.Fatalf("upsert response state = %v, want %v", upserted.GetJob().GetState(), row.want)
+				}
+			})
+		}
+	}
+}

@@ -488,6 +488,14 @@ func apsSpecOutputToRecoveryConfig(apsSpec jobmanagerBindings.ApsSlurmJobSpecOut
 	return config
 }
 
+// isDirectKubernetesObservation reports whether stored scheduler metadata
+// identifies a row published by Kubernetes workload discovery. It matches Job
+// Manager's rule: scheduler kubernetes with a nonempty workload UID.
+func isDirectKubernetesObservation(metadata map[string]any) bool {
+	uid, ok := metadata["workload_uid"].(string)
+	return metadata["scheduler"] == "kubernetes" && ok && uid != ""
+}
+
 // convertJobStatusToString converts a protobuf JobStatus enum to a string
 func convertJobStatusToString(status v1.JobStatus) string {
 	switch status {
@@ -712,7 +720,12 @@ func slurmJobExecutionStatusToJobPb(ctx context.Context, job *jobmanager.SlurmJo
 
 	// See: https://slurm.schedmd.com/job_state_codes.html#states for all possible slurm job states.
 	actualState := v1.JobStatus_JOB_STATUS_UNSPECIFIED
-	if job.State.IsSet() && job.State.Get() != nil {
+	if job.State.IsSet() && job.State.Get() != nil && isDirectKubernetesObservation(job.SchedulerMetadata) {
+		// Job Manager keeps only canonical terminal states final for direct
+		// Kubernetes rows. Reporting a Slurm alias as terminal would let
+		// discovery acknowledge an outcome that storage can still replace.
+		actualState = parseJobStatus(*job.State.Get())
+	} else if job.State.IsSet() && job.State.Get() != nil {
 		stateStr := *job.State.Get()
 		// TODO: Double check these states are correct
 		switch stateStr {
@@ -724,6 +737,8 @@ func slurmJobExecutionStatusToJobPb(ctx context.Context, job *jobmanager.SlurmJo
 			actualState = v1.JobStatus_JOB_STATUS_FAILED
 		case "CANCELLED":
 			actualState = v1.JobStatus_JOB_STATUS_CANCELLED
+		case "DELETED":
+			actualState = v1.JobStatus_JOB_STATUS_DELETED
 		case "STOPPED", "PREEMPTED", "SUSPENDED":
 			actualState = v1.JobStatus_JOB_STATUS_STOPPED
 		case "PENDING":

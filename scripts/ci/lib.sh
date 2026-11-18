@@ -98,13 +98,15 @@ ci_go_packages() {
     # Return all supported Go modules for the default verification set.
     printf '%s\n' \
         "api-gateway" \
-        "slurm-advisor-controller"
+        "slurm-advisor-controller" \
+        "kubernetes-job-controller"
 }
 
 ci_go_package_dir() {
     case "$1" in
         api-gateway) echo "api-gateway" ;;
         slurm-advisor-controller) echo "slurm-advisor-controller" ;;
+        kubernetes-job-controller) echo "kubernetes-job-controller" ;;
         workload-map) echo "tests/workload_map" ;;
         *)
             echo "unsupported Go package: $1" >&2

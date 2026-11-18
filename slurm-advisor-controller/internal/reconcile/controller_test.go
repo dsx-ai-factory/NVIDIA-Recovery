@@ -1136,9 +1136,16 @@ func TestControllerRetainsUnresolvedBootstrappedJobAcrossTicks(t *testing.T) {
 	reader.EXPECT().ActiveJobs(gomock.Any()).Return(nil, nil).Times(2)
 	firstAccounting := reader.EXPECT().FinalizedJobs(gomock.Any(), []cluster.JobAttemptRef{key}).Return(nil, nil)
 	reader.EXPECT().FinalizedJobs(gomock.Any(), []cluster.JobAttemptRef{key}).Return([]cluster.JobExecutionRecord{completedJob}, nil).After(firstAccounting)
+	kubernetesMetadata, err := structpb.NewStruct(map[string]any{"scheduler": "kubernetes"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	client := &fakeControllerClient{
 		getJobsResponses: map[string]*pb.GetJobsResponse{
-			"": {Jobs: []*pb.Job{{JobId: key.JobID, AttemptIndex: key.AttemptIndex}}},
+			"": {Jobs: []*pb.Job{
+				{JobId: key.JobID, AttemptIndex: key.AttemptIndex},
+				{JobId: "7e913d4d-98fa-4468-937d-15a7a925155e", SchedulerMetadata: kubernetesMetadata},
+			}},
 		},
 		listAdviceResponses: map[string]*pb.ListAdviceResponse{"": {}},
 	}

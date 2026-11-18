@@ -389,6 +389,9 @@ func (c *Controller) buildBaseSnapshot(ctx context.Context, observation *SyncObs
 		addActiveJob(&snapshot, job)
 	}
 	for _, job := range heimdallJobs {
+		if job.GetSchedulerMetadata().GetFields()["scheduler"].GetStringValue() == "kubernetes" {
+			continue
+		}
 		// Reject historical candidates before bootstrap retains their keys or
 		// accounting queries Slurm. Do not record a scheduler rejection here:
 		// a stale backend value must not block a fresh, independently admitted job.

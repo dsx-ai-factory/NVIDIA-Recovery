@@ -90,6 +90,9 @@ for package in "${packages[@]}"; do
         slurm-advisor-controller)
             check_slurm_advisor_controller || failed=1
             ;;
+        kubernetes-job-controller)
+            # The controller consumes gateway bindings and has no generated files.
+            ;;
         *)
             echo "generated-artifact check does not support package: $package" >&2
             failed=1
