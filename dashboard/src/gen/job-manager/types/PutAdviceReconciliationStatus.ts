@@ -6,42 +6,42 @@ import type { AdviceReconciliationStatus } from './AdviceReconciliationStatus'
 import type { HTTPValidationError } from './HTTPValidationError'
 
 export interface PutAdviceReconciliationStatusPath {
-    heimdall_id: string;
+  heimdall_id: string;
 }
 
 /**
  * @description The reconciliation observation for an Advice generation.
  * @example {"reason":"DESIRED_STATE_OBSERVED","disposition":"PENDING","observedAt":"2000-01-23T04:56:07.000+00:00","transitionedAt":"2000-01-23T04:56:07.000+00:00","observedGeneration":1,"diagnosticMessage":"diagnosticMessage"}
  * @type object
-*/
+ */
 export type PutAdviceReconciliationStatusStatus200 = AdviceReconciliationStatus;
 
 /**
  * @example {"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}
  * @type object
-*/
+ */
 export type PutAdviceReconciliationStatusStatus422 = HTTPValidationError;
 
 /**
  * @description The reconciliation observation for an Advice generation.
  * @example {"reason":"DESIRED_STATE_OBSERVED","disposition":"PENDING","observedAt":"2000-01-23T04:56:07.000+00:00","transitionedAt":"2000-01-23T04:56:07.000+00:00","observedGeneration":1,"diagnosticMessage":"diagnosticMessage"}
  * @type object
-*/
+ */
 export type PutAdviceReconciliationStatusBody = AdviceReconciliationStatus;
 
 export interface PutAdviceReconciliationStatusOptions {
-    body: PutAdviceReconciliationStatusBody;
-    path: PutAdviceReconciliationStatusPath;
-    query?: never;
-    headers?: never;
+  body: PutAdviceReconciliationStatusBody;
+  path: PutAdviceReconciliationStatusPath;
+  query?: never;
+  headers?: never;
 }
 
 export interface PutAdviceReconciliationStatusResponses {
-    "200": PutAdviceReconciliationStatusStatus200;
-    "422": PutAdviceReconciliationStatusStatus422;
+  '200': PutAdviceReconciliationStatusStatus200;
+  '422': PutAdviceReconciliationStatusStatus422;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type PutAdviceReconciliationStatusResponse = (PutAdviceReconciliationStatusStatus200 | PutAdviceReconciliationStatusStatus422);
+ */
+export type PutAdviceReconciliationStatusResponse = PutAdviceReconciliationStatusStatus200;

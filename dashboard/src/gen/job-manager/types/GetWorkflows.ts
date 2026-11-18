@@ -6,62 +6,69 @@ import type { GetWorkflowsResponse } from './GetWorkflowsResponse'
 import type { HTTPValidationError } from './HTTPValidationError'
 
 export const getWorkflowsWorkflowIdMatch = {
-    prefix: "prefix",
-    exact: "exact",
-    fuzzy: "fuzzy"
+  prefix: 'prefix',
+  exact: 'exact',
+  fuzzy: 'fuzzy',
 } as const;
 
 export type GetWorkflowsWorkflowIdMatchKey = (typeof getWorkflowsWorkflowIdMatch)[keyof typeof getWorkflowsWorkflowIdMatch];
 
 export interface GetWorkflowsQuery {
-    /**
-     * @description The maximum number of records to return.
-     * @default 50
-     * @type integer | undefined
-    */
-    limit?: number;
-    /**
-     * @description The offset to start the records from.
-     * @default 0
-     * @type integer | undefined
-    */
-    offset?: number;
-    /**
-     * @description The workflow ID filter.
-     * @minLength 1
-     * @maxLength 256
-     * @type string | undefined
-    */
-    "workflow-id"?: string | null;
-    /**
-     * @description How to match workflow_id: \'prefix\' (default, case-insensitive starts with), \'exact\' (case-sensitive exact match), or \'fuzzy\' (case-insensitive substring match).
-     * @default 'prefix'
-     * @type string | undefined
-    */
-    workflow_id_match?: GetWorkflowsWorkflowIdMatchKey;
+  /**
+   * @description The maximum number of records to return.
+   * @default 50
+   * @type integer | undefined
+   */
+  limit?: number;
+  /**
+   * @description The offset to start the records from.
+   * @default 0
+   * @type integer | undefined
+   */
+  offset?: number;
+  /**
+   * @description The workflow ID filter.
+   * @minLength 1
+   * @maxLength 256
+   * @type string | undefined
+   */
+  'workflow-id'?: string | null;
+  /**
+   * @description How to match workflow_id: 'prefix' (default, case-insensitive starts with), 'exact' (case-sensitive exact match), or 'fuzzy' (case-insensitive substring match).
+   * @default 'prefix'
+   * @type string | undefined
+   */
+  workflow_id_match?: GetWorkflowsWorkflowIdMatchKey;
 }
 
 /**
- * @description The public facing data model of the jobs by name response that gets\nreturned from job manager\'s REST APIs. It contains a list of JobsByName\nobjects.
+ * @description The public facing data model of the jobs by name response that gets
+ * returned from job manager's REST APIs. It contains a list of JobsByName
+ * objects.
  * @example {"item_count":0,"workflows":[{"start_time":"2000-01-23T04:56:07.000+00:00","end_time":"2000-01-23T04:56:07.000+00:00","id":"id"},{"start_time":"2000-01-23T04:56:07.000+00:00","end_time":"2000-01-23T04:56:07.000+00:00","id":"id"}]}
  * @type object
-*/
+ */
 export type GetWorkflowsStatus200 = GetWorkflowsResponse;
 
 /**
  * @example {"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}
  * @type object
-*/
+ */
 export type GetWorkflowsStatus422 = HTTPValidationError;
 
 export interface GetWorkflowsOptions {
-    body?: never;
-    path?: never;
-    query?: GetWorkflowsQuery;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query?: GetWorkflowsQuery;
+  headers?: never;
 }
 
 export interface GetWorkflowsResponses {
-    "200": GetWorkflowsStatus200;
-    "422": GetWorkflowsStatus422;
+  '200': GetWorkflowsStatus200;
+  '422': GetWorkflowsStatus422;
 }
+
+/**
+ * @description Union of all possible responses
+ */
+export type GetWorkflowsResponse2 = GetWorkflowsStatus200;

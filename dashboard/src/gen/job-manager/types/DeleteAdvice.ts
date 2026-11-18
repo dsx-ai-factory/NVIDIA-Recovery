@@ -5,7 +5,7 @@
 import type { HTTPValidationError } from './HTTPValidationError'
 
 export interface DeleteAdvicePath {
-    heimdall_id: string;
+  heimdall_id: string;
 }
 
 export type DeleteAdviceStatus200 = unknown;
@@ -13,22 +13,22 @@ export type DeleteAdviceStatus200 = unknown;
 /**
  * @example {"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}
  * @type object
-*/
+ */
 export type DeleteAdviceStatus422 = HTTPValidationError;
 
 export interface DeleteAdviceOptions {
-    body?: never;
-    path: DeleteAdvicePath;
-    query?: never;
-    headers?: never;
+  body?: never;
+  path: DeleteAdvicePath;
+  query?: never;
+  headers?: never;
 }
 
 export interface DeleteAdviceResponses {
-    "200": DeleteAdviceStatus200;
-    "422": DeleteAdviceStatus422;
+  '200': DeleteAdviceStatus200;
+  '422': DeleteAdviceStatus422;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type DeleteAdviceResponse = (DeleteAdviceStatus200 | DeleteAdviceStatus422);
+ */
+export type DeleteAdviceResponse = DeleteAdviceStatus200;

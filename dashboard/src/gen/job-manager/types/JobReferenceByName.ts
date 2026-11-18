@@ -6,12 +6,12 @@
  * @description Identify a target job by its name.
  * @example {"name":"name","type":"name"}
  * @type object
-*/
+ */
 export interface JobReferenceByName {
-    /**
-     * @default 'name'
-     * @type string | undefined
-    */
-    type?: "name";
-    name: string;
+  /**
+   * @default 'name'
+   * @type string | undefined
+   */
+  type?: 'name';
+  name: string;
 }

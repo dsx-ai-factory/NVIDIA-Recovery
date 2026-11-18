@@ -28,31 +28,33 @@ function stripKubbBanner(source) {
     .replace(KUBB_CUSTOM_BANNER, "");
 }
 
-// @kubb/plugin-axios's readBytes() template delegates `yield*` to a bare
-// AsyncIterable, whose iterator defaults `next()` to accept `undefined`,
-// while the containing AsyncGenerator defaults to sending `unknown` -
-// TypeScript rejects the delegation (TS2766) even though the two are
-// runtime-equivalent. Rewriting the delegation as an explicit `for await`
-// loop iterates via the same Symbol.asyncIterator protocol without
-// generator-to-generator delegation, sidestepping the mismatch.
-const YIELD_STAR_STREAM = "    yield* stream\n    return\n  }";
-const YIELD_STAR_STREAM_FIX =
-  "    for await (const chunk of stream) {\n      yield chunk\n    }\n    return\n  }";
+// @kubb/plugin-axios's core.ts destructures `{ request, response }` from
+// `typeof contentType === 'string' ? { request: contentType } : ...`. The
+// string branch's object literal has no `response` property, so TypeScript
+// 5.5 rejects the binding with TS2525 (newer releases accept it). Spelling
+// out `response: undefined` yields the same runtime value and gives both
+// union members the property.
+const CONTENT_TYPE_STRING_BRANCH = "? { request: contentType } :";
+const CONTENT_TYPE_STRING_BRANCH_FIX =
+  "? { request: contentType, response: undefined } :";
 
-function fixYieldStarDelegation(file, source) {
-  if (!file.endsWith(`${join(".kubb", "client.ts")}`)) {
+function fixContentTypeDestructuring(file, source) {
+  if (!file.endsWith(`${join(".kubb", "core.ts")}`)) {
     return source;
   }
-  if (source.includes(YIELD_STAR_STREAM_FIX)) {
+  if (source.includes(CONTENT_TYPE_STRING_BRANCH_FIX)) {
     return source;
   }
-  if (!source.includes(YIELD_STAR_STREAM)) {
+  if (!source.includes(CONTENT_TYPE_STRING_BRANCH)) {
     throw new Error(
-      `${file}: expected @kubb/plugin-axios's readBytes() "yield* stream" pattern was not found. ` +
-        "Kubb may have changed its generated template - re-check whether the TS2766 workaround in this script is still needed.",
+      `${file}: expected @kubb/plugin-axios's contentType destructuring pattern was not found. ` +
+        "Kubb may have changed its generated template - re-check whether the TS2525 workaround in this script is still needed.",
     );
   }
-  return source.replace(YIELD_STAR_STREAM, YIELD_STAR_STREAM_FIX);
+  return source.replace(
+    CONTENT_TYPE_STRING_BRANCH,
+    CONTENT_TYPE_STRING_BRANCH_FIX,
+  );
 }
 
 // @kubb/plugin-zod emits `<schema>.optional().default({})` for an
@@ -99,8 +101,11 @@ for (const file of await generatedTypeScriptFiles(GENERATED_ROOT)) {
   const withHeader = preamble.includes(SPDX_MARKER)
     ? original
     : GENERATED_HEADER + stripKubbBanner(original);
-  const withYieldStarFix = fixYieldStarDelegation(file, withHeader);
-  const patched = fixOptionalDefaultEmptyObjectMismatch(file, withYieldStarFix);
+  const withContentTypeFix = fixContentTypeDestructuring(file, withHeader);
+  const patched = fixOptionalDefaultEmptyObjectMismatch(
+    file,
+    withContentTypeFix,
+  );
   if (patched !== original) {
     await writeFile(file, patched);
   }

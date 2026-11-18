@@ -3,7 +3,7 @@
 
 import type { AxiosError } from "axios";
 import { type NextRequest, NextResponse } from "next/server";
-import { auditEventsGet } from "~/gen/notifications";
+import { auditEventsGet, isResponseError } from "~/gen/notifications";
 import type {
   AuditEventLevelKey,
   AuditEventsGetResponses,
@@ -22,8 +22,8 @@ import {
 
 const MOCK_ENABLED = false;
 
-function errorDetail(error: AxiosError): string {
-  const responseData = error.response?.data;
+function errorDetail(error: Error): string {
+  const responseData = isResponseError(error) ? error.data : undefined;
   if (
     responseData !== null &&
     typeof responseData === "object" &&
@@ -172,9 +172,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(auditEventsData);
   } catch (_error) {
-    const error = _error as AxiosError;
+    const error = _error as Error;
     const publicErrorDetails = {
-      code: error.code,
+      code: (error as AxiosError).code,
       name: error.name,
       message: error.message,
       cause: error.cause,
@@ -186,7 +186,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       {
         detail: errorDetail(error),
       },
-      { status: error.response?.status || 500 },
+      { status: (isResponseError(error) && error.status) || 500 },
     );
   }
 }

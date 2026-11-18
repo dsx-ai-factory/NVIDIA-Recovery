@@ -6,9 +6,9 @@ import * as z from 'zod'
 import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { nodeEventsSchema } from './nodeEventsSchema'
 
-export const getErrorAttributionsQueryNodeNamesSchema = z.array(z.string()).optional()
+export const getErrorAttributionsQueryNodeNamesSchema = z.array(z.string().nullable()).optional()
 
-export const getErrorAttributionsQueryJobIdsSchema = z.array(z.string()).optional()
+export const getErrorAttributionsQueryJobIdsSchema = z.array(z.string().nullable()).optional()
 
 export const getErrorAttributionsQueryStartTimestampSchema = z.iso.datetime().nullish()
 
@@ -20,10 +20,20 @@ export const getErrorAttributionsQueryLimitSchema = z.int().nullish()
 
 export const getErrorAttributionsQueryOffsetSchema = z.int().nullish()
 
-export const getErrorAttributionsStatus200Schema = nodeEventsSchema.describe('Represents a collection of node events and global events.\n\nThis model contains lists of NodeEvent and GlobalEvent objects and provides metadata\nabout the total number of items and the page size.\n\nTODO: Rename this class to something more generic like `AttributionEvents` or\n`ErrorAttributions` since it now contains both node-level and global/job-level events,\nnot just node events.').meta({ examples: [{}] })
+export const getErrorAttributionsStatus200Schema = nodeEventsSchema.describe('Represents a collection of node events and global events.\n\nThis model contains lists of NodeEvent and GlobalEvent objects and provides metadata\nabout the total number of items and the page size.\n\nTODO: Rename this class to something more generic like `AttributionEvents` or\n`ErrorAttributions` since it now contains both node-level and global/job-level events,\nnot just node events.').meta({ examples: [{"item_count":0,"global_events":[{"error_attribution_origin":"error_attribution_origin","error_attribution_sources":["error_attribution_sources","error_attribution_sources"],"fact_status":"fact_status","job_id":"job_id","error_attribution_type":"error_attribution_type","error_attribution":"error_attribution","job_execution_error":{"code":1,"signature":"signature","description":"description","message":"message"},"job_attempt_index":5,"timestamp":"2000-01-23T04:56:07.000+00:00"},{"error_attribution_origin":"error_attribution_origin","error_attribution_sources":["error_attribution_sources","error_attribution_sources"],"fact_status":"fact_status","job_id":"job_id","error_attribution_type":"error_attribution_type","error_attribution":"error_attribution","job_execution_error":{"code":1,"signature":"signature","description":"description","message":"message"},"job_attempt_index":5,"timestamp":"2000-01-23T04:56:07.000+00:00"}],"attribution_summary":"attribution_summary","attribution_insight":"attribution_insight","events":[{"cluster":"cluster","error_attribution_origin":"error_attribution_origin","job_end_time":"2000-01-23T04:56:07.000+00:00","job_start_time":"2000-01-23T04:56:07.000+00:00","error_attribution":"error_attribution","job_execution_error":{"code":1,"signature":"signature","description":"description","message":"message"},"job_attempt_index":6,"node":"node","original_exclusion_type":"original_exclusion_type","error_attribution_sources":["error_attribution_sources","error_attribution_sources"],"fact_status":"fact_status","job_id":"job_id","exclusion_type":"exclusion_type","error_attribution_type":"error_attribution_type","timestamp":"2000-01-23T04:56:07.000+00:00"},{"cluster":"cluster","error_attribution_origin":"error_attribution_origin","job_end_time":"2000-01-23T04:56:07.000+00:00","job_start_time":"2000-01-23T04:56:07.000+00:00","error_attribution":"error_attribution","job_execution_error":{"code":1,"signature":"signature","description":"description","message":"message"},"job_attempt_index":6,"node":"node","original_exclusion_type":"original_exclusion_type","error_attribution_sources":["error_attribution_sources","error_attribution_sources"],"fact_status":"fact_status","job_id":"job_id","exclusion_type":"exclusion_type","error_attribution_type":"error_attribution_type","timestamp":"2000-01-23T04:56:07.000+00:00"}]}] })
 
-export const getErrorAttributionsStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getErrorAttributionsStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const getErrorAttributionsResponseSchema = getErrorAttributionsStatus200Schema
 
 export const getErrorAttributionsErrorSchema = getErrorAttributionsStatus422Schema
+
+export const getErrorAttributionsQuerySchema = z.object({
+  node_names: getErrorAttributionsQueryNodeNamesSchema,
+  job_ids: getErrorAttributionsQueryJobIdsSchema,
+  start_timestamp: getErrorAttributionsQueryStartTimestampSchema,
+  end_timestamp: getErrorAttributionsQueryEndTimestampSchema,
+  anomaly_uuid: getErrorAttributionsQueryAnomalyUuidSchema,
+  limit: getErrorAttributionsQueryLimitSchema,
+  offset: getErrorAttributionsQueryOffsetSchema,
+})

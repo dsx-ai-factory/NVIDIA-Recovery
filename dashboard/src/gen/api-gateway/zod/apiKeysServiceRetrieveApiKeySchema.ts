@@ -6,6 +6,9 @@ import * as z from 'zod'
 import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1RetrieveApiKeyResponseSchema } from './v1RetrieveApiKeyResponseSchema'
 
+/**
+ * Legacy key ID path parameter retained for compatibility.
+ */
 export const apiKeysServiceRetrieveApiKeyPathKeyIdSchema = z.string().describe('Legacy key ID path parameter retained for compatibility.')
 
 export const apiKeysServiceRetrieveApiKeyStatus200Schema = v1RetrieveApiKeyResponseSchema
@@ -17,3 +20,7 @@ export const apiKeysServiceRetrieveApiKeyStatusDefaultSchema = rpcStatusSchema
 export const apiKeysServiceRetrieveApiKeyResponseSchema = apiKeysServiceRetrieveApiKeyStatus200Schema
 
 export const apiKeysServiceRetrieveApiKeyErrorSchema = z.union([apiKeysServiceRetrieveApiKeyStatus500Schema, apiKeysServiceRetrieveApiKeyStatusDefaultSchema])
+
+export const apiKeysServiceRetrieveApiKeyPathSchema = z.object({
+  keyId: apiKeysServiceRetrieveApiKeyPathKeyIdSchema,
+})

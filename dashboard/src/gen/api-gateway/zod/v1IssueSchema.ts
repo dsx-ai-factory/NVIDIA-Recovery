@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { v1RemediationActionSchema } from './v1RemediationActionSchema'
 
+/**
+ * Issue represents a detected issue with a job.
+ */
 export const v1IssueSchema = z.object({
   issueType: z.string().optional().describe('The type of issue detected.'),
   timestamp: z.iso.datetime().optional().describe('When the issue was detected.'),

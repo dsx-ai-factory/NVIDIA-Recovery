@@ -18,9 +18,10 @@ describe("notificationStatusFromType", () => {
   });
 
   // Guards against schema drift: every NotificationType must map to a valid CardStatus.
-  it.each(
-    Object.values(notificationType),
-  )("returns a valid CardStatus for %s", (type) => {
-    expect(["error", "info"]).toContain(notificationStatusFromType(type));
-  });
+  it.each(Object.values(notificationType))(
+    "returns a valid CardStatus for %s",
+    (type) => {
+      expect(["error", "info"]).toContain(notificationStatusFromType(type));
+    },
+  );
 });

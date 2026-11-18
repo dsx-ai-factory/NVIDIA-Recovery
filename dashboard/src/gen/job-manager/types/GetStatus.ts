@@ -5,17 +5,17 @@
 export type GetStatusStatus200 = unknown;
 
 export interface GetStatusOptions {
-    body?: never;
-    path?: never;
-    query?: never;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query?: never;
+  headers?: never;
 }
 
 export interface GetStatusResponses {
-    "200": GetStatusStatus200;
+  '200': GetStatusStatus200;
 }
 
 /**
  * @description Union of all possible responses
-*/
+ */
 export type GetStatusResponse = GetStatusStatus200;

@@ -5,17 +5,17 @@
 export type ManifestWellKnownManifestJsonGetStatus200 = unknown;
 
 export interface ManifestWellKnownManifestJsonGetOptions {
-    body?: never;
-    path?: never;
-    query?: never;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query?: never;
+  headers?: never;
 }
 
 export interface ManifestWellKnownManifestJsonGetResponses {
-    "200": ManifestWellKnownManifestJsonGetStatus200;
+  '200': ManifestWellKnownManifestJsonGetStatus200;
 }
 
 /**
  * @description Union of all possible responses
-*/
+ */
 export type ManifestWellKnownManifestJsonGetResponse = ManifestWellKnownManifestJsonGetStatus200;

@@ -6,6 +6,9 @@ import * as z from 'zod'
 import { v1AdviceReconciliationDispositionSchema } from './v1AdviceReconciliationDispositionSchema'
 import { v1AdviceReconciliationReasonSchema } from './v1AdviceReconciliationReasonSchema'
 
+/**
+ * AdviceReconciliationStatus records one generation-scoped reconciliation observation.
+ */
 export const v1AdviceReconciliationStatusSchema = z.object({
   observedGeneration: z.string().regex(/^-?\d+$/).optional().describe('Advice generation observed by the controller.'),
   disposition: v1AdviceReconciliationDispositionSchema.optional().default('ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED').describe('Current lifecycle disposition for the observed generation.'),

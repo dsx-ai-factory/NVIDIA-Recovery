@@ -38,24 +38,23 @@ vi.mock("@nvidia/foundations-react-core", () => {
 import { FiltersCard } from "./FiltersCard";
 
 describe("audit filters", () => {
-  it.each([
-    "12345",
-    "job/2",
-    "job/with/slash",
-  ])("preserves job-only deep link %j without inventing an attempt identity", (jobId) => {
-    const html = renderToStaticMarkup(
-      <FiltersCard
-        filters={{ job_id: jobId, event_type: "job_attempt_observed" }}
-        onApply={vi.fn()}
-        expanded
-        onExpandedChange={vi.fn()}
-        isFetching={false}
-      />,
-    );
+  it.each(["12345", "job/2", "job/with/slash"])(
+    "preserves job-only deep link %j without inventing an attempt identity",
+    (jobId) => {
+      const html = renderToStaticMarkup(
+        <FiltersCard
+          filters={{ job_id: jobId, event_type: "job_attempt_observed" }}
+          onApply={vi.fn()}
+          expanded
+          onExpandedChange={vi.fn()}
+          isFetching={false}
+        />,
+      );
 
-    expect(html).toContain(`value="${jobId}"`);
-    expect(html).toContain('value="job_attempt_observed"');
-    expect(html).not.toContain("Heimdall Job ID");
-    expect(html).not.toContain("disabled");
-  });
+      expect(html).toContain(`value="${jobId}"`);
+      expect(html).toContain('value="job_attempt_observed"');
+      expect(html).not.toContain("Heimdall Job ID");
+      expect(html).not.toContain("disabled");
+    },
+  );
 });

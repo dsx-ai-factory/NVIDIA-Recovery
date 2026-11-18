@@ -7,33 +7,33 @@ import type { V1RemediationAction } from './V1RemediationAction'
 /**
  * @description Issue represents a detected issue with a job.
  * @type object
-*/
+ */
 export interface V1Issue {
-    /**
-     * @description The type of issue detected.
-     * @type string | undefined
-    */
-    issueType?: string;
-    /**
-     * @description When the issue was detected.
-     *
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    timestamp?: string;
-    /**
-     * @description What detected this issue (e.g., \"watcher\", \"advisor\").
-     * @type string | undefined
-    */
-    detectedBy?: string;
-    /**
-     * @description Relevant log lines related to the issue.
-     * @type array | undefined
-    */
-    relevantLogLines?: string[];
-    /**
-     * @description Actions taken to remediate this issue.
-     * @type array | undefined
-    */
-    remediationActions?: V1RemediationAction[];
+  /**
+   * @description The type of issue detected.
+   * @type string | undefined
+   */
+  issueType?: string;
+  /**
+   * @description When the issue was detected.
+   *
+   * Format: `date-time`
+   * @type string | undefined
+   */
+  timestamp?: string;
+  /**
+   * @description What detected this issue (e.g., "watcher", "advisor").
+   * @type string | undefined
+   */
+  detectedBy?: string;
+  /**
+   * @description Relevant log lines related to the issue.
+   * @type array | undefined
+   */
+  relevantLogLines?: string[];
+  /**
+   * @description Actions taken to remediate this issue.
+   * @type array | undefined
+   */
+  remediationActions?: V1RemediationAction[];
 }

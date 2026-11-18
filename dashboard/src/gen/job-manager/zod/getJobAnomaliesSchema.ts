@@ -12,8 +12,16 @@ export const getJobAnomaliesQueryJobAttemptIndexSchema = z.int().nullish()
 
 export const getJobAnomaliesStatus200Schema = z.array(jobAnomalySchema)
 
-export const getJobAnomaliesStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getJobAnomaliesStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const getJobAnomaliesResponseSchema = getJobAnomaliesStatus200Schema
 
 export const getJobAnomaliesErrorSchema = getJobAnomaliesStatus422Schema
+
+export const getJobAnomaliesPathSchema = z.object({
+  job_id: getJobAnomaliesPathJobIdSchema,
+})
+
+export const getJobAnomaliesQuerySchema = z.object({
+  job_attempt_index: getJobAnomaliesQueryJobAttemptIndexSchema,
+})

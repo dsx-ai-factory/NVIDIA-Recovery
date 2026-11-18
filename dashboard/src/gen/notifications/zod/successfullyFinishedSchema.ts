@@ -4,6 +4,15 @@
 
 import * as z from 'zod'
 
+/**
+ * The job successfully finished.
+ * Examples:
+ *     >>> message = SuccessfullyFinished(job_id="123", job_attempt_index=7, job_name="some-job")
+ *     >>> expected_message = "Job 123(7) (some-job) finished."
+ *     >>> assert_equal(message.render_message(), expected_message)
+ *     >>> expected_title = "Job 123 finished successfully"
+ *     >>> assert_equal(message.render_title(), expected_title)
+ */
 export const successfullyFinishedSchema = z.object({
   template_id: z.enum(['/templates/SuccessfullyFinished']).optional().default('/templates/SuccessfullyFinished'),
   job_id: z.string(),

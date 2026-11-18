@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { ApiKeysServiceDeleteApiKeyOptions, ApiKeysServiceDeleteApiKeyResponses } from '../types/ApiKeysServiceDeleteApiKey'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `DELETE /v1/keys/{keyId}`
  * @description API-key deletion is disabled in this build. This compatibility endpoint always returns an internal error.
  * @summary Disabled API-key deletion compatibility endpoint.
- * {@link /v1/keys/:keyId}
  */
 export function apiKeysServiceDeleteApiKey<ThrowOnError extends boolean = true>(options: Options<ApiKeysServiceDeleteApiKeyOptions, ThrowOnError>): Unwrappable<RequestResult<ApiKeysServiceDeleteApiKeyResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'DELETE', url: '/v1/keys/{keyId}', ...config }) as Promise<RequestResult<ApiKeysServiceDeleteApiKeyResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<ApiKeysServiceDeleteApiKeyResponses, ThrowOnError>({ method: 'DELETE', url: '/v1/keys/{keyId}', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

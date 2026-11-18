@@ -3,11 +3,12 @@
 
 import type { AxiosError } from "axios";
 import { type NextRequest, NextResponse } from "next/server";
-import { getNodeAnalysis } from "~/gen/job-manager";
+import { getNodeAnalysis, isResponseError } from "~/gen/job-manager";
 import { logger } from "~/pino";
 import { getServerAuthSession } from "~/server/auth";
 import { isAuthAvailable } from "~/utils/auth";
 
+/** Return node analysis or a JSON error when the job-manager request fails. */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     if (isAuthAvailable()) {
@@ -42,24 +43,38 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(nodeAnalysisData);
   } catch (_error) {
-    const error = _error as AxiosError;
+    const error = _error as Error;
     const publicErrorDetails = {
-      code: error.code,
+      code: (error as AxiosError).code,
       name: error.name,
       message: error.message,
       cause: error.cause,
     };
+    const responseError = isResponseError(error) ? error : undefined;
     logger.error(
       `GET /api/jobs-node-analysis?${req.nextUrl.searchParams.toString()} failed: ${JSON.stringify({ ...publicErrorDetails, stack: error.stack?.substring(0, 200) })}`,
     );
+    const responseData = responseError?.data;
+    const detail =
+      typeof responseData === "object" &&
+      responseData !== null &&
+      "detail" in responseData
+        ? responseData.detail
+        : "";
+    const upstreamStatus = responseError?.status;
+    // A rejected redirect or other non-error status is a bad gateway result;
+    // statuses such as 304 cannot carry the JSON error body.
+    const status =
+      upstreamStatus === undefined
+        ? 500
+        : upstreamStatus >= 400 && upstreamStatus <= 599
+          ? upstreamStatus
+          : 502;
     return NextResponse.json(
       {
-        detail:
-          "detail" in (error.response?.data as { detail?: string })
-            ? (error.response?.data as { detail: string }).detail
-            : "",
+        detail: detail || "unknown error",
       },
-      { status: error.response?.status || 500 },
+      { status },
     );
   }
 }

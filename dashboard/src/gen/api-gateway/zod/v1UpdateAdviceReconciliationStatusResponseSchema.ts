@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { v1AdviceReconciliationStatusSchema } from './v1AdviceReconciliationStatusSchema'
 
+/**
+ * UpdateAdviceReconciliationStatusResponse returns the persisted status.
+ */
 export const v1UpdateAdviceReconciliationStatusResponseSchema = z.object({
   status: v1AdviceReconciliationStatusSchema.optional().describe('Idempotently persisted reconciliation status.'),
 }).describe('UpdateAdviceReconciliationStatusResponse returns the persisted status.')

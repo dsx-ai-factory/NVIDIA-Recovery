@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { v1JobSchema } from './v1JobSchema'
 
+/**
+ * CreateOrUpdateJobResponse is the response for creating or updating a job.
+ */
 export const v1CreateOrUpdateJobResponseSchema = z.object({
   job: v1JobSchema.optional().describe('The created or updated job.'),
 }).describe('CreateOrUpdateJobResponse is the response for creating or updating a job.')

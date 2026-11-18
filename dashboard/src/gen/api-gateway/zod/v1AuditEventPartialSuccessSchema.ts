@@ -4,7 +4,10 @@
 
 import * as z from 'zod'
 
+/**
+ * AuditEventPartialSuccess describes events rejected from an otherwise accepted batch.
+ */
 export const v1AuditEventPartialSuccessSchema = z.object({
-  rejectedEvents: z.int().optional().describe('Number of rejected events.'),
+  rejectedEvents: z.int32().optional().describe('Number of rejected events.'),
   errorMessage: z.string().optional().describe('Human-readable explanation of why events were rejected.'),
 }).describe('AuditEventPartialSuccess describes events rejected from an otherwise accepted batch.')

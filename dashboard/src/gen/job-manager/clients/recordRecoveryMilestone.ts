@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { RecordRecoveryMilestoneOptions, RecordRecoveryMilestoneResponses } from '../types/RecordRecoveryMilestone'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `POST /recovery/milestones`
  * @description Idempotently record one scheduler-action completion occurrence.
  * @summary Record Recovery Milestone
- * {@link /recovery/milestones}
  */
 export function recordRecoveryMilestone<ThrowOnError extends boolean = true>(options: Options<RecordRecoveryMilestoneOptions, ThrowOnError>): Unwrappable<RequestResult<RecordRecoveryMilestoneResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'POST', url: '/recovery/milestones', ...config }) as Promise<RequestResult<RecordRecoveryMilestoneResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<RecordRecoveryMilestoneResponses, ThrowOnError>({ method: 'POST', url: '/recovery/milestones', contentType: { request: 'application/json' }, ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

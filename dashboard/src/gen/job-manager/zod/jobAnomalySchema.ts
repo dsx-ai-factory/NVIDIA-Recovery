@@ -5,6 +5,15 @@
 import * as z from 'zod'
 import { jobAnomalyHandledBySchema } from './jobAnomalyHandledBySchema'
 
+/**
+ * Class to represent an anomaly that happened during the job execution.
+ * Note: Today given this model is very simple, it's also directly returned
+ * from job manager's REST API. We can introduce a new model and migrate the
+ * internal data model to it when we need to distinguish them.
+ * Note that for newly created JobAnomaly the default value for `processed` is False,
+ * but old data read from the storage, the default value will be set to None to provide
+ * correct semantic because they will never be set to True or False.
+ */
 export const jobAnomalySchema = z.object({
   anomaly_type: z.string(),
   timestamp: z.iso.datetime(),
@@ -14,4 +23,4 @@ export const jobAnomalySchema = z.object({
   original_watcher_anomaly_event: z.string().nullish(),
   handled_by: jobAnomalyHandledBySchema.optional(),
   trace_id: z.string().nullish(),
-}).describe('Class to represent an anomaly that happened during the job execution.\n\nNote: Today given this model is very simple, it\'s also directly returned\nfrom job manager\'s REST API. We can introduce a new model and migrate the\ninternal data model to it when we need to distinguish them.\n\nNote that for newly created JobAnomaly the default value for `processed` is False,\nbut old data read from the storage, the default value will be set to None to provide\ncorrect semantic because they will never be set to True or False.').meta({ examples: [{}] })
+}).describe('Class to represent an anomaly that happened during the job execution.\n\nNote: Today given this model is very simple, it\'s also directly returned\nfrom job manager\'s REST API. We can introduce a new model and migrate the\ninternal data model to it when we need to distinguish them.\n\nNote that for newly created JobAnomaly the default value for `processed` is False,\nbut old data read from the storage, the default value will be set to None to provide\ncorrect semantic because they will never be set to True or False.').meta({ examples: [{"processed":true,"original_watcher_anomaly_event":"original_watcher_anomaly_event","isolation_result_json":"isolation_result_json","trace_id":"trace_id","handled_by":"HEIMDALL","anomaly_type":"anomaly_type","uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"}] })

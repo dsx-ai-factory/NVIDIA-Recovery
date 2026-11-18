@@ -15,13 +15,12 @@ describe("normalizeBasePath", () => {
     );
   });
 
-  it.each([
-    "dashboard",
-    "https://example.test/dashboard",
-    "/dashboard?x=1",
-  ])("rejects invalid base path %s", (value) => {
-    expect(() => normalizeBasePath(value)).toThrow();
-  });
+  it.each(["dashboard", "https://example.test/dashboard", "/dashboard?x=1"])(
+    "rejects invalid base path %s",
+    (value) => {
+      expect(() => normalizeBasePath(value)).toThrow();
+    },
+  );
 });
 
 describe("withBasePath", () => {
@@ -44,12 +43,12 @@ describe("withBasePath", () => {
     ).toBe("/mission-control/recovery-engine/dashboard/workflow");
   });
 
-  it.each([
-    "api/jobs",
-    "//example.test/api/jobs",
-  ])("rejects path that is not safely root-relative: %s", (path) => {
-    expect(() => withBasePath(path, "/dashboard")).toThrow(
-      "Application paths must start with '/'",
-    );
-  });
+  it.each(["api/jobs", "//example.test/api/jobs"])(
+    "rejects path that is not safely root-relative: %s",
+    (path) => {
+      expect(() => withBasePath(path, "/dashboard")).toThrow(
+        "Application paths must start with '/'",
+      );
+    },
+  );
 });

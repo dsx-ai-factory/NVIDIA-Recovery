@@ -4,6 +4,22 @@
 
 import * as z from 'zod'
 
+/**
+ * Advice to release a job attempt has been issued.
+ * Examples:
+ *     >>> message = ReleasedJob(
+ *     ...     job_id="123",
+ *     ...     job_attempt_index=4,
+ *     ...     job_name="some-job",
+ *     ...     user="some-user",
+ *     ... )
+ *     >>> expected_message = '''\
+ *     ... Advice to release job 123(4) (job name: some-job) issued.
+ *     ... '''
+ *     >>> assert_equal(message.render_message(), expected_message)
+ *     >>> expected_title = "Advice to release job 123 issued"
+ *     >>> assert_equal(message.render_title(), expected_title)
+ */
 export const releasedJobSchema = z.object({
   template_id: z.enum(['/templates/ReleasedJob']).optional().default('/templates/ReleasedJob'),
   job_id: z.string(),

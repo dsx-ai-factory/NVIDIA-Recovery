@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetJobAnomaliesOptions, GetJobAnomaliesResponses } from '../types/GetJobAnomalies'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /job_anomalies/{job_id}`
  * @description Retrieve a list of anomalies associated with a specific job.
  * Parameters:
  * job_id (str):
@@ -18,10 +19,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * list[JobAnomaly]:
  * A list of anomalies detected for the specified job attempt.
  * @summary Get Job Anomalies
- * {@link /job_anomalies/:job_id}
  */
 export function getJobAnomalies<ThrowOnError extends boolean = true>(options: Options<GetJobAnomaliesOptions, ThrowOnError>): Unwrappable<RequestResult<GetJobAnomaliesResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/job_anomalies/{job_id}', styles: { path: { jobId: { style: 'simple', explode: false } }, query: { job_attempt_index: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetJobAnomaliesResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetJobAnomaliesResponses, ThrowOnError>({ method: 'GET', url: '/job_anomalies/{job_id}', ...config, styles: { ...config.styles, path: { job_id: { style: 'simple', explode: false }, ...config.styles?.path }, query: { job_attempt_index: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

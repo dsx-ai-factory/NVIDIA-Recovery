@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * ProducerAuditEvent is one structured event emitted by an NVIDIA Recovery component.
+ */
 export const v1ProducerAuditEventSchema = z.object({
   heimdallJobId: z.string().optional().describe('NVIDIA Recovery\'s internal identifier for the job.'),
   eventProducer: z.string().optional().describe('Component that produced the event.'),

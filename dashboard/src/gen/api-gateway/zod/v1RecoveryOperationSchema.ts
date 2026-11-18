@@ -4,4 +4,11 @@
 
 import * as z from 'zod'
 
+/**
+ * RecoveryOperation identifies the scheduler-neutral recovery intent.
+ *  - RECOVERY_OPERATION_UNSPECIFIED: No recovery operation was specified.
+ *  - RECOVERY_OPERATION_RESTART: Restart the failed source attempt.
+ *  - RECOVERY_OPERATION_TERMINATE: Terminate the source attempt.
+ *  - RECOVERY_OPERATION_DAG_RELEASE: Release a held job after its DAG dependencies are satisfied.
+ */
 export const v1RecoveryOperationSchema = z.enum(['RECOVERY_OPERATION_UNSPECIFIED', 'RECOVERY_OPERATION_RESTART', 'RECOVERY_OPERATION_TERMINATE', 'RECOVERY_OPERATION_DAG_RELEASE']).default('RECOVERY_OPERATION_UNSPECIFIED').describe('RecoveryOperation identifies the scheduler-neutral recovery intent.\n\n - RECOVERY_OPERATION_UNSPECIFIED: No recovery operation was specified.\n - RECOVERY_OPERATION_RESTART: Restart the failed source attempt.\n - RECOVERY_OPERATION_TERMINATE: Terminate the source attempt.\n - RECOVERY_OPERATION_DAG_RELEASE: Release a held job after its DAG dependencies are satisfied.')

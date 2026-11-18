@@ -52,18 +52,12 @@ describe("audit job identity", () => {
     expect(parseAttemptIndex(value)).toBe(expected);
   });
 
-  it.each([
-    undefined,
-    null,
-    "",
-    " ",
-    "-1",
-    "1.5",
-    "1e2",
-    "9007199254740992",
-  ])("rejects malformed attempt index %j", (value) => {
-    expect(parseAttemptIndex(value)).toBeUndefined();
-  });
+  it.each([undefined, null, "", " ", "-1", "1.5", "1e2", "9007199254740992"])(
+    "rejects malformed attempt index %j",
+    (value) => {
+      expect(parseAttemptIndex(value)).toBeUndefined();
+    },
+  );
 
   it("rejects repeated attempt parameters", () => {
     expect(parseAttemptIndex(["2"])).toBeUndefined();

@@ -5,12 +5,15 @@
 import * as z from 'zod'
 import { auditEventLevelSchema } from './auditEventLevelSchema'
 
+/**
+ * An audit event submitted by an NVIDIA Recovery component.
+ */
 export const producerAuditEventSchema = z.object({
   heimdall_job_id: z.string().describe('NVIDIA Recovery\'s internal identifier for the job.'),
   event_producer: z.string().describe('The component that produced the event.'),
   event_type: z.string().describe('The type of event.'),
   event_level: auditEventLevelSchema.describe('The audit event level.'),
-  payload: z.object({}).catchall(z.unknown()).describe('Event-specific structured data.'),
+  payload: z.looseObject({}).describe('Event-specific structured data.'),
   event_produced_at: z.int().describe('Producer emission time as Unix microseconds.'),
   idempotency_key: z.string().describe('Producer key used to discard duplicate events.'),
 }).describe('An audit event submitted by an NVIDIA Recovery component.')

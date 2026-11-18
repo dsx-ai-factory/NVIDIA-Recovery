@@ -4,14 +4,14 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { ManifestWellKnownManifestJsonGetOptions, ManifestWellKnownManifestJsonGetResponses } from '../types/ManifestWellKnownManifestJsonGet'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /.well-known/manifest.json`
  * @summary Manifest
- * {@link /.well-known/manifest.json}
  */
 export function manifestWellKnownManifestJsonGet<ThrowOnError extends boolean = true>(options: Options<ManifestWellKnownManifestJsonGetOptions, ThrowOnError> = {}): Unwrappable<RequestResult<ManifestWellKnownManifestJsonGetResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/.well-known/manifest.json', ...config }) as Promise<RequestResult<ManifestWellKnownManifestJsonGetResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<ManifestWellKnownManifestJsonGetResponses, ThrowOnError>({ method: 'GET', url: '/.well-known/manifest.json', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

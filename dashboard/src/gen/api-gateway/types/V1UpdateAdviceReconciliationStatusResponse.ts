@@ -7,11 +7,11 @@ import type { V1AdviceReconciliationStatus } from './V1AdviceReconciliationStatu
 /**
  * @description UpdateAdviceReconciliationStatusResponse returns the persisted status.
  * @type object
-*/
+ */
 export interface V1UpdateAdviceReconciliationStatusResponse {
-    /**
-     * @description Idempotently persisted reconciliation status.
-     * @type object | undefined
-    */
-    status?: V1AdviceReconciliationStatus;
+  /**
+   * @description Idempotently persisted reconciliation status.
+   * @type object | undefined
+   */
+  status?: V1AdviceReconciliationStatus;
 }

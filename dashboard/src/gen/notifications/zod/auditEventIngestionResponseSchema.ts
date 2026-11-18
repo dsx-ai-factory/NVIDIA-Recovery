@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { auditEventPartialSuccessSchema } from './auditEventPartialSuccessSchema'
 
+/**
+ * Result of accepting an audit-event batch.
+ */
 export const auditEventIngestionResponseSchema = z.object({
-  partial_success: z.union([auditEventPartialSuccessSchema, z.null()]).optional().describe('Present only when the server rejected some events.'),
+  partial_success: z.union([auditEventPartialSuccessSchema, z.null().nullable()]).optional().describe('Present only when the server rejected some events.'),
 }).describe('Result of accepting an audit-event batch.')

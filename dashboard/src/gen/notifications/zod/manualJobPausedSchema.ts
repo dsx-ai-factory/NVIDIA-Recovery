@@ -5,6 +5,23 @@
 import * as z from 'zod'
 import { userSchema } from './userSchema'
 
+/**
+ * A user has manually paused a job via cockpit.
+ * Examples:
+ *     >>> message = ManualJobPaused(
+ *     ...     job_id="456",
+ *     ...     job_attempt_index=7,
+ *     ...     job_name="some-job",
+ *     ...     triggerer=User(user="job-killer-guy"),
+ *     ...     user="some-person",
+ *     ... )
+ *     >>> expected_message = '''\
+ *     ... Job 456(7) (job name: some-job) has been `PAUSED` manually via Cockpit by job-killer-guy.
+ *     ... '''
+ *     >>> assert_equal(message.render_message(), expected_message)
+ *     >>> expected_title = "Manually paused job 456"
+ *     >>> assert_equal(message.render_title(), expected_title)
+ */
 export const manualJobPausedSchema = z.object({
   template_id: z.enum(['/templates/ManualJobPaused']).optional().default('/templates/ManualJobPaused'),
   job_id: z.string(),

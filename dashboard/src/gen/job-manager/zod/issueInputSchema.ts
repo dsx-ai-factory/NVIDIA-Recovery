@@ -5,10 +5,15 @@
 import * as z from 'zod'
 import { remediationActionSchema } from './remediationActionSchema'
 
+/**
+ * Describes a detected issue for a job.
+ * This model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
+ * Issue types include: CRASH, HANG, STRAGGLER, etc.
+ */
 export const issueInputSchema = z.object({
   issueType: z.string(),
   timestamp: z.iso.datetime(),
   detectedBy: z.string().nullish(),
   relevantLogLines: z.array(z.string()).nullish(),
   remediationActions: z.array(remediationActionSchema).nullish(),
-}).describe('Describes a detected issue for a job.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.\nIssue types include: CRASH, HANG, STRAGGLER, etc.').meta({ examples: [{}] })
+}).describe('Describes a detected issue for a job.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.\nIssue types include: CRASH, HANG, STRAGGLER, etc.').meta({ examples: [{"issueType":"issueType","detectedBy":"detectedBy","remediationActions":[{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"},{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"}],"relevantLogLines":["relevantLogLines","relevantLogLines"],"timestamp":"2000-01-23T04:56:07.000+00:00"}] })

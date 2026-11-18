@@ -6,6 +6,9 @@ import * as z from 'zod'
 import { v1AuditEventPageCursorSchema } from './v1AuditEventPageCursorSchema'
 import { v1AuditEventSchema } from './v1AuditEventSchema'
 
+/**
+ * GetAuditEventsResponse returns one page of persisted public audit events.
+ */
 export const v1GetAuditEventsResponseSchema = z.object({
   cursor: v1AuditEventPageCursorSchema.optional().describe('Opaque adjacent-page cursors.'),
   items: z.array(v1AuditEventSchema).optional().describe('Events matching the requested filters and ordering.'),

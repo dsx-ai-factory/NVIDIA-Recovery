@@ -5,18 +5,20 @@
 import type { ResourceDetail } from './ResourceDetail'
 
 /**
- * @description Describes a specific action to take to remediate an issue.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
+ * @description Describes a specific action to take to remediate an issue.
+ *
+ * This model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
  * @example {"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"}
  * @type object
-*/
+ */
 export interface RemediationAction {
-    actionType: string;
-    /**
-     * @description
-     * Format: `date-time`
-     * @type string
-    */
-    timestamp: string;
-    reason: string;
-    resourceDetails?: ResourceDetail[] | null;
+  actionType: string;
+  /**
+   * @description
+   * Format: `date-time`
+   * @type string
+   */
+  timestamp: string;
+  reason: string;
+  resourceDetails?: ResourceDetail[] | null;
 }

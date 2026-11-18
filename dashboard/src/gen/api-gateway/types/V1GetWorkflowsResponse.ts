@@ -8,23 +8,23 @@ import type { V1Workflow } from './V1Workflow'
  * @description GetWorkflowsResponse is the response for the GetWorkflows method.
  * @example {"count":1,"workflows":[{"endTime":"2025-06-18T18:37:00.667816956Z","name":"workflow-0","startTime":"2025-06-18T18:17:50.667816956Z","workflowId":"workflow-0"}]}
  * @type object
-*/
+ */
 export interface V1GetWorkflowsResponse {
-    /**
-     * @description The workflows.
-     * @type array | undefined
-    */
-    workflows?: V1Workflow[];
-    /**
-     * @description The total count of workflows returned.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    count?: number;
-    /**
-     * @description The decimal zero-based offset to use for the next page of results.
-     * @type string | undefined
-    */
-    nextPageToken?: string;
+  /**
+   * @description The workflows.
+   * @type array | undefined
+   */
+  workflows?: V1Workflow[];
+  /**
+   * @description The total count of workflows returned.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  count?: number;
+  /**
+   * @description The decimal zero-based offset to use for the next page of results.
+   * @type string | undefined
+   */
+  nextPageToken?: string;
 }

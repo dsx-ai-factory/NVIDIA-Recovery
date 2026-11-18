@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetAdviceByJobOptions, GetAdviceByJobResponses } from '../types/GetAdviceByJob'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /advice/by-job/{job_id}/{attempt_index}`
  * @description Retrieve a single advice record by its natural key (job_id + attempt_index).
  * Parameters:
  * job_id (str): The job identifier.
@@ -16,10 +17,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * Raises:
  * HTTPException: 404 if not found, 500 on server error.
  * @summary Get Advice By Job
- * {@link /advice/by-job/:job_id/:attempt_index}
  */
 export function getAdviceByJob<ThrowOnError extends boolean = true>(options: Options<GetAdviceByJobOptions, ThrowOnError>): Unwrappable<RequestResult<GetAdviceByJobResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/advice/by-job/{job_id}/{attempt_index}', styles: { path: { jobId: { style: 'simple', explode: false }, attemptIndex: { style: 'simple', explode: false } } }, ...config }) as Promise<RequestResult<GetAdviceByJobResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetAdviceByJobResponses, ThrowOnError>({ method: 'GET', url: '/advice/by-job/{job_id}/{attempt_index}', ...config, styles: { ...config.styles, path: { job_id: { style: 'simple', explode: false }, attempt_index: { style: 'simple', explode: false }, ...config.styles?.path } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

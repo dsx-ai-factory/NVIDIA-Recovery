@@ -7,30 +7,30 @@ import type { RecoveryOperationKey } from './RecoveryOperation'
 /**
  * @example {"tracestate":"tracestate","traceparent":"traceparent","triggeredAt":"2000-01-23T04:56:07.000+00:00","sequenceId":"sequenceId","operation":"restart"}
  * @type object
-*/
+ */
 export interface RecoveryContext {
-    /**
-     * @minLength 1
-     * @maxLength 64
-     * @type string
-    */
-    sequenceId: string;
-    /**
-     * @minLength 1
-     * @maxLength 128
-     * @type string
-    */
-    traceparent: string;
-    /**
-     * @maxLength 512
-     * @type string | undefined
-    */
-    tracestate?: string | null;
-    /**
-     * @description
-     * Format: `date-time`
-     * @type string
-    */
-    triggeredAt: string;
-    operation: RecoveryOperationKey;
+  /**
+   * @minLength 1
+   * @maxLength 64
+   * @type string
+   */
+  sequenceId: string;
+  /**
+   * @minLength 1
+   * @maxLength 128
+   * @type string
+   */
+  traceparent: string;
+  /**
+   * @maxLength 512
+   * @type string | undefined
+   */
+  tracestate?: string | null;
+  /**
+   * @description
+   * Format: `date-time`
+   * @type string
+   */
+  triggeredAt: string;
+  operation: RecoveryOperationKey;
 }

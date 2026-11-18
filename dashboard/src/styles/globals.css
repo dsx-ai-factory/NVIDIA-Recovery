@@ -44,3 +44,7 @@ body,
   }
   --animate-bounce: bounce 1.4s ease-in-out infinite;
 }
+
+svg[data-icon-name] {
+  display: inline-block;
+}

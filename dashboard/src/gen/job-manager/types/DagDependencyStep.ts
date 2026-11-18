@@ -6,15 +6,22 @@ import type { DagTriggerConditionEnumKey } from './DagTriggerConditionEnum'
 import type { Target } from './Target'
 
 /**
- * @description A single DAG dependency step that describes a dependency that must meet a trigger condition\nbefore the current job can run.\n\nAttributes:\n    target (JobReference): The dependency job, identified by name or id.\n    trigger (DagTriggerConditionEnum): The condition that triggers this step. Defaults to COMPLETED.
+ * @description A single DAG dependency step that describes a dependency that must meet a trigger condition
+ * before the current job can run.
+ *
+ * Attributes:
+ *     target (JobReference): The dependency job, identified by name or id.
+ *     trigger (DagTriggerConditionEnum): The condition that triggers this step. Defaults to COMPLETED.
  * @example {"trigger":"completed","target":{"name":"name","type":"name"}}
  * @type object
-*/
+ */
 export interface DagDependencyStep {
-    target: Target;
-    /**
-     * @description The condition under which a DAG step should be triggered.\n\nCOMPLETED: Trigger when the current job finishes successfully (Slurm COMPLETED state).
-     * @type string | undefined
-    */
-    trigger?: DagTriggerConditionEnumKey;
+  target: Target;
+  /**
+   * @description The condition under which a DAG step should be triggered.
+   *
+   * COMPLETED: Trigger when the current job finishes successfully (Slurm COMPLETED state).
+   * @type string | undefined
+   */
+  trigger?: DagTriggerConditionEnumKey;
 }

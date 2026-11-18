@@ -8,11 +8,11 @@ import type { V1Job } from './V1Job'
  * @description GetJobResponse is the response for the GetJob method.
  * @example {"job":{"attemptIndex":0,"heimdallJobId":"test-job-0","jobId":"test-job","nodes":["node1","node2","node3"],"state":"JOB_STATUS_COMPLETED","workflowId":"test-workflow"}}
  * @type object
-*/
+ */
 export interface V1GetJobResponse {
-    /**
-     * @description The job.
-     * @type object | undefined
-    */
-    job?: V1Job;
+  /**
+   * @description The job.
+   * @type object | undefined
+   */
+  job?: V1Job;
 }

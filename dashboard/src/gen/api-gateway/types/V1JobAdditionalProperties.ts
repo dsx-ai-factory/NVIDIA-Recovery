@@ -5,18 +5,18 @@
 /**
  * @description JobAdditionalProperties contains additional configuration properties for jobs.
  * @type object
-*/
+ */
 export interface V1JobAdditionalProperties {
-    /**
-     * @description Maximum number of times a job can be requeued. -1 means unlimited.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    maxRequeueTimes?: number;
-    /**
-     * @description Whether NVRX is enabled for this job.
-     * @type boolean | undefined
-    */
-    enableNvrx?: boolean;
+  /**
+   * @description Maximum number of times a job can be requeued. -1 means unlimited.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  maxRequeueTimes?: number;
+  /**
+   * @description Whether NVRX is enabled for this job.
+   * @type boolean | undefined
+   */
+  enableNvrx?: boolean;
 }

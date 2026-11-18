@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetAdviceByIdOptions, GetAdviceByIdResponses } from '../types/GetAdviceById'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /advice/{heimdall_id}`
  * @description Retrieve a single advice record by its NVIDIA Recovery ID.
  * Parameters:
  * heimdall_id (str):
@@ -17,10 +18,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * Raises:
  * HTTPException: 404 if not found, 400 if invalid ID format, 500 on server error.
  * @summary Get Advice By Id
- * {@link /advice/:heimdall_id}
  */
 export function getAdviceById<ThrowOnError extends boolean = true>(options: Options<GetAdviceByIdOptions, ThrowOnError>): Unwrappable<RequestResult<GetAdviceByIdResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/advice/{heimdall_id}', styles: { path: { heimdallId: { style: 'simple', explode: false } } }, ...config }) as Promise<RequestResult<GetAdviceByIdResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetAdviceByIdResponses, ThrowOnError>({ method: 'GET', url: '/advice/{heimdall_id}', ...config, styles: { ...config.styles, path: { heimdall_id: { style: 'simple', explode: false }, ...config.styles?.path } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

@@ -6,27 +6,60 @@ import * as z from 'zod'
 import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1GetAuditEventsResponseSchema } from './v1GetAuditEventsResponseSchema'
 
+/**
+ * Exact internal job identifier; exclusive with scheduler job selectors.
+ */
 export const auditServiceGetAuditEventsQueryHeimdallJobIdSchema = z.string().optional().describe('Exact internal job identifier; exclusive with scheduler job selectors.')
 
+/**
+ * Scheduler job identifier; omitting attempt_index includes all attempts.
+ */
 export const auditServiceGetAuditEventsQueryJobIdSchema = z.string().optional().describe('Scheduler job identifier; omitting attempt_index includes all attempts.')
 
-export const auditServiceGetAuditEventsQueryAttemptIndexSchema = z.int().optional().describe('Exact non-negative attempt; requires job_id. Zero is a valid attempt.')
+/**
+ * Exact non-negative attempt; requires job_id. Zero is a valid attempt.
+ */
+export const auditServiceGetAuditEventsQueryAttemptIndexSchema = z.int32().optional().describe('Exact non-negative attempt; requires job_id. Zero is a valid attempt.')
 
+/**
+ * Stable event type to match exactly.
+ */
 export const auditServiceGetAuditEventsQueryEventTypeSchema = z.string().optional().describe('Stable event type to match exactly.')
 
+/**
+ * Event level to match exactly.
+ */
 export const auditServiceGetAuditEventsQueryEventLevelSchema = z.string().optional().describe('Event level to match exactly.')
 
+/**
+ * Producer component to match exactly.
+ */
 export const auditServiceGetAuditEventsQueryEventProducerSchema = z.string().optional().describe('Producer component to match exactly.')
 
+/**
+ * Inclusive minimum producer timestamp in Unix microseconds.
+ */
 export const auditServiceGetAuditEventsQueryMinEventProducedAtSchema = z.string().regex(/^-?\d+$/).optional().describe('Inclusive minimum producer timestamp in Unix microseconds.')
 
+/**
+ * Inclusive maximum producer timestamp in Unix microseconds.
+ */
 export const auditServiceGetAuditEventsQueryMaxEventProducedAtSchema = z.string().regex(/^-?\d+$/).optional().describe('Inclusive maximum producer timestamp in Unix microseconds.')
 
+/**
+ * Timestamp ordering: event_produced_at:asc or event_produced_at:desc.
+ */
 export const auditServiceGetAuditEventsQuerySortBySchema = z.string().optional().describe('Timestamp ordering: event_produced_at:asc or event_produced_at:desc.')
 
+/**
+ * Opaque cursor returned for an adjacent page of the same query.
+ */
 export const auditServiceGetAuditEventsQueryCursorSchema = z.string().optional().describe('Opaque cursor returned for an adjacent page of the same query.')
 
-export const auditServiceGetAuditEventsQueryLimitSchema = z.int().optional().describe('Page size from 1 through 100; defaults to 100 when omitted.')
+/**
+ * Page size from 1 through 100; defaults to 100 when omitted.
+ */
+export const auditServiceGetAuditEventsQueryLimitSchema = z.int32().optional().describe('Page size from 1 through 100; defaults to 100 when omitted.')
 
 export const auditServiceGetAuditEventsStatus200Schema = v1GetAuditEventsResponseSchema.describe('GetAuditEventsResponse returns one page of persisted public audit events.')
 
@@ -35,3 +68,17 @@ export const auditServiceGetAuditEventsStatusDefaultSchema = rpcStatusSchema
 export const auditServiceGetAuditEventsResponseSchema = auditServiceGetAuditEventsStatus200Schema
 
 export const auditServiceGetAuditEventsErrorSchema = auditServiceGetAuditEventsStatusDefaultSchema
+
+export const auditServiceGetAuditEventsQuerySchema = z.object({
+  heimdallJobId: auditServiceGetAuditEventsQueryHeimdallJobIdSchema,
+  jobId: auditServiceGetAuditEventsQueryJobIdSchema,
+  attemptIndex: auditServiceGetAuditEventsQueryAttemptIndexSchema,
+  eventType: auditServiceGetAuditEventsQueryEventTypeSchema,
+  eventLevel: auditServiceGetAuditEventsQueryEventLevelSchema,
+  eventProducer: auditServiceGetAuditEventsQueryEventProducerSchema,
+  minEventProducedAt: auditServiceGetAuditEventsQueryMinEventProducedAtSchema,
+  maxEventProducedAt: auditServiceGetAuditEventsQueryMaxEventProducedAtSchema,
+  sortBy: auditServiceGetAuditEventsQuerySortBySchema,
+  cursor: auditServiceGetAuditEventsQueryCursorSchema,
+  limit: auditServiceGetAuditEventsQueryLimitSchema,
+})

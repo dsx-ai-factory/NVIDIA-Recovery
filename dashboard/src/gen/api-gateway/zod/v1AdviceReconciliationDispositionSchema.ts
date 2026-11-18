@@ -4,4 +4,12 @@
 
 import * as z from 'zod'
 
+/**
+ * AdviceReconciliationDisposition describes whether one Advice generation
+ * still needs work.
+ *  - ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED: The disposition is not specified.
+ *  - ADVICE_RECONCILIATION_DISPOSITION_PENDING: Reconciliation has not reached a terminal observation.
+ *  - ADVICE_RECONCILIATION_DISPOSITION_CONVERGED: Fresh scheduler state satisfies the desired state.
+ *  - ADVICE_RECONCILIATION_DISPOSITION_ABANDONED: The desired state can no longer be reached for this generation.
+ */
 export const v1AdviceReconciliationDispositionSchema = z.enum(['ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED', 'ADVICE_RECONCILIATION_DISPOSITION_PENDING', 'ADVICE_RECONCILIATION_DISPOSITION_CONVERGED', 'ADVICE_RECONCILIATION_DISPOSITION_ABANDONED']).default('ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED').describe('AdviceReconciliationDisposition describes whether one Advice generation\nstill needs work.\n\n - ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED: The disposition is not specified.\n - ADVICE_RECONCILIATION_DISPOSITION_PENDING: Reconciliation has not reached a terminal observation.\n - ADVICE_RECONCILIATION_DISPOSITION_CONVERGED: Fresh scheduler state satisfies the desired state.\n - ADVICE_RECONCILIATION_DISPOSITION_ABANDONED: The desired state can no longer be reached for this generation.')

@@ -6,20 +6,43 @@ import * as z from 'zod'
 import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { jobGroupStatusesSchema } from './jobGroupStatusesSchema'
 
+/**
+ * Filter by a specific job group ID.
+ */
 export const getJobGroupsQueryJobGroupIdSchema = z.string().nullish().describe('Filter by a specific job group ID.')
 
+/**
+ * The user filter.
+ */
 export const getJobGroupsQueryUserSchema = z.string().nullish().describe('The user filter.')
 
+/**
+ * The maximum number of records to return.
+ */
 export const getJobGroupsQueryLimitSchema = z.int().optional().default(50).describe('The maximum number of records to return.')
 
+/**
+ * The offset to start the records from.
+ */
 export const getJobGroupsQueryOffsetSchema = z.int().optional().default(0).describe('The offset to start the records from.')
 
+/**
+ * Comma separated list of fields to sort by. Valid fields: job_group_id, unique_job_count, total_job_attempt_count. Format: 'field:order' pairs, e.g., 'total_job_attempt_count:desc'.
+ */
 export const getJobGroupsQuerySortBySchema = z.string().nullish().describe('Comma separated list of fields to sort by. Valid fields: job_group_id, unique_job_count, total_job_attempt_count. Format: \'field:order\' pairs, e.g., \'total_job_attempt_count:desc\'.')
 
-export const getJobGroupsStatus200Schema = jobGroupStatusesSchema.describe('This class is used to return a list of job group statuses from the job manager\'s REST API. Since the response is\npaginated, this class also contains the total number of items that match the query.').meta({ examples: [{}] })
+export const getJobGroupsStatus200Schema = jobGroupStatusesSchema.describe('This class is used to return a list of job group statuses from the job manager\'s REST API. Since the response is\npaginated, this class also contains the total number of items that match the query.').meta({ examples: [{"item_count":0,"job_groups":[{"job_group_id":"job_group_id","unique_job_count":6,"total_job_attempt_count":1},{"job_group_id":"job_group_id","unique_job_count":6,"total_job_attempt_count":1}]}] })
 
-export const getJobGroupsStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getJobGroupsStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const getJobGroupsResponseSchema = getJobGroupsStatus200Schema
 
 export const getJobGroupsErrorSchema = getJobGroupsStatus422Schema
+
+export const getJobGroupsQuerySchema = z.object({
+  job_group_id: getJobGroupsQueryJobGroupIdSchema,
+  user: getJobGroupsQueryUserSchema,
+  limit: getJobGroupsQueryLimitSchema,
+  offset: getJobGroupsQueryOffsetSchema,
+  sort_by: getJobGroupsQuerySortBySchema,
+})

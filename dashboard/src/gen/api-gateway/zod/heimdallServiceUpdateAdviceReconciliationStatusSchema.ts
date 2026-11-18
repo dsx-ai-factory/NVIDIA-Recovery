@@ -7,6 +7,9 @@ import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1AdviceReconciliationStatusSchema } from './v1AdviceReconciliationStatusSchema'
 import { v1UpdateAdviceReconciliationStatusResponseSchema } from './v1UpdateAdviceReconciliationStatusResponseSchema'
 
+/**
+ * UUID of the Advice record being observed.
+ */
 export const heimdallServiceUpdateAdviceReconciliationStatusPathHeimdallJobIdSchema = z.string().describe('UUID of the Advice record being observed.')
 
 export const heimdallServiceUpdateAdviceReconciliationStatusStatus200Schema = v1UpdateAdviceReconciliationStatusResponseSchema.describe('UpdateAdviceReconciliationStatusResponse returns the persisted status.')
@@ -18,3 +21,7 @@ export const heimdallServiceUpdateAdviceReconciliationStatusResponseSchema = hei
 export const heimdallServiceUpdateAdviceReconciliationStatusErrorSchema = heimdallServiceUpdateAdviceReconciliationStatusStatusDefaultSchema
 
 export const heimdallServiceUpdateAdviceReconciliationStatusBodySchema = v1AdviceReconciliationStatusSchema.describe('Generation-scoped reconciliation status.')
+
+export const heimdallServiceUpdateAdviceReconciliationStatusPathSchema = z.object({
+  heimdallJobId: heimdallServiceUpdateAdviceReconciliationStatusPathHeimdallJobIdSchema,
+})

@@ -5,8 +5,11 @@
 import * as z from 'zod'
 import { v1JobSchema } from './v1JobSchema'
 
+/**
+ * GetJobsBySchedulerIdResponse is the response for getting jobs by scheduler ID.
+ */
 export const v1GetJobsBySchedulerIdResponseSchema = z.object({
   jobs: z.array(v1JobSchema).optional().describe('The list of jobs.'),
-  count: z.int().optional().describe('The total count of jobs returned.'),
+  count: z.int32().optional().describe('The total count of jobs returned.'),
   nextPageToken: z.string().optional().describe('The decimal zero-based offset to use for the next page of results.'),
 }).describe('GetJobsBySchedulerIdResponse is the response for getting jobs by scheduler ID.')

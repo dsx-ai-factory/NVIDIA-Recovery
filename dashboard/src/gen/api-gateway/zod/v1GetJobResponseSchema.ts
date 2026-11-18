@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { v1JobSchema } from './v1JobSchema'
 
+/**
+ * GetJobResponse is the response for the GetJob method.
+ */
 export const v1GetJobResponseSchema = z.object({
   job: v1JobSchema.optional().describe('The job.'),
-}).describe('GetJobResponse is the response for the GetJob method.').meta({ examples: [{}] })
+}).describe('GetJobResponse is the response for the GetJob method.').meta({ examples: [{"job":{"attemptIndex":0,"heimdallJobId":"test-job-0","jobId":"test-job","nodes":["node1","node2","node3"],"state":"JOB_STATUS_COMPLETED","workflowId":"test-workflow"}}] })

@@ -4,8 +4,12 @@
 
 import * as z from 'zod'
 
+/**
+ * Represents details about a specific resource involved in a remediation action.
+ * This model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
+ */
 export const resourceDetailSchema = z.object({
   resourceType: z.string(),
   resourceId: z.string(),
   details: z.string().nullish(),
-}).describe('Represents details about a specific resource involved in a remediation action.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{}] })
+}).describe('Represents details about a specific resource involved in a remediation action.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}] })

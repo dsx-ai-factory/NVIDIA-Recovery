@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { v1ProducerAuditEventSchema } from './v1ProducerAuditEventSchema'
 
+/**
+ * CreateAuditEventsRequest is a batch of producer audit events to ingest.
+ */
 export const v1CreateAuditEventsRequestSchema = z.object({
   items: z.array(v1ProducerAuditEventSchema).optional().describe('Events in this ingestion batch.'),
 }).describe('CreateAuditEventsRequest is a batch of producer audit events to ingest.')

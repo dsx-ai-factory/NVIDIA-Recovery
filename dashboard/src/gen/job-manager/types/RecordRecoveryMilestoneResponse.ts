@@ -5,13 +5,13 @@
 /**
  * @example {"duplicate":true,"endToEndDurationSeconds":0.08008281904610115,"sequenceCompleted":true}
  * @type object
-*/
+ */
 export interface RecordRecoveryMilestoneResponse {
-    duplicate: boolean;
-    sequenceCompleted: boolean;
-    /**
-     * @minLength 0
-     * @type number | undefined
-    */
-    endToEndDurationSeconds?: number | null;
+  duplicate: boolean;
+  sequenceCompleted: boolean;
+  /**
+   * @minimum 0
+   * @type number | undefined
+   */
+  endToEndDurationSeconds?: number | null;
 }

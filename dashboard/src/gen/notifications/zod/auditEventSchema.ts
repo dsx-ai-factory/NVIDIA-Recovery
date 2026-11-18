@@ -6,12 +6,15 @@ import * as z from 'zod'
 import { auditEventHumanSummarySchema } from './auditEventHumanSummarySchema'
 import { auditEventLevelSchema } from './auditEventLevelSchema'
 
+/**
+ * An audit event visible through the query API.
+ */
 export const auditEventSchema = z.object({
   heimdall_job_id: z.string().describe('NVIDIA Recovery\'s internal identifier for the job.'),
   event_producer: z.string().describe('The component that produced the event.'),
   event_type: z.string().describe('The type of event.'),
   event_level: auditEventLevelSchema.describe('The audit event level.'),
-  payload: z.object({}).catchall(z.unknown()).describe('Event-specific structured data.'),
+  payload: z.looseObject({}).describe('Event-specific structured data.'),
   event_produced_at: z.int().describe('Producer emission time as Unix microseconds.'),
   summary: auditEventHumanSummarySchema.describe('Human-readable descriptions of the audit event.'),
 }).describe('An audit event visible through the query API.')

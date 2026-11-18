@@ -8,16 +8,16 @@ import type { V1AuditEventPageCursor } from './V1AuditEventPageCursor'
 /**
  * @description GetAuditEventsResponse returns one page of persisted public audit events.
  * @type object
-*/
+ */
 export interface V1GetAuditEventsResponse {
-    /**
-     * @description Opaque adjacent-page cursors.
-     * @type object | undefined
-    */
-    cursor?: V1AuditEventPageCursor;
-    /**
-     * @description Events matching the requested filters and ordering.
-     * @type array | undefined
-    */
-    items?: V1AuditEvent[];
+  /**
+   * @description Opaque adjacent-page cursors.
+   * @type object | undefined
+   */
+  cursor?: V1AuditEventPageCursor;
+  /**
+   * @description Events matching the requested filters and ordering.
+   * @type array | undefined
+   */
+  items?: V1AuditEvent[];
 }

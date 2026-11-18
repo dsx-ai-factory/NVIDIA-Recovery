@@ -13,10 +13,17 @@ export const getAdminUsersQueryOffsetSchema = z.int().optional().default(0)
 
 export const getAdminUsersQueryDescSchema = z.boolean().optional().default(false)
 
-export const getAdminUsersStatus200Schema = z.array(z.string())
+export const getAdminUsersStatus200Schema = z.array(z.string().nullable())
 
-export const getAdminUsersStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getAdminUsersStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const getAdminUsersResponseSchema = getAdminUsersStatus200Schema
 
 export const getAdminUsersErrorSchema = getAdminUsersStatus422Schema
+
+export const getAdminUsersQuerySchema = z.object({
+  job_states: getAdminUsersQueryJobStatesSchema,
+  limit: getAdminUsersQueryLimitSchema,
+  offset: getAdminUsersQueryOffsetSchema,
+  desc: getAdminUsersQueryDescSchema,
+})

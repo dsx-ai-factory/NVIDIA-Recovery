@@ -6,22 +6,56 @@ import * as z from 'zod'
 import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1GetJobsResponseSchema } from './v1GetJobsResponseSchema'
 
+/**
+ * A decimal zero-based offset from the previous response's next_page_token field. Mutually exclusive with page_number.
+ */
 export const heimdallServiceGetJobsQueryPageTokenSchema = z.string().optional().describe('A decimal zero-based offset from the previous response\'s next_page_token field. Mutually exclusive with page_number.')
 
-export const heimdallServiceGetJobsQueryPageNumberSchema = z.int().optional().describe('A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.')
+/**
+ * A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.
+ */
+export const heimdallServiceGetJobsQueryPageNumberSchema = z.int32().optional().describe('A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.')
 
-export const heimdallServiceGetJobsQueryLimitSchema = z.int().optional().describe('The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.')
+/**
+ * The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.
+ */
+export const heimdallServiceGetJobsQueryLimitSchema = z.int32().optional().describe('The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.')
 
+/**
+ * The workflow IDs to filter by.
+ */
 export const heimdallServiceGetJobsQueryWorkflowIdsSchema = z.array(z.string().min(1).refine((value) => { const characters = Array.from(value); return characters.length <= 256 && characters.every((character) => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff); }, { message: "Must contain at most 256 Unicode scalar values" })).optional().describe('The workflow IDs to filter by.')
 
+/**
+ * The job IDs to filter by.
+ */
 export const heimdallServiceGetJobsQueryJobIdsSchema = z.array(z.string()).optional().describe('The job IDs to filter by.')
 
+/**
+ * Job manager / scheduler state filter (e.g. RUNNING, COMPLETED). Passed through to job manager.
+ */
 export const heimdallServiceGetJobsQueryJmStateSchema = z.string().optional().describe('Job manager / scheduler state filter (e.g. RUNNING, COMPLETED). Passed through to job manager.')
 
+/**
+ * Return jobs that can seed scheduler reconciliation: all non-final jobs plus
+ * failure-like terminal jobs. COMPLETED and REQUEUED jobs are excluded
+ * because their recovery is driven by exact-attempt Advice. Passed through
+ * to job manager and mutually exclusive with jm_state.
+ */
 export const heimdallServiceGetJobsQueryReconciliationEligibleJobsSchema = z.boolean().optional().describe('Return jobs that can seed scheduler reconciliation: all non-final jobs plus\nfailure-like terminal jobs. COMPLETED and REQUEUED jobs are excluded\nbecause their recovery is driven by exact-attempt Advice. Passed through\nto job manager and mutually exclusive with jm_state.')
 
+/**
+ * Filter by backend completion state: false returns non-final attempts,
+ * true returns final attempts, and omission preserves historical listing.
+ * Passed through to job manager; mutually exclusive with jm_state and
+ * reconciliation_eligible_jobs=true.
+ */
 export const heimdallServiceGetJobsQueryCompletedJobsSchema = z.boolean().optional().describe('Filter by backend completion state: false returns non-final attempts,\ntrue returns final attempts, and omission preserves historical listing.\nPassed through to job manager; mutually exclusive with jm_state and\nreconciliation_eligible_jobs=true.')
 
+/**
+ * Inclusive lower bound on persisted job end time, applied in job manager
+ * before count and pagination. Attempts without an end time are excluded.
+ */
 export const heimdallServiceGetJobsQueryEndTimeFromSchema = z.iso.datetime().optional().describe('Inclusive lower bound on persisted job end time, applied in job manager\nbefore count and pagination. Attempts without an end time are excluded.')
 
 export const heimdallServiceGetJobsStatus200Schema = v1GetJobsResponseSchema.describe('GetJobsResponse is the response for listing jobs.')
@@ -31,3 +65,15 @@ export const heimdallServiceGetJobsStatusDefaultSchema = rpcStatusSchema
 export const heimdallServiceGetJobsResponseSchema = heimdallServiceGetJobsStatus200Schema
 
 export const heimdallServiceGetJobsErrorSchema = heimdallServiceGetJobsStatusDefaultSchema
+
+export const heimdallServiceGetJobsQuerySchema = z.object({
+  pageToken: heimdallServiceGetJobsQueryPageTokenSchema,
+  pageNumber: heimdallServiceGetJobsQueryPageNumberSchema,
+  limit: heimdallServiceGetJobsQueryLimitSchema,
+  workflowIds: heimdallServiceGetJobsQueryWorkflowIdsSchema,
+  jobIds: heimdallServiceGetJobsQueryJobIdsSchema,
+  jmState: heimdallServiceGetJobsQueryJmStateSchema,
+  reconciliationEligibleJobs: heimdallServiceGetJobsQueryReconciliationEligibleJobsSchema,
+  completedJobs: heimdallServiceGetJobsQueryCompletedJobsSchema,
+  endTimeFrom: heimdallServiceGetJobsQueryEndTimeFromSchema,
+})

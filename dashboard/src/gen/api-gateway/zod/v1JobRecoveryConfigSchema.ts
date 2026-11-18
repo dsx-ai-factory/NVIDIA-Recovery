@@ -8,12 +8,16 @@ import { jobRecoveryConfigDagActionSchema } from './jobRecoveryConfigDagActionSc
 import { v1JobAnomalyDetectionConfigSchema } from './v1JobAnomalyDetectionConfigSchema'
 import { v1JobDagDependencySchema } from './v1JobDagDependencySchema'
 
+/**
+ * JobRecoveryConfig contains typed recovery policy for scheduler jobs.
+ */
 export const v1JobRecoveryConfigSchema = z.object({
   autoResumeMode: jobRecoveryConfigAutoResumeModeSchema.optional().default('AUTO_RESUME_MODE_UNSPECIFIED').describe('Job-level auto-resume mode.'),
-  maxRequeueTimes: z.int().optional().describe('Maximum number of times a job can be requeued. Must be positive when present.'),
+  maxRequeueTimes: z.int32().optional().describe('Maximum number of times a job can be requeued. Must be positive when present.'),
   requeueOnCompletion: z.boolean().optional().describe('Whether normal completion should trigger requeue. Presence overrides the system default.'),
   anomalyDetectionConfig: v1JobAnomalyDetectionConfigSchema.optional().describe('Job-level anomaly detection policy supplied by the scheduler adapter.'),
   dagDependencies: z.array(v1JobDagDependencySchema).optional().describe('Parent gates that must be satisfied before this job becomes eligible.'),
   dagAction: jobRecoveryConfigDagActionSchema.optional().default('DAG_ACTION_UNSPECIFIED').describe('Action to apply after all DAG dependencies are satisfied.'),
   environment: z.string().optional().describe('Optional APS routing environment preserved exactly from the scheduler job.'),
+  logFilePathsSharedAcrossAttempts: z.boolean().optional().describe('Whether requeued attempts intentionally write to the same log files.'),
 }).describe('JobRecoveryConfig contains typed recovery policy for scheduler jobs.')

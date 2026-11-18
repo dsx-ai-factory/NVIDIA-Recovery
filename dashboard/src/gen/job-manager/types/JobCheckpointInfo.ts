@@ -6,13 +6,13 @@
  * @description Data structure that represents a job checkpoint event.
  * @example {"uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"}
  * @type object
-*/
+ */
 export interface JobCheckpointInfo {
-    /**
-     * @description
-     * Format: `date-time`
-     * @type string
-    */
-    timestamp: string;
-    uuid: string;
+  /**
+   * @description
+   * Format: `date-time`
+   * @type string
+   */
+  timestamp: string;
+  uuid: string;
 }

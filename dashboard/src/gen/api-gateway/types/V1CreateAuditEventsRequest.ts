@@ -7,11 +7,11 @@ import type { V1ProducerAuditEvent } from './V1ProducerAuditEvent'
 /**
  * @description CreateAuditEventsRequest is a batch of producer audit events to ingest.
  * @type object
-*/
+ */
 export interface V1CreateAuditEventsRequest {
-    /**
-     * @description Events in this ingestion batch.
-     * @type array | undefined
-    */
-    items?: V1ProducerAuditEvent[];
+  /**
+   * @description Events in this ingestion batch.
+   * @type array | undefined
+   */
+  items?: V1ProducerAuditEvent[];
 }

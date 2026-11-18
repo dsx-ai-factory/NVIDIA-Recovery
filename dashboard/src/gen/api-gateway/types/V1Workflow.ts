@@ -5,36 +5,36 @@
 /**
  * @description Workflow is the workflow.
  * @type object
-*/
+ */
 export interface V1Workflow {
-    /**
-     * @minLength 1
-     * @maxLength 256
-     * @type string
-    */
-    workflowId: string;
-    /**
-     * @description The ID of the workflow.
-     * @type string | undefined
-    */
-    schedulerWorkflowId?: string;
-    /**
-     * @description The name of the workflow.
-     * @type string | undefined
-    */
-    name?: string;
-    /**
-     * @description The start time of the workflow as utc unix timestamp.
-     *
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    startTime?: string;
-    /**
-     * @description The end time of the workflow as utc unix timestamp.
-     *
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    endTime?: string;
+  /**
+   * @minLength 1
+   * @maxLength 256
+   * @type string
+   */
+  workflowId: string;
+  /**
+   * @description The ID of the workflow.
+   * @type string | undefined
+   */
+  schedulerWorkflowId?: string;
+  /**
+   * @description The name of the workflow.
+   * @type string | undefined
+   */
+  name?: string;
+  /**
+   * @description The start time of the workflow as utc unix timestamp.
+   *
+   * Format: `date-time`
+   * @type string | undefined
+   */
+  startTime?: string;
+  /**
+   * @description The end time of the workflow as utc unix timestamp.
+   *
+   * Format: `date-time`
+   * @type string | undefined
+   */
+  endTime?: string;
 }

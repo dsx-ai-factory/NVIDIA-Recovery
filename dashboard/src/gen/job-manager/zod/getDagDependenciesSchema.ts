@@ -6,26 +6,61 @@ import * as z from 'zod'
 import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { listDagDependenciesResponseSchema } from './listDagDependenciesResponseSchema'
 
+/**
+ * Filter by dependent (child) job ID.
+ */
 export const getDagDependenciesQueryDependentJobIdSchema = z.string().nullish().describe('Filter by dependent (child) job ID.')
 
+/**
+ * Filter by parent job identifier (job ID or job name).
+ */
 export const getDagDependenciesQueryDependencyJobIdentifierSchema = z.string().nullish().describe('Filter by parent job identifier (job ID or job name).')
 
+/**
+ * Filter by parent identifier type ('id' or 'name'). Required when dependency_job_identifier is provided.
+ */
 export const getDagDependenciesQueryDependencyJobIdentifierTypeSchema = z.string().nullish().describe('Filter by parent identifier type (\'id\' or \'name\'). Required when dependency_job_identifier is provided.')
 
+/**
+ * Filter by action status values: 'not_eligible', 'in_progress', 'successful', 'failed', or 'aborted'.
+ */
 export const getDagDependenciesQueryActionStatusSchema = z.array(z.string()).nullish().describe('Filter by action status values: \'not_eligible\', \'in_progress\', \'successful\', \'failed\', or \'aborted\'.')
 
+/**
+ * Filter for records with action_time before this timestamp.
+ */
 export const getDagDependenciesQueryActionTimeBeforeSchema = z.iso.datetime().nullish().describe('Filter for records with action_time before this timestamp.')
 
+/**
+ * Maximum number of records to return.
+ */
 export const getDagDependenciesQueryLimitSchema = z.int().min(1).max(1000).optional().default(50).describe('Maximum number of records to return.')
 
+/**
+ * Number of records to skip for pagination.
+ */
 export const getDagDependenciesQueryOffsetSchema = z.int().min(0).optional().default(0).describe('Number of records to skip for pagination.')
 
+/**
+ * Comma-separated list of 'field:order' pairs for sorting. e.g., 'id:asc,dependent_job_id:desc'.
+ */
 export const getDagDependenciesQuerySortBySchema = z.string().nullish().describe('Comma-separated list of \'field:order\' pairs for sorting. e.g., \'id:asc,dependent_job_id:desc\'.')
 
-export const getDagDependenciesStatus200Schema = listDagDependenciesResponseSchema.describe('Response model for listing DAG dependency records. The response is paginated —\nitem_count reflects the total number of matching records, not the page size.').meta({ examples: [{}] })
+export const getDagDependenciesStatus200Schema = listDagDependenciesResponseSchema.describe('Response model for listing DAG dependency records. The response is paginated —\nitem_count reflects the total number of matching records, not the page size.').meta({ examples: [{"item_count":0,"dag_dependencies":[{"reason_code":"WAITING_FOR_PARENT_REGISTRATION","action_time":"2000-01-23T04:56:07.000+00:00","dependent_job_action":"dependent_job_action","dependency_trigger_condition":"dependency_trigger_condition","reason_message":"reason_message","last_evaluated_at":"2000-01-23T04:56:07.000+00:00","dependent_job_id":"dependent_job_id","dependency_job_identifier_type":"dependency_job_identifier_type","dependency_job_identifier":"dependency_job_identifier","reason_details":{"key":""},"action_status":"action_status"},{"reason_code":"WAITING_FOR_PARENT_REGISTRATION","action_time":"2000-01-23T04:56:07.000+00:00","dependent_job_action":"dependent_job_action","dependency_trigger_condition":"dependency_trigger_condition","reason_message":"reason_message","last_evaluated_at":"2000-01-23T04:56:07.000+00:00","dependent_job_id":"dependent_job_id","dependency_job_identifier_type":"dependency_job_identifier_type","dependency_job_identifier":"dependency_job_identifier","reason_details":{"key":""},"action_status":"action_status"}]}] })
 
-export const getDagDependenciesStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getDagDependenciesStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const getDagDependenciesResponseSchema = getDagDependenciesStatus200Schema
 
 export const getDagDependenciesErrorSchema = getDagDependenciesStatus422Schema
+
+export const getDagDependenciesQuerySchema = z.object({
+  dependent_job_id: getDagDependenciesQueryDependentJobIdSchema,
+  dependency_job_identifier: getDagDependenciesQueryDependencyJobIdentifierSchema,
+  dependency_job_identifier_type: getDagDependenciesQueryDependencyJobIdentifierTypeSchema,
+  action_status: getDagDependenciesQueryActionStatusSchema,
+  action_time_before: getDagDependenciesQueryActionTimeBeforeSchema,
+  limit: getDagDependenciesQueryLimitSchema,
+  offset: getDagDependenciesQueryOffsetSchema,
+  sort_by: getDagDependenciesQuerySortBySchema,
+})

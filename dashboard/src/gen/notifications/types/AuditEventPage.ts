@@ -8,12 +8,12 @@ import type { AuditEventPageCursor } from './AuditEventPageCursor'
 /**
  * @description One page of audit events.
  * @type object
-*/
+ */
 export interface AuditEventPage {
-    /**
-     * @description Opaque cursors for the adjacent pages.
-     * @type object
-    */
-    cursor: AuditEventPageCursor;
-    items: AuditEvent[];
+  /**
+   * @description Opaque cursors for the adjacent pages.
+   * @type object
+   */
+  cursor: AuditEventPageCursor;
+  items: AuditEvent[];
 }

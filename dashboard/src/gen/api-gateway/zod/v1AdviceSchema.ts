@@ -8,11 +8,15 @@ import { v1AdviceReconciliationStatusSchema } from './v1AdviceReconciliationStat
 import { v1IssueSchema } from './v1IssueSchema'
 import { v1RecoveryContextSchema } from './v1RecoveryContextSchema'
 
+/**
+ * Advice represents advice computed by the Advisor for a job.
+ * This includes desired state, node constraints, and detected issues.
+ */
 export const v1AdviceSchema = z.object({
   heimdallJobId: z.string().optional().describe('The UUID assigned by NVIDIA Recovery.'),
   jobId: z.string().optional().describe('Scheduler-specific job identifier.'),
   schedulerMetadata: z.object({}).optional().describe('Scheduler metadata that is specific to the scheduler such as kubernetes namespace or job kind.'),
-  attemptIndex: z.int().optional().describe('The restart/attempt count for this job.'),
+  attemptIndex: z.int32().optional().describe('The restart/attempt count for this job.'),
   advice: v1AdviceRecommendationSchema.optional().describe('The advice recommendation (desired state and node constraints).'),
   issues: z.array(v1IssueSchema).optional().describe('Issues detected for this job.'),
   createdAt: z.iso.datetime().optional().describe('When this advice was created.'),

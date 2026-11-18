@@ -9,38 +9,38 @@ import type { AdviceReconciliationReasonKey } from './AdviceReconciliationReason
  * @description The reconciliation observation for an Advice generation.
  * @example {"reason":"DESIRED_STATE_OBSERVED","disposition":"PENDING","observedAt":"2000-01-23T04:56:07.000+00:00","transitionedAt":"2000-01-23T04:56:07.000+00:00","observedGeneration":1,"diagnosticMessage":"diagnosticMessage"}
  * @type object
-*/
+ */
 export interface AdviceReconciliationStatus {
-    /**
-     * @minLength 1
-     * @type integer
-    */
-    observedGeneration: number;
-    /**
-     * @description Lifecycle disposition reported by an Advice reconciler.
-     * @type string
-    */
-    disposition: AdviceReconciliationDispositionKey;
-    /**
-     * @description Bounded machine-readable reasons for Advice reconciliation status.
-     * @type string
-    */
-    reason: AdviceReconciliationReasonKey;
-    /**
-     * @description
-     * Format: `date-time`
-     * @type string
-    */
-    observedAt: string;
-    /**
-     * @description
-     * Format: `date-time`
-     * @type string
-    */
-    transitionedAt: string;
-    /**
-     * @maxLength 1024
-     * @type string | undefined
-    */
-    diagnosticMessage?: string | null;
+  /**
+   * @minimum 1
+   * @type integer
+   */
+  observedGeneration: number;
+  /**
+   * @description Lifecycle disposition reported by an Advice reconciler.
+   * @type string
+   */
+  disposition: AdviceReconciliationDispositionKey;
+  /**
+   * @description Bounded machine-readable reasons for Advice reconciliation status.
+   * @type string
+   */
+  reason: AdviceReconciliationReasonKey;
+  /**
+   * @description
+   * Format: `date-time`
+   * @type string
+   */
+  observedAt: string;
+  /**
+   * @description
+   * Format: `date-time`
+   * @type string
+   */
+  transitionedAt: string;
+  /**
+   * @maxLength 1024
+   * @type string | undefined
+   */
+  diagnosticMessage?: string | null;
 }

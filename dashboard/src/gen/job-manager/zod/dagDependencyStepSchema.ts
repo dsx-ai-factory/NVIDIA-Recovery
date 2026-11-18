@@ -6,7 +6,14 @@ import * as z from 'zod'
 import { dagTriggerConditionEnumSchema } from './dagTriggerConditionEnumSchema'
 import { targetSchema } from './targetSchema'
 
+/**
+ * A single DAG dependency step that describes a dependency that must meet a trigger condition
+ * before the current job can run.
+ * Attributes:
+ *     target (JobReference): The dependency job, identified by name or id.
+ *     trigger (DagTriggerConditionEnum): The condition that triggers this step. Defaults to COMPLETED.
+ */
 export const dagDependencyStepSchema = z.object({
   target: targetSchema,
   trigger: dagTriggerConditionEnumSchema.optional().describe('The condition under which a DAG step should be triggered.\n\nCOMPLETED: Trigger when the current job finishes successfully (Slurm COMPLETED state).'),
-}).describe('A single DAG dependency step that describes a dependency that must meet a trigger condition\nbefore the current job can run.\n\nAttributes:\n    target (JobReference): The dependency job, identified by name or id.\n    trigger (DagTriggerConditionEnum): The condition that triggers this step. Defaults to COMPLETED.').meta({ examples: [{}] })
+}).describe('A single DAG dependency step that describes a dependency that must meet a trigger condition\nbefore the current job can run.\n\nAttributes:\n    target (JobReference): The dependency job, identified by name or id.\n    trigger (DagTriggerConditionEnum): The condition that triggers this step. Defaults to COMPLETED.').meta({ examples: [{"trigger":"completed","target":{"name":"name","type":"name"}}] })
