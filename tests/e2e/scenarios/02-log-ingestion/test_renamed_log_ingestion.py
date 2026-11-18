@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
 import pytest
@@ -86,8 +86,12 @@ def _enable_renamed_links(stack: StackControl, destination: str) -> Action[E2ESe
     return action
 
 
-def _renamed_log_ingested(marker: str, source: str) -> Check[E2EServices]:
-    """Require the actual collected filename to be published for this job and mapped to its source."""
+def _renamed_log_ingested(marker: str, source: str, destination: str) -> Check[E2EServices]:
+    """Require the actual collected filename to be published for this job and mapped to its source.
+
+    The collected link must also sit in `destination`. Otherwise the check can pass on a link in shared storage when
+    the controller ignores the destination override, and cleanup of the disposable directory would never remove it.
+    """
 
     def check(run: Run[E2EServices]) -> Evidence:
         submitted = run.submitted_at.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -113,6 +117,7 @@ def _renamed_log_ingested(marker: str, source: str) -> Check[E2EServices]:
         mapping = metadata.get("app_log_link_targets", {})
         matched = (
             filename != source
+            and PurePosixPath(filename).parent == PurePosixPath(destination)
             and filename in (status.get("log_file_paths") or [])
             and filename in metadata.get("slurm_log_file_paths", [])
             and mapping.get(filename) == source
@@ -139,7 +144,7 @@ def test_same_arbitrary_basename_is_collected_for_each_job(
     sources = {role: f"{directory}-{role}/output" for role in roles}
     markers = {role: f"HEIMDALL_E2E_RENAMED_{uuid4().hex}" for role in roles}
     body = Path(__file__).with_name("renamed-job.sh").read_text()
-    checks = tuple(on(role, _renamed_log_ingested(markers[role], sources[role])) for role in roles)
+    checks = tuple(on(role, _renamed_log_ingested(markers[role], sources[role], destination)) for role in roles)
     return Scenario(
         name="02-log-ingestion",
         setup=(

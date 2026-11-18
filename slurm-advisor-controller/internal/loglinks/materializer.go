@@ -106,6 +106,13 @@ type candidate struct {
 	origin       linkOrigin
 }
 
+// scanSeedKey identifies one source path to search around, for one owner when
+// renaming is on and for no particular owner when it is off.
+type scanSeedKey struct {
+	path  string
+	owner scanOwnerKey
+}
+
 type jobAttemptKey struct {
 	jobID        string
 	attemptIndex int32
@@ -277,7 +284,11 @@ func (m *Materializer) collectPrimaryCandidates(
 	targets []Target,
 	state *syncState,
 ) ([]candidate, []candidate) {
+	// scanSeeds names the directories adjacent-log discovery searches, and for
+	// which job. They are kept apart from primaries so that a primary that cannot
+	// be named does not stop its directory from being searched.
 	var scanSeeds []candidate
+	seededScans := make(map[scanSeedKey]struct{})
 	primaries := make([]candidate, 0, min(m.config.MaxPathsPerSync, len(targets)))
 	seen := make(map[string]struct{}, min(m.config.MaxPathsPerSync, len(targets)))
 	processed := 0
@@ -323,12 +334,26 @@ func (m *Materializer) collectPrimaryCandidates(
 				state.observation.Rejected = saturatingIncrement(state.observation.Rejected)
 				continue
 			}
-			// Directory discovery depends on source validation, not whether this
-			// primary has enough identity to receive a generated filename.
-			scanSeeds = append(scanSeeds, candidate{
-				jobID: target.JobID, attemptIndex: target.AttemptIndex,
-				arrayJobID: target.ArrayJobID, target: normalized,
-			})
+			// With renaming on, directory discovery depends on source validation, not
+			// on whether this primary has enough identity to receive a generated
+			// filename, and every job is an owner of its own directories. With
+			// renaming off, keep the behavior from before the option existed: one
+			// seed per source path, so jobs that share a path are not all added as
+			// owners of its directory, which would let one job's matches use up the
+			// scan's match budget on every pass.
+			seed := scanSeedKey{path: normalized}
+			if m.config.RenameEnabled {
+				seed.owner = scanOwnerKey{
+					jobID: target.JobID, arrayJobID: target.ArrayJobID, attemptIndex: target.AttemptIndex,
+				}
+			}
+			if _, seeded := seededScans[seed]; !seeded {
+				seededScans[seed] = struct{}{}
+				scanSeeds = append(scanSeeds, candidate{
+					jobID: target.JobID, attemptIndex: target.AttemptIndex,
+					arrayJobID: target.ArrayJobID, target: normalized,
+				})
+			}
 			name, renamed, err := Name(target, normalized, m.config.RenameEnabled)
 			if err != nil || (m.config.RenameEnabled && len(name) > m.config.MaxPathLength) ||
 				(renamed && len(filepath.Join(m.config.Destination, name)) > m.config.MaxPathLength) {

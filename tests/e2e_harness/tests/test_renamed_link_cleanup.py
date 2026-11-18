@@ -65,22 +65,38 @@ class Run:
         return self
 
 
+def destination_of(containers: list[dict[str, Any]]) -> str | None:
+    """The link destination that a set of containers is configured with."""
+
+    env = {item["name"]: item.get("value") for item in containers[0]["env"]}
+    return env.get("SLURM_ADVISOR_LOG_LINKS_DESTINATION")
+
+
 @pytest.mark.parametrize("restoration_fails", [False, True])
 def test_link_storage_is_removed_only_after_the_writer_has_stopped(restoration_fails: bool) -> None:
     """A failed rollout wait must retain ownership files even after desired env is restored."""
 
+    isolated = "/home/log-links/scenario-isolated"
     path = Path(__file__).resolve().parents[2] / "e2e/scenarios/02-log-ingestion/test_renamed_log_ingestion.py"
     enable = runpy.run_path(str(path))["_enable_renamed_links"]
     stack, run = Stack(), Run()
     original = deepcopy(stack.containers)
-    enable(stack, "/home/log-links/scenario-isolated")(run)
+    enable(stack, isolated)(run)
     assert stack.exists
+    # The protection below only matters if the live writer really moved to the
+    # disposable directory. Without this, both cases would pass trivially when
+    # setup creates the directory but leaves the writer on shared storage.
+    assert destination_of(stack.running) == isolated
     stack.fail_restart = restoration_fails
     cleanup = next(iter(run.cleanups.values()))
     if restoration_fails:
         with pytest.raises(TimeoutError):
             cleanup()
         assert stack.exists
+        # Desired state is back to normal, but the old writer is still running on
+        # the disposable directory, which is why that directory must be kept.
+        assert destination_of(stack.containers) == destination_of(original)
+        assert destination_of(stack.running) == isolated
     else:
         cleanup()
         assert not stack.exists

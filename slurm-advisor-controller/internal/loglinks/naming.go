@@ -17,6 +17,11 @@ import (
 var (
 	collectorJobID = regexp.MustCompile(`^[0-9]+(?:_[0-9]+)?$`)
 	unsafePrefix   = regexp.MustCompile(`[^A-Za-z0-9-]+`)
+	// apsTimestamp is the YY-MM-DD_time_HH-MM-SS part of an APS filename. Anything
+	// may follow it, such as an NVRx cycle suffix. It must be present: a name that
+	// stops matching the convention after "_date_" is not an APS name, and the
+	// collector would take a later numeric suffix as its job ID.
+	apsTimestamp = regexp.MustCompile(`^\d{2}-\d{2}-\d{2}_time_\d{2}-\d{2}-\d{2}`)
 )
 
 // Name plans a primary link's basename without accessing the filesystem. The
@@ -42,7 +47,8 @@ func Name(target Target, path string, renameEnabled bool) (name string, renamed 
 	}
 	if target.JobName != "" {
 		for _, jobID := range []string{target.JobID, target.ArrayJobID} {
-			if jobID != "" && strings.HasPrefix(base, target.JobName+"_"+jobID+"_date_") {
+			apsPrefix := target.JobName + "_" + jobID + "_date_"
+			if jobID != "" && strings.HasPrefix(base, apsPrefix) && apsTimestamp.MatchString(base[len(apsPrefix):]) {
 				return base, false, nil
 			}
 		}

@@ -46,10 +46,20 @@ func (m *Materializer) scan(
 	scanCtx, cancel := context.WithTimeout(ctx, m.config.ScanTimeout)
 	defer cancel()
 
-	primaryPaths := make(map[string]struct{}, len(primaries))
+	// A source that already reaches the collector under a generated name must not
+	// also be linked under its plain basename, or the collector reads one file
+	// under two names. That covers the current primaries, and also the sources of
+	// generated links still owned after their job has left the snapshot: a later
+	// scan for another job in the same directory would otherwise match them.
+	exposedSources := make(map[string]struct{}, len(primaries))
 	if m.config.RenameEnabled {
 		for _, primary := range primaries {
-			primaryPaths[primary.target] = struct{}{}
+			exposedSources[primary.target] = struct{}{}
+		}
+	}
+	for _, record := range state.owned {
+		if !record.SubmitTime.IsZero() {
+			exposedSources[record.Target] = struct{}{}
 		}
 	}
 	directories := m.scanDirectories(scanCtx, primaries, state)
@@ -65,7 +75,7 @@ func (m *Materializer) scan(
 		if state.observation.ScanMatches >= m.config.MaxMatchesPerScan {
 			return
 		}
-		m.scanOneDirectory(scanCtx, now, directory, primaryPaths, state)
+		m.scanOneDirectory(scanCtx, now, directory, exposedSources, state)
 	}
 }
 
@@ -171,7 +181,7 @@ func (m *Materializer) scanOneDirectory(
 	ctx context.Context,
 	now time.Time,
 	directory scanDirectory,
-	primaryPaths map[string]struct{},
+	exposedSources map[string]struct{},
 	state *syncState,
 ) {
 	if err := validateExistingDirectoryBoundary(directory.path); err != nil {
@@ -210,8 +220,8 @@ func (m *Materializer) scanOneDirectory(
 		}
 
 		entryPath := filepath.Join(directory.path, entry.Name())
-		if _, primary := primaryPaths[entryPath]; primary {
-			// Do not expose a renamed primary a second time under its old basename.
+		if _, exposed := exposedSources[entryPath]; exposed {
+			// Do not expose a generated primary a second time under its old basename.
 			continue
 		}
 		info, err := os.Lstat(entryPath)

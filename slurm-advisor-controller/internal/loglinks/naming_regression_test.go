@@ -13,13 +13,37 @@ import (
 	"time"
 )
 
-// A filename containing a word beginning with date is not an APS identity.
-func TestNameRenamesPartialDateToken(t *testing.T) {
+// Only the complete APS convention keeps its basename. A name that merely
+// starts with the APS prefix would otherwise reach the collector unchanged, and
+// the collector would take a later numeric suffix as the job ID, so renaming
+// exists precisely to give such files an identity of their own.
+func TestNameRenamesNamesThatOnlyResembleAPSNames(t *testing.T) {
 	now := time.Now().UTC()
-	path := "/logs/train_42_datebook.log"
-	name, renamed, err := Name(Target{JobID: "42", JobName: "train", SubmitTime: now}, path, true)
-	if err != nil || !renamed || name == filepath.Base(path) {
-		t.Fatalf("Name = %q, %v, %v", name, renamed, err)
+	for _, base := range []string{
+		"train_42_datebook.log",       // word that merely begins with "date"
+		"train_42_date_report_99.log", // collector would extract 99, another job's ID
+		"train_42_date_26-11-17.log",  // date without the time component
+	} {
+		path := "/logs/" + base
+		name, renamed, err := Name(Target{JobID: "42", JobName: "train", SubmitTime: now}, path, true)
+		if err != nil || !renamed || name == base {
+			t.Errorf("Name(%s) = %q, renamed=%v, err=%v; want a generated name", base, name, renamed, err)
+		}
+	}
+}
+
+// Real APS names may carry a trailing qualifier such as an NVRx cycle. They must
+// keep their basenames, since the collector already identifies them correctly.
+func TestNamePreservesAPSNamesWithTrailingQualifier(t *testing.T) {
+	now := time.Now().UTC()
+	for _, base := range []string{
+		"train_42_date_26-11-17_time_01-02-03.log",
+		"train_42_date_26-11-17_time_01-02-03_cycle1.log",
+	} {
+		name, renamed, err := Name(Target{JobID: "42", JobName: "train", SubmitTime: now}, "/logs/"+base, true)
+		if err != nil || renamed || name != base {
+			t.Errorf("Name(%s) = %q, renamed=%v, err=%v; want the basename kept", base, name, renamed, err)
+		}
 	}
 }
 
@@ -62,6 +86,62 @@ func TestPreservedAPSLinkKeepsLegacyLengthBounds(t *testing.T) {
 	assertSymlink(t, filepath.Join(destination, filepath.Base(path)), path)
 }
 
+// With renaming off, adjacent-log discovery must behave exactly as before the
+// option existed: jobs that share a stdout path seed that directory once. Seeding
+// it for every job lets one job's match consume the scan's whole match budget on
+// every pass, so a job in another directory never gets its application log.
+func TestScanSeedsKeepPreFeatureDeduplicationWhenRenamingIsOff(t *testing.T) {
+	_, source, destination := testDirectories(t)
+	shared, other := filepath.Join(source, "w1"), filepath.Join(source, "w2")
+	for _, directory := range []string{shared, other} {
+		if err := os.Mkdir(directory, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sharedStdout, ownStdout := filepath.Join(shared, "out.log"), filepath.Join(other, "out2.log")
+	for _, path := range []string{
+		sharedStdout, ownStdout, filepath.Join(shared, "app-43.log"), filepath.Join(other, "app-44.log"),
+	} {
+		writeFile(t, path)
+	}
+	cfg := testConfig(source, destination)
+	cfg.MaxMatchesPerScan = 1
+	cfg.ApplicationPatterns = []string{`^app-{job_id}\.log$`}
+	m := mustNew(t, cfg)
+	m.Sync(context.Background(), time.Now().UTC(), []Target{
+		{JobID: "42", Paths: []string{sharedStdout}},
+		{JobID: "43", Paths: []string{sharedStdout}},
+		{JobID: "44", Paths: []string{ownStdout}},
+	})
+	assertSymlink(t, filepath.Join(destination, "app-44.log"), filepath.Join(other, "app-44.log"))
+}
+
+// A job's generated link outlives the job until retention. A later scan for
+// another job must not expose that same file again under its plain basename,
+// which would send one file to the collector under two names. A different
+// adjacent application file must stay eligible.
+func TestScanDoesNotRelinkTheSourceOfAnOwnedGeneratedLink(t *testing.T) {
+	_, source, destination := testDirectories(t)
+	finished := filepath.Join(source, "stdout-42.log")
+	active := filepath.Join(source, "output43")
+	adjacent := filepath.Join(source, "extra.log")
+	for _, path := range []string{finished, active, adjacent} {
+		writeFile(t, path)
+	}
+	cfg := testConfig(source, destination)
+	cfg.RenameEnabled = true
+	cfg.ScanInterval = time.Second
+	cfg.ApplicationPatterns = []string{`\.log$`}
+	m := mustNew(t, cfg)
+	now := time.Now().UTC()
+	m.Sync(context.Background(), now, []Target{{JobID: "42", SubmitTime: now, Paths: []string{finished}}})
+	// Job 42 has ended; its generated link is still within retention.
+	m.Sync(context.Background(), now.Add(time.Minute), []Target{{JobID: "43", SubmitTime: now, Paths: []string{active}}})
+
+	assertNotExist(t, filepath.Join(destination, "stdout-42.log"))
+	assertSymlink(t, filepath.Join(destination, "extra.log"), adjacent)
+}
+
 // A failed atomic replacement must not strand a link created by this process.
 func TestGeneratedOwnershipRetriesAfterManifestFailure(t *testing.T) {
 	_, source, destination := testDirectories(t)
@@ -83,7 +163,9 @@ func TestGeneratedOwnershipRetriesAfterManifestFailure(t *testing.T) {
 	if err := os.Remove(manifest); err != nil {
 		t.Fatal(err)
 	}
-	second := m.Sync(context.Background(), now.Add(time.Second), []Target{target})
+	// Replay nothing: observing the target again would refresh its record and force
+	// a write by itself, hiding a retry that is not scheduled when it should be.
+	second := m.Sync(context.Background(), now.Add(time.Second), nil)
 	if second.Owned != 1 || second.Errors != 0 {
 		t.Fatalf("retry = %+v", second)
 	}
