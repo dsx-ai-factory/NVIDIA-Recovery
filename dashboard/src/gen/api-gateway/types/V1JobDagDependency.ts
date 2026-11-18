@@ -7,22 +7,22 @@ import type { JobDagDependencyTriggerConditionKey } from './JobDagDependencyTrig
 /**
  * @description JobDagDependency identifies one parent gate for a DAG child.
  * @type object
-*/
+ */
 export interface V1JobDagDependency {
-    /**
-     * @description Scheduler job ID of the parent.
-     * @type string | undefined
-    */
-    jobId?: string;
-    /**
-     * @description Workflow-scoped job name of the parent.
-     * @type string | undefined
-    */
-    jobName?: string;
-    /**
-     * @description Condition that satisfies this dependency.
-     * @default 'TRIGGER_CONDITION_UNSPECIFIED'
-     * @type string | undefined
-    */
-    trigger?: JobDagDependencyTriggerConditionKey;
+  /**
+   * @description Scheduler job ID of the parent.
+   * @type string | undefined
+   */
+  jobId?: string;
+  /**
+   * @description Workflow-scoped job name of the parent.
+   * @type string | undefined
+   */
+  jobName?: string;
+  /**
+   * @description Condition that satisfies this dependency.
+   * @default 'TRIGGER_CONDITION_UNSPECIFIED'
+   * @type string | undefined
+   */
+  trigger?: JobDagDependencyTriggerConditionKey;
 }

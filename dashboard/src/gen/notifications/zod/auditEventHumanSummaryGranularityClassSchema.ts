@@ -4,4 +4,7 @@
 
 import * as z from 'zod'
 
+/**
+ * Supported granularity levels for an audit-event summary.
+ */
 export const auditEventHumanSummaryGranularityClassSchema = z.union([z.literal(1), z.literal(11)]).describe('Supported granularity levels for an audit-event summary.')

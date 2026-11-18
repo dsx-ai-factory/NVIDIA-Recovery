@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { v1WorkflowSchema } from './v1WorkflowSchema'
 
+/**
+ * GetWorkflowResponse is the response for the GetWorkflow method.
+ */
 export const v1GetWorkflowResponseSchema = z.object({
   workflow: v1WorkflowSchema.optional().describe('The workflow.'),
 }).describe('GetWorkflowResponse is the response for the GetWorkflow method.')

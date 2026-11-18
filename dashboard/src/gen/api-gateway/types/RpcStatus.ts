@@ -5,12 +5,12 @@
 import type { ProtobufAny } from './ProtobufAny'
 
 export interface RpcStatus {
-    /**
-     * @description
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    code?: number;
-    message?: string;
-    details?: ProtobufAny[];
+  /**
+   * @description
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  code?: number;
+  message?: string;
+  details?: ProtobufAny[];
 }

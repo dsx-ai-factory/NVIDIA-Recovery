@@ -6,22 +6,49 @@ import * as z from 'zod'
 import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { listAdviceResponseSchema } from './listAdviceResponseSchema'
 
+/**
+ * Number of items per page.
+ */
 export const getAdviceQueryPageSizeSchema = z.int().min(1).max(1000).optional().default(50).describe('Number of items per page.')
 
+/**
+ * Token for the next page of results.
+ */
 export const getAdviceQueryPageTokenSchema = z.string().nullish().describe('Token for the next page of results.')
 
+/**
+ * Filter advice by job_id.
+ */
 export const getAdviceQueryJobIdSchema = z.string().nullish().describe('Filter advice by job_id.')
 
+/**
+ * If true, include hidden/non-visible advice records.
+ */
 export const getAdviceQueryIncludeHiddenSchema = z.boolean().optional().default(false).describe('If true, include hidden/non-visible advice records.')
 
+/**
+ * Return ordinary advice created at or after this time while retaining durable states.
+ */
 export const getAdviceQueryCreatedAfterSchema = z.iso.datetime().nullish().describe('Return ordinary advice created at or after this time while retaining durable states.')
 
+/**
+ * Return only advice that can still require reconciliation.
+ */
 export const getAdviceQueryOnlyActiveSchema = z.boolean().optional().default(false).describe('Return only advice that can still require reconciliation.')
 
-export const getAdviceStatus200Schema = listAdviceResponseSchema.describe('Response model for listing advice records.').meta({ examples: [{}] })
+export const getAdviceStatus200Schema = listAdviceResponseSchema.describe('Response model for listing advice records.').meta({ examples: [{"item_count":0,"advice":[{"generation":1,"factAttribution":{"key":""},"visible":false,"restartCount":6,"advice":{"nodeConstraints":{"exclusions":["exclusions","exclusions"],"inclusions":["inclusions","inclusions"]},"state":"Restarted"},"issues":[{"issueType":"issueType","detectedBy":"detectedBy","remediationActions":[{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"},{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"}],"relevantLogLines":["relevantLogLines","relevantLogLines"],"timestamp":"2000-01-23T04:56:07.000+00:00"},{"issueType":"issueType","detectedBy":"detectedBy","remediationActions":[{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"},{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"}],"relevantLogLines":["relevantLogLines","relevantLogLines"],"timestamp":"2000-01-23T04:56:07.000+00:00"}],"jobId":"jobId","desiredStateChangedAt":"2000-01-23T04:56:07.000+00:00","createdAt":"2000-01-23T04:56:07.000+00:00","reconciliationStatus":{"reason":"DESIRED_STATE_OBSERVED","disposition":"PENDING","observedAt":"2000-01-23T04:56:07.000+00:00","transitionedAt":"2000-01-23T04:56:07.000+00:00","observedGeneration":1,"diagnosticMessage":"diagnosticMessage"},"recoveryContext":{"tracestate":"tracestate","traceparent":"traceparent","triggeredAt":"2000-01-23T04:56:07.000+00:00","sequenceId":"sequenceId","operation":"restart"},"schedulerMetadata":{"key":""},"id":"id","updatedAt":"2000-01-23T04:56:07.000+00:00"},{"generation":1,"factAttribution":{"key":""},"visible":false,"restartCount":6,"advice":{"nodeConstraints":{"exclusions":["exclusions","exclusions"],"inclusions":["inclusions","inclusions"]},"state":"Restarted"},"issues":[{"issueType":"issueType","detectedBy":"detectedBy","remediationActions":[{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"},{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"}],"relevantLogLines":["relevantLogLines","relevantLogLines"],"timestamp":"2000-01-23T04:56:07.000+00:00"},{"issueType":"issueType","detectedBy":"detectedBy","remediationActions":[{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"},{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"}],"relevantLogLines":["relevantLogLines","relevantLogLines"],"timestamp":"2000-01-23T04:56:07.000+00:00"}],"jobId":"jobId","desiredStateChangedAt":"2000-01-23T04:56:07.000+00:00","createdAt":"2000-01-23T04:56:07.000+00:00","reconciliationStatus":{"reason":"DESIRED_STATE_OBSERVED","disposition":"PENDING","observedAt":"2000-01-23T04:56:07.000+00:00","transitionedAt":"2000-01-23T04:56:07.000+00:00","observedGeneration":1,"diagnosticMessage":"diagnosticMessage"},"recoveryContext":{"tracestate":"tracestate","traceparent":"traceparent","triggeredAt":"2000-01-23T04:56:07.000+00:00","sequenceId":"sequenceId","operation":"restart"},"schedulerMetadata":{"key":""},"id":"id","updatedAt":"2000-01-23T04:56:07.000+00:00"}],"nextPageToken":"nextPageToken"}] })
 
-export const getAdviceStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getAdviceStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const getAdviceResponseSchema = getAdviceStatus200Schema
 
 export const getAdviceErrorSchema = getAdviceStatus422Schema
+
+export const getAdviceQuerySchema = z.object({
+  page_size: getAdviceQueryPageSizeSchema,
+  page_token: getAdviceQueryPageTokenSchema,
+  job_id: getAdviceQueryJobIdSchema,
+  include_hidden: getAdviceQueryIncludeHiddenSchema,
+  created_after: getAdviceQueryCreatedAfterSchema,
+  only_active: getAdviceQueryOnlyActiveSchema,
+})

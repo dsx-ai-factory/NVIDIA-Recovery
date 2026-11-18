@@ -6,16 +6,37 @@ import * as z from 'zod'
 import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { getWorkflowsResponseSchema } from './getWorkflowsResponseSchema'
 
+/**
+ * The maximum number of records to return.
+ */
 export const getWorkflowsQueryLimitSchema = z.int().optional().default(50).describe('The maximum number of records to return.')
 
+/**
+ * The offset to start the records from.
+ */
 export const getWorkflowsQueryOffsetSchema = z.int().optional().default(0).describe('The offset to start the records from.')
 
+/**
+ * The workflow ID filter.
+ */
 export const getWorkflowsQueryWorkflowIdSchema = z.string().min(1).refine((value) => { const characters = Array.from(value); return characters.length <= 256 && characters.every((character) => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff); }, { message: "Must contain at most 256 Unicode scalar values" }).nullish().describe('The workflow ID filter.')
 
+/**
+ * How to match workflow_id: 'prefix' (default, case-insensitive starts with), 'exact' (case-sensitive exact match), or 'fuzzy' (case-insensitive substring match).
+ */
 export const getWorkflowsQueryWorkflowIdMatchSchema = z.enum(['prefix', 'exact', 'fuzzy']).optional().default('prefix').describe('How to match workflow_id: \'prefix\' (default, case-insensitive starts with), \'exact\' (case-sensitive exact match), or \'fuzzy\' (case-insensitive substring match).')
 
-export const getWorkflowsStatus200Schema = getWorkflowsResponseSchema.describe('The public facing data model of the jobs by name response that gets\nreturned from job manager\'s REST APIs. It contains a list of JobsByName\nobjects.').meta({ examples: [{}] })
+export const getWorkflowsStatus200Schema = getWorkflowsResponseSchema.describe('The public facing data model of the jobs by name response that gets\nreturned from job manager\'s REST APIs. It contains a list of JobsByName\nobjects.').meta({ examples: [{"item_count":0,"workflows":[{"start_time":"2000-01-23T04:56:07.000+00:00","end_time":"2000-01-23T04:56:07.000+00:00","id":"id"},{"start_time":"2000-01-23T04:56:07.000+00:00","end_time":"2000-01-23T04:56:07.000+00:00","id":"id"}]}] })
 
-export const getWorkflowsStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getWorkflowsStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
+
+export const getWorkflowsResponseSchema2 = getWorkflowsStatus200Schema
 
 export const getWorkflowsErrorSchema = getWorkflowsStatus422Schema
+
+export const getWorkflowsQuerySchema = z.object({
+  limit: getWorkflowsQueryLimitSchema,
+  offset: getWorkflowsQueryOffsetSchema,
+  'workflow-id': getWorkflowsQueryWorkflowIdSchema,
+  workflow_id_match: getWorkflowsQueryWorkflowIdMatchSchema,
+})

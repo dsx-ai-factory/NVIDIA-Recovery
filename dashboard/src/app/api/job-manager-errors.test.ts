@@ -9,7 +9,12 @@ const { getJobGroupsMock, getNodeAnalysisMock } = vi.hoisted(() => ({
   getNodeAnalysisMock: vi.fn(),
 }));
 
-vi.mock("~/gen/job-manager", () => ({
+vi.mock("~/gen/job-manager", async () => ({
+  // `~` is only resolvable in mocks here, so load the real client by path to
+  // keep its genuine `isResponseError`.
+  ...(await vi.importActual<typeof import("../../gen/job-manager")>(
+    "../../gen/job-manager",
+  )),
   getJobGroups: getJobGroupsMock,
   getNodeAnalysis: getNodeAnalysisMock,
 }));
@@ -19,8 +24,20 @@ vi.mock("~/pino", () => ({
 vi.mock("~/server/auth", () => ({ getServerAuthSession: vi.fn() }));
 vi.mock("~/utils/auth", () => ({ isAuthAvailable: () => false }));
 
+import { ResponseError } from "../../gen/job-manager";
 import { GET as getJobGroups } from "./job-groups/route";
 import { GET as getNodeAnalysis } from "./job-node-analysis/route";
+
+/** Builds the error the generated client throws for a non-2xx response. */
+function upstreamError(status: number, data: unknown): ResponseError {
+  return new ResponseError({
+    data,
+    status,
+    statusText: "",
+    request: {} as ResponseError["request"],
+    response: {} as ResponseError["response"],
+  });
+}
 
 describe.each([
   {
@@ -60,7 +77,7 @@ describe.each([
   ])(
     "preserves the upstream status for body $data",
     async ({ data, detail }) => {
-      backend.mockRejectedValue({ response: { status: 503, data } });
+      backend.mockRejectedValue(upstreamError(503, data));
 
       const response = await handler(
         new NextRequest(`http://dashboard.test${path}`),
@@ -97,7 +114,7 @@ describe.each([
   ])(
     "returns JSON $expectedStatus for rejected upstream status $status",
     async ({ status, expectedStatus }) => {
-      backend.mockRejectedValue({ response: { status, data: null } });
+      backend.mockRejectedValue(upstreamError(status, null));
 
       const response = await handler(
         new NextRequest(`http://dashboard.test${path}`),
@@ -112,7 +129,7 @@ describe.each([
     const detail = [
       { loc: ["query", "limit"], msg: "Invalid limit", type: "int_parsing" },
     ];
-    backend.mockRejectedValue({ response: { status: 422, data: { detail } } });
+    backend.mockRejectedValue(upstreamError(422, { detail }));
 
     const response = await handler(
       new NextRequest(`http://dashboard.test${path}`),

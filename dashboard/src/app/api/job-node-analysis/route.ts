@@ -3,7 +3,7 @@
 
 import type { AxiosError } from "axios";
 import { type NextRequest, NextResponse } from "next/server";
-import { getNodeAnalysis } from "~/gen/job-manager";
+import { getNodeAnalysis, isResponseError } from "~/gen/job-manager";
 import { logger } from "~/pino";
 import { getServerAuthSession } from "~/server/auth";
 import { isAuthAvailable } from "~/utils/auth";
@@ -43,24 +43,25 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(nodeAnalysisData);
   } catch (_error) {
-    const error = _error as AxiosError<unknown>;
+    const error = _error as Error;
     const publicErrorDetails = {
-      code: error.code,
+      code: (error as AxiosError).code,
       name: error.name,
       message: error.message,
       cause: error.cause,
     };
+    const responseError = isResponseError(error) ? error : undefined;
     logger.error(
       `GET /api/jobs-node-analysis?${req.nextUrl.searchParams.toString()} failed: ${JSON.stringify({ ...publicErrorDetails, stack: error.stack?.substring(0, 200) })}`,
     );
-    const responseData = error.response?.data;
+    const responseData = responseError?.data;
     const detail =
       typeof responseData === "object" &&
       responseData !== null &&
       "detail" in responseData
         ? responseData.detail
         : "";
-    const upstreamStatus = error.response?.status;
+    const upstreamStatus = responseError?.status;
     // A rejected redirect or other non-error status is a bad gateway result;
     // statuses such as 304 cannot carry the JSON error body.
     const status =

@@ -5,17 +5,17 @@
 /**
  * @description Partial result; accepted equals submitted minus rejected.
  * @type object
-*/
+ */
 export interface AuditEventPartialSuccess {
-    /**
-     * @description Number of rejected events.
-     * @minLength 1
-     * @type integer
-    */
-    rejected_events: number;
-    /**
-     * @description Human-readable explanation of why events were rejected.
-     * @type string
-    */
-    error_message: string;
+  /**
+   * @description Number of rejected events.
+   * @minimum 1
+   * @type integer
+   */
+  rejected_events: number;
+  /**
+   * @description Human-readable explanation of why events were rejected.
+   * @type string
+   */
+  error_message: string;
 }

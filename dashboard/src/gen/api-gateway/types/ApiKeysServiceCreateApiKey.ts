@@ -15,19 +15,19 @@ export type ApiKeysServiceCreateApiKeyStatusDefault = RpcStatus;
 export type ApiKeysServiceCreateApiKeyBody = V1CreateApiKeyRequest;
 
 export interface ApiKeysServiceCreateApiKeyOptions {
-    body: ApiKeysServiceCreateApiKeyBody;
-    path?: never;
-    query?: never;
-    headers?: never;
+  body: ApiKeysServiceCreateApiKeyBody;
+  path?: never;
+  query?: never;
+  headers?: never;
 }
 
 export interface ApiKeysServiceCreateApiKeyResponses {
-    "200": ApiKeysServiceCreateApiKeyStatus200;
-    "500": ApiKeysServiceCreateApiKeyStatus500;
-    default: ApiKeysServiceCreateApiKeyStatusDefault;
+  '200': ApiKeysServiceCreateApiKeyStatus200;
+  '500': ApiKeysServiceCreateApiKeyStatus500;
+  default: ApiKeysServiceCreateApiKeyStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type ApiKeysServiceCreateApiKeyResponse = (ApiKeysServiceCreateApiKeyStatus200 | ApiKeysServiceCreateApiKeyStatus500 | ApiKeysServiceCreateApiKeyStatusDefault);
+ */
+export type ApiKeysServiceCreateApiKeyResponse = ApiKeysServiceCreateApiKeyStatus200;

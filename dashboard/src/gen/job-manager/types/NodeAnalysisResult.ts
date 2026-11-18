@@ -6,16 +6,16 @@
  * @description Result of node set analysis containing the computed node set.
  * @example {"nodes":["nodes","nodes"],"count":0}
  * @type object
-*/
+ */
 export interface NodeAnalysisResult {
-    /**
-     * @description List of node names in the result set
-     * @type array
-    */
-    nodes: string[];
-    /**
-     * @description Total number of nodes in the result set
-     * @type integer
-    */
-    count: number;
+  /**
+   * @description List of node names in the result set
+   * @type array
+   */
+  nodes: string[];
+  /**
+   * @description Total number of nodes in the result set
+   * @type integer
+   */
+  count: number;
 }

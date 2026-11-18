@@ -7,43 +7,43 @@ import type { V1AuditEventHumanSummary } from './V1AuditEventHumanSummary'
 /**
  * @description AuditEvent is the public projection of a persisted event.
  * @type object
-*/
+ */
 export interface V1AuditEvent {
-    /**
-     * @description Internal job identifier; distinct from the private storage row identifier.
-     * @type string | undefined
-    */
-    heimdallJobId?: string;
-    /**
-     * @description Component that produced the event.
-     * @type string | undefined
-    */
-    eventProducer?: string;
-    /**
-     * @description Stable event-type identifier.
-     * @type string | undefined
-    */
-    eventType?: string;
-    /**
-     * @description Stable audit event-level identifier.
-     * @type string | undefined
-    */
-    eventLevel?: string;
-    /**
-     * @description Event-specific structured data.
-     * @type object | undefined
-    */
-    payload?: object;
-    /**
-     * @description Producer emission time as Unix microseconds.
-     *
-     * Format: `int64`
-     * @type string | undefined
-    */
-    eventProducedAt?: string;
-    /**
-     * @description Human-readable event details.
-     * @type object | undefined
-    */
-    summary?: V1AuditEventHumanSummary;
+  /**
+   * @description Internal job identifier; distinct from the private storage row identifier.
+   * @type string | undefined
+   */
+  heimdallJobId?: string;
+  /**
+   * @description Component that produced the event.
+   * @type string | undefined
+   */
+  eventProducer?: string;
+  /**
+   * @description Stable event-type identifier.
+   * @type string | undefined
+   */
+  eventType?: string;
+  /**
+   * @description Stable audit event-level identifier.
+   * @type string | undefined
+   */
+  eventLevel?: string;
+  /**
+   * @description Event-specific structured data.
+   * @type object | undefined
+   */
+  payload?: object;
+  /**
+   * @description Producer emission time as Unix microseconds.
+   *
+   * Format: `int64`
+   * @type string | undefined
+   */
+  eventProducedAt?: string;
+  /**
+   * @description Human-readable event details.
+   * @type object | undefined
+   */
+  summary?: V1AuditEventHumanSummary;
 }

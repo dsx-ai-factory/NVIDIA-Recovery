@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { AuditServiceCreateAuditEventsOptions, AuditServiceCreateAuditEventsResponses } from '../types/AuditServiceCreateAuditEvents'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `POST /v1/audit/events`
  * @description Submit a batch of producer audit events to Audit Trail. A successful response reports full or partial acceptance, not durable persistence. Do not retry partially accepted batches; retry an overloaded request using the same idempotency keys.
  * @summary Ingest audit events
- * {@link /v1/audit/events}
  */
 export function auditServiceCreateAuditEvents<ThrowOnError extends boolean = true>(options: Options<AuditServiceCreateAuditEventsOptions, ThrowOnError>): Unwrappable<RequestResult<AuditServiceCreateAuditEventsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'POST', url: '/v1/audit/events', ...config }) as Promise<RequestResult<AuditServiceCreateAuditEventsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<AuditServiceCreateAuditEventsResponses, ThrowOnError>({ method: 'POST', url: '/v1/audit/events', contentType: { request: 'application/json' }, ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

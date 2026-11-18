@@ -4,6 +4,10 @@
 
 import * as z from 'zod'
 
+/**
+ * A representation of a user.
+ * The default template just shows the user, but it can be overridden to show more interesting representations.
+ */
 export const userSchema = z.object({
   template_id: z.enum(['/partials/User']).optional().default('/partials/User'),
   user: z.string(),

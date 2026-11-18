@@ -5,17 +5,17 @@
 export type MetricsStatus200 = unknown;
 
 export interface MetricsOptions {
-    body?: never;
-    path?: never;
-    query?: never;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query?: never;
+  headers?: never;
 }
 
 export interface MetricsResponses {
-    "200": MetricsStatus200;
+  '200': MetricsStatus200;
 }
 
 /**
  * @description Union of all possible responses
-*/
+ */
 export type MetricsResponse = MetricsStatus200;

@@ -5,16 +5,16 @@
 /**
  * @description NodeConstraints defines node scheduling constraints for jobs.
  * @type object
-*/
+ */
 export interface V1NodeConstraints {
-    /**
-     * @description List of nodes to exclude from job scheduling.
-     * @type array | undefined
-    */
-    exclusions?: string[];
-    /**
-     * @description List of nodes to explicitly include for job scheduling.
-     * @type array | undefined
-    */
-    inclusions?: string[];
+  /**
+   * @description List of nodes to exclude from job scheduling.
+   * @type array | undefined
+   */
+  exclusions?: string[];
+  /**
+   * @description List of nodes to explicitly include for job scheduling.
+   * @type array | undefined
+   */
+  inclusions?: string[];
 }

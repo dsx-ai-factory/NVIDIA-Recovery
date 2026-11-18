@@ -5,23 +5,23 @@
 /**
  * @description AuditEventHumanSummary describes a persisted event for human readers.
  * @type object
-*/
+ */
 export interface V1AuditEventHumanSummary {
-    /**
-     * @description Event title.
-     * @type string | undefined
-    */
-    title?: string;
-    /**
-     * @description Concise event description.
-     * @type string | undefined
-    */
-    description?: string;
-    /**
-     * @description Granularity used to group events in human-facing views.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    granularity?: number;
+  /**
+   * @description Event title.
+   * @type string | undefined
+   */
+  title?: string;
+  /**
+   * @description Concise event description.
+   * @type string | undefined
+   */
+  description?: string;
+  /**
+   * @description Granularity used to group events in human-facing views.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  granularity?: number;
 }

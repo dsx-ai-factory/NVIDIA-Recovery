@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * Identify a target job by its Slurm job ID.
+ */
 export const jobReferenceByIdSchema = z.object({
   type: z.enum(['id']).optional().default('id'),
   id: z.string(),

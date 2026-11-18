@@ -7,21 +7,21 @@ import type { AuditEventHumanSummaryGranularityClassKey } from './AuditEventHuma
 /**
  * @description Human-readable descriptions of the audit event.
  * @type object
-*/
+ */
 export interface AuditEventHumanSummary {
-    /**
-     * @description Event title -- should be similar to the audit event type.
-     * @type string
-    */
-    title: string;
-    /**
-     * @description Concise description of the event.
-     * @type string
-    */
-    description: string;
-    /**
-     * @description Granularity used to group events in human-facing views.
-     * @type number
-    */
-    granularity: AuditEventHumanSummaryGranularityClassKey;
+  /**
+   * @description Event title -- should be similar to the audit event type.
+   * @type string
+   */
+  title: string;
+  /**
+   * @description Concise description of the event.
+   * @type string
+   */
+  description: string;
+  /**
+   * @description Granularity used to group events in human-facing views.
+   * @type number
+   */
+  granularity: AuditEventHumanSummaryGranularityClassKey;
 }

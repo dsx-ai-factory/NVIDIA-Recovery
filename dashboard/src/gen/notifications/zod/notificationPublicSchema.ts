@@ -7,13 +7,16 @@ import { notificationStatusSchema } from './notificationStatusSchema'
 import { notificationTypeSchema } from './notificationTypeSchema'
 import { templateDataSchema } from './templateDataSchema'
 
+/**
+ * A fully formed notification object.
+ */
 export const notificationPublicSchema = z.object({
   recipient: z.string().describe('The recipient of the notification.'),
-  job_id: z.union([z.string(), z.null()]).optional().describe('The job id associated with the notification (if applicable.)'),
+  job_id: z.union([z.string(), z.null().nullable()]).optional().describe('The job id associated with the notification (if applicable.)'),
   id: z.uuid().optional().describe('The unique id of the notification.'),
   title: z.string().describe('The title of the notification.'),
   message: z.string().describe('The notification\'s message body.'),
-  template_data: z.union([templateDataSchema, z.null()]).optional().describe('The template id and data used to generate this notification.'),
+  template_data: z.union([templateDataSchema, z.null().nullable()]).optional().describe('The template id and data used to generate this notification.'),
   type: notificationTypeSchema.describe('The type of notification.'),
   created_time: z.iso.datetime().optional().describe('When was the notification created.'),
   via_callback: notificationStatusSchema.optional().default('DISABLED').describe('The current status of this notification being sent via http request callback.'),

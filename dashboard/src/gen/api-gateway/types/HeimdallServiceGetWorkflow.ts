@@ -6,34 +6,34 @@ import type { RpcStatus } from './RpcStatus'
 import type { V1GetWorkflowResponse } from './V1GetWorkflowResponse'
 
 export interface HeimdallServiceGetWorkflowQuery {
-    /**
-     * @description The opaque identifier of the workflow to get.
-     * @type string
-    */
-    workflowId: string;
+  /**
+   * @description The opaque identifier of the workflow to get.
+   * @type string
+   */
+  workflowId: string;
 }
 
 /**
  * @description GetWorkflowResponse is the response for the GetWorkflow method.
  * @type object
-*/
+ */
 export type HeimdallServiceGetWorkflowStatus200 = V1GetWorkflowResponse;
 
 export type HeimdallServiceGetWorkflowStatusDefault = RpcStatus;
 
 export interface HeimdallServiceGetWorkflowOptions {
-    body?: never;
-    path?: never;
-    query: HeimdallServiceGetWorkflowQuery;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query: HeimdallServiceGetWorkflowQuery;
+  headers?: never;
 }
 
 export interface HeimdallServiceGetWorkflowResponses {
-    "200": HeimdallServiceGetWorkflowStatus200;
-    default: HeimdallServiceGetWorkflowStatusDefault;
+  '200': HeimdallServiceGetWorkflowStatus200;
+  default: HeimdallServiceGetWorkflowStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type HeimdallServiceGetWorkflowResponse = (HeimdallServiceGetWorkflowStatus200 | HeimdallServiceGetWorkflowStatusDefault);
+ */
+export type HeimdallServiceGetWorkflowResponse = HeimdallServiceGetWorkflowStatus200;

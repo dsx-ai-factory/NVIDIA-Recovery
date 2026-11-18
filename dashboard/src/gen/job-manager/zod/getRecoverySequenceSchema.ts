@@ -17,8 +17,18 @@ export const getRecoverySequenceQuerySourceAttemptIndexSchema = z.int().min(0)
 
 export const getRecoverySequenceQueryOperationSchema = recoveryOperationSchema
 
-export const getRecoverySequenceStatus200Schema = getRecoverySequenceResponseSchema.describe('Canonical context of an existing backend-owned recovery sequence.').meta({ examples: [{}] })
+export const getRecoverySequenceStatus200Schema = getRecoverySequenceResponseSchema.describe('Canonical context of an existing backend-owned recovery sequence.').meta({ examples: [{"recoveryContext":{"tracestate":"tracestate","traceparent":"traceparent","triggeredAt":"2000-01-23T04:56:07.000+00:00","sequenceId":"sequenceId","operation":"restart"}}] })
 
-export const getRecoverySequenceStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getRecoverySequenceStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
+
+export const getRecoverySequenceResponseSchema2 = getRecoverySequenceStatus200Schema
 
 export const getRecoverySequenceErrorSchema = getRecoverySequenceStatus422Schema
+
+export const getRecoverySequenceQuerySchema = z.object({
+  scheduler_system: getRecoverySequenceQuerySchedulerSystemSchema,
+  scheduler_scope: getRecoverySequenceQuerySchedulerScopeSchema,
+  job_id: getRecoverySequenceQueryJobIdSchema,
+  source_attempt_index: getRecoverySequenceQuerySourceAttemptIndexSchema,
+  operation: getRecoverySequenceQueryOperationSchema,
+})

@@ -7,23 +7,23 @@ import type { V1Advice } from './V1Advice'
 /**
  * @description ListAdviceResponse is the response for listing advice.
  * @type object
-*/
+ */
 export interface V1ListAdviceResponse {
-    /**
-     * @description The list of advice records.
-     * @type array | undefined
-    */
-    advice?: V1Advice[];
-    /**
-     * @description The total count of advice records returned.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    count?: number;
-    /**
-     * @description The opaque token to use for the next page of results.
-     * @type string | undefined
-    */
-    nextPageToken?: string;
+  /**
+   * @description The list of advice records.
+   * @type array | undefined
+   */
+  advice?: V1Advice[];
+  /**
+   * @description The total count of advice records returned.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  count?: number;
+  /**
+   * @description The opaque token to use for the next page of results.
+   * @type string | undefined
+   */
+  nextPageToken?: string;
 }

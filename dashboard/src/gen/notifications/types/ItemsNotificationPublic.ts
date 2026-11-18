@@ -5,6 +5,6 @@
 import type { NotificationPublic } from './NotificationPublic'
 
 export interface ItemsNotificationPublic {
-    items: NotificationPublic[];
-    total_items: number;
+  items: NotificationPublic[];
+  total_items: number;
 }

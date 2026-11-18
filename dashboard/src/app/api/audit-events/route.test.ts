@@ -3,12 +3,18 @@
 
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ResponseError } from "../../../gen/notifications";
 
 const { auditEventsGetMock } = vi.hoisted(() => ({
   auditEventsGetMock: vi.fn(),
 }));
 
-vi.mock("~/gen/notifications", () => ({
+vi.mock("~/gen/notifications", async () => ({
+  // `~` is only resolvable in mocks here, so load the real client by path to
+  // keep its genuine `isResponseError`.
+  ...(await vi.importActual<typeof import("../../../gen/notifications")>(
+    "../../../gen/notifications",
+  )),
   auditEventsGet: auditEventsGetMock,
 }));
 
@@ -35,6 +41,17 @@ vi.mock("./mock", () => ({
 }));
 
 import { GET } from "./route";
+
+/** Builds the error the generated client throws for a non-2xx response. */
+function notificationsError(status: number, data: unknown): ResponseError {
+  return new ResponseError({
+    data,
+    status,
+    statusText: "",
+    request: {} as ResponseError["request"],
+    response: {} as ResponseError["response"],
+  });
+}
 
 describe("GET /api/audit-events", () => {
   beforeEach(() => {
@@ -66,9 +83,7 @@ describe("GET /api/audit-events", () => {
 
   it("preserves the API validation error for unsupported ordering", async () => {
     auditEventsGetMock.mockRejectedValue(
-      Object.assign(new Error("Request failed"), {
-        response: { status: 422, data: { detail: "Invalid audit event sort" } },
-      }),
+      notificationsError(422, { detail: "Invalid audit event sort" }),
     );
 
     const response = await GET(
@@ -144,9 +159,7 @@ describe("GET /api/audit-events", () => {
 
   it("preserves a Notifications validation error", async () => {
     auditEventsGetMock.mockRejectedValue(
-      Object.assign(new Error("Request failed"), {
-        response: { status: 422, data: { detail: "Invalid job identity" } },
-      }),
+      notificationsError(422, { detail: "Invalid job identity" }),
     );
 
     const response = await GET(

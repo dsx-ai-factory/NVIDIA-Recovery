@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetErrorAttributionsOptions, GetErrorAttributionsResponses } from '../types/GetErrorAttributions'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /error_attributions`
  * @description Retrieve error attributions (both node-level and global/job-level) for specified nodes or jobs within a given time range.
  * Parameters:
  * node_names (List[str], optional):
@@ -29,10 +30,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * A structured collection containing both node-level and global/job-level error events matching
  * the specified filters. The item_count field reflects the total count of both types of events.
  * @summary Get Error Attributions
- * {@link /error_attributions}
  */
 export function getErrorAttributions<ThrowOnError extends boolean = true>(options: Options<GetErrorAttributionsOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetErrorAttributionsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/error_attributions', styles: { query: { node_names: { style: 'form', explode: true }, job_ids: { style: 'form', explode: true }, start_timestamp: { style: 'form', explode: true }, end_timestamp: { style: 'form', explode: true }, anomaly_uuid: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetErrorAttributionsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetErrorAttributionsResponses, ThrowOnError>({ method: 'GET', url: '/error_attributions', ...config, styles: { ...config.styles, query: { node_names: { style: 'form', explode: true }, job_ids: { style: 'form', explode: true }, start_timestamp: { style: 'form', explode: true }, end_timestamp: { style: 'form', explode: true }, anomaly_uuid: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

@@ -8,46 +8,46 @@ import type { V1ApiKeyStatusKey } from './V1ApiKeyStatus'
 /**
  * @description API-key metadata retained for disabled compatibility endpoints.
  * @type object
-*/
+ */
 export interface V1ApiKey {
-    /**
-     * @description Legacy key ID field retained for response shape compatibility.
-     * @type string | undefined
-    */
-    id?: string;
-    /**
-     * @description Legacy key value field. Disabled endpoints never return key material.
-     * @type string | undefined
-    */
-    value?: string;
-    /**
-     * @description Legacy key status field. Disabled endpoints do not return active key metadata.
-     * @default 'API_KEY_STATUS_UNSPECIFIED'
-     * @type string | undefined
-    */
-    status?: V1ApiKeyStatusKey;
-    /**
-     * @description Legacy key description field retained for compatibility.
-     * @type string | undefined
-    */
-    description?: string;
-    /**
-     * @description Legacy key expiration field retained for compatibility.
-     *
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    expiresAt?: string;
-    /**
-     * @description Legacy key creation timestamp field retained for compatibility.
-     *
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    createdAt?: string;
-    /**
-     * @description Legacy authorization field retained for compatibility.
-     * @type object | undefined
-    */
-    authorizations?: V1ApiKeyAuthorizations;
+  /**
+   * @description Legacy key ID field retained for response shape compatibility.
+   * @type string | undefined
+   */
+  id?: string;
+  /**
+   * @description Legacy key value field. Disabled endpoints never return key material.
+   * @type string | undefined
+   */
+  value?: string;
+  /**
+   * @description Legacy key status field. Disabled endpoints do not return active key metadata.
+   * @default 'API_KEY_STATUS_UNSPECIFIED'
+   * @type string | undefined
+   */
+  status?: V1ApiKeyStatusKey;
+  /**
+   * @description Legacy key description field retained for compatibility.
+   * @type string | undefined
+   */
+  description?: string;
+  /**
+   * @description Legacy key expiration field retained for compatibility.
+   *
+   * Format: `date-time`
+   * @type string | undefined
+   */
+  expiresAt?: string;
+  /**
+   * @description Legacy key creation timestamp field retained for compatibility.
+   *
+   * Format: `date-time`
+   * @type string | undefined
+   */
+  createdAt?: string;
+  /**
+   * @description Legacy authorization field retained for compatibility.
+   * @type object | undefined
+   */
+  authorizations?: V1ApiKeyAuthorizations;
 }

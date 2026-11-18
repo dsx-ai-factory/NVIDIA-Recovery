@@ -25,6 +25,9 @@ import { releasedJobSchema } from './releasedJobSchema'
 import { successfullyFinishedSchema } from './successfullyFinishedSchema'
 import { userSchema } from './userSchema'
 
+/**
+ * A template_id and the data associated with it.
+ */
 export const templateDataSchema = z.discriminatedUnion('template_id', [
   jobReprSchema.extend({
     template_id: z.enum(['/partials/JobRepr']),

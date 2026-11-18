@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetJobErrorAttributionsOptions, GetJobErrorAttributionsResponses } from '../types/GetJobErrorAttributions'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /job_error_attributions`
  * @description Retrieve error attributions (both node-level and global/job-level) for a specific job.
  * Parameters:
  * job_id (str):
@@ -22,10 +23,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * attributed to the given job (and attempt, if provided). The item_count field reflects
  * the total count of both types of events.
  * @summary Get Job Error Attributions
- * {@link /job_error_attributions}
  */
 export function getJobErrorAttributions<ThrowOnError extends boolean = true>(options: Options<GetJobErrorAttributionsOptions, ThrowOnError>): Unwrappable<RequestResult<GetJobErrorAttributionsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/job_error_attributions', styles: { query: { job_id: { style: 'form', explode: true }, job_attempt_index: { style: 'form', explode: true }, anomaly_uuid: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetJobErrorAttributionsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetJobErrorAttributionsResponses, ThrowOnError>({ method: 'GET', url: '/job_error_attributions', ...config, styles: { ...config.styles, query: { job_id: { style: 'form', explode: true }, job_attempt_index: { style: 'form', explode: true }, anomaly_uuid: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

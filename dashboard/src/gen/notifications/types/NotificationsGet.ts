@@ -6,38 +6,38 @@ import type { HTTPValidationError } from './HTTPValidationError'
 import type { ItemsNotificationPublic } from './ItemsNotificationPublic'
 
 export interface NotificationsGetQuery {
-    /**
-     * @description The id of the notification.
-    */
-    id?: (string | null);
-    /**
-     * @description The recipient the notifications were sent to.
-    */
-    recipient?: (string | null);
-    /**
-     * @description The job_id associated with the job.
-    */
-    job_id?: (string | null);
-    /**
-     * @description The maximum number of records to return.
-     * @default 50
-     * @type integer | undefined
-    */
-    limit?: number;
-    /**
-     * @description The offset to start the records from.
-     * @default 0
-     * @type integer | undefined
-    */
-    offset?: number;
-    /**
-     * @description Only show notifications created after this time.
-    */
-    created_after?: (string | null);
-    /**
-     * @description Only show notifications created before this time.
-    */
-    created_before?: (string | null);
+  /**
+   * @description The id of the notification.
+   */
+  id?: string | (null | null);
+  /**
+   * @description The recipient the notifications were sent to.
+   */
+  recipient?: string | (null | null);
+  /**
+   * @description The job_id associated with the job.
+   */
+  job_id?: string | (null | null);
+  /**
+   * @description The maximum number of records to return.
+   * @default 50
+   * @type integer | undefined
+   */
+  limit?: number;
+  /**
+   * @description The offset to start the records from.
+   * @default 0
+   * @type integer | undefined
+   */
+  offset?: number;
+  /**
+   * @description Only show notifications created after this time.
+   */
+  created_after?: string | (null | null);
+  /**
+   * @description Only show notifications created before this time.
+   */
+  created_before?: string | (null | null);
 }
 
 export type NotificationsGetStatus200 = ItemsNotificationPublic;
@@ -45,18 +45,18 @@ export type NotificationsGetStatus200 = ItemsNotificationPublic;
 export type NotificationsGetStatus422 = HTTPValidationError;
 
 export interface NotificationsGetOptions {
-    body?: never;
-    path?: never;
-    query?: NotificationsGetQuery;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query?: NotificationsGetQuery;
+  headers?: never;
 }
 
 export interface NotificationsGetResponses {
-    "200": NotificationsGetStatus200;
-    "422": NotificationsGetStatus422;
+  '200': NotificationsGetStatus200;
+  '422': NotificationsGetStatus422;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type NotificationsGetResponse = (NotificationsGetStatus200 | NotificationsGetStatus422);
+ */
+export type NotificationsGetResponse = NotificationsGetStatus200;

@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * Opaque cursors for navigating between audit event pages.
+ */
 export const auditEventPageCursorSchema = z.object({
   prev_cursor: z.string().describe('Cursor for the previous page; empty on the first page.'),
   next_cursor: z.string().describe('Cursor for the next page, or an empty string at the end.'),

@@ -6,46 +6,46 @@ import type { RpcStatus } from './RpcStatus'
 import type { V1ListAdviceResponse } from './V1ListAdviceResponse'
 
 export interface HeimdallServiceListAdviceQuery {
-    /**
-     * @description The opaque page token from the previous response\'s next_page_token field.
-     * @type string | undefined
-    */
-    page?: string;
-    /**
-     * @description The maximum number of advice records to return. Defaults to 100 and cannot exceed 250.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    limit?: number;
-    /**
-     * @description Return only Advice that can still require reconciliation.
-     * @type boolean | undefined
-    */
-    onlyActive?: boolean;
+  /**
+   * @description The opaque page token from the previous response's next_page_token field.
+   * @type string | undefined
+   */
+  page?: string;
+  /**
+   * @description The maximum number of advice records to return. Defaults to 100 and cannot exceed 250.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  limit?: number;
+  /**
+   * @description Return only Advice that can still require reconciliation.
+   * @type boolean | undefined
+   */
+  onlyActive?: boolean;
 }
 
 /**
  * @description ListAdviceResponse is the response for listing advice.
  * @type object
-*/
+ */
 export type HeimdallServiceListAdviceStatus200 = V1ListAdviceResponse;
 
 export type HeimdallServiceListAdviceStatusDefault = RpcStatus;
 
 export interface HeimdallServiceListAdviceOptions {
-    body?: never;
-    path?: never;
-    query?: HeimdallServiceListAdviceQuery;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query?: HeimdallServiceListAdviceQuery;
+  headers?: never;
 }
 
 export interface HeimdallServiceListAdviceResponses {
-    "200": HeimdallServiceListAdviceStatus200;
-    default: HeimdallServiceListAdviceStatusDefault;
+  '200': HeimdallServiceListAdviceStatus200;
+  default: HeimdallServiceListAdviceStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type HeimdallServiceListAdviceResponse = (HeimdallServiceListAdviceStatus200 | HeimdallServiceListAdviceStatusDefault);
+ */
+export type HeimdallServiceListAdviceResponse = HeimdallServiceListAdviceStatus200;

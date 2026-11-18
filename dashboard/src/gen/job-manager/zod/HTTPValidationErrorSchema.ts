@@ -7,4 +7,4 @@ import { validationErrorSchema } from './validationErrorSchema'
 
 export const HTTPValidationErrorSchema = z.object({
   detail: z.array(validationErrorSchema).optional(),
-}).meta({ examples: [{}] })
+}).meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })

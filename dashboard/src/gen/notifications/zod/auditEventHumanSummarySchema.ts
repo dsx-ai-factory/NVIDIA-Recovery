@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { auditEventHumanSummaryGranularityClassSchema } from './auditEventHumanSummaryGranularityClassSchema'
 
+/**
+ * Human-readable descriptions of the audit event.
+ */
 export const auditEventHumanSummarySchema = z.object({
   title: z.string().describe('Event title -- should be similar to the audit event type.'),
   description: z.string().describe('Concise description of the event.'),

@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetStatusOptions, GetStatusResponses } from '../types/GetStatus'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /status`
  * @description Endpoint to indicate if job manager is properly functioning or not.
  * @summary Get Status
- * {@link /status}
  */
 export function getStatus<ThrowOnError extends boolean = true>(options: Options<GetStatusOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetStatusResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/status', ...config }) as Promise<RequestResult<GetStatusResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetStatusResponses, ThrowOnError>({ method: 'GET', url: '/status', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

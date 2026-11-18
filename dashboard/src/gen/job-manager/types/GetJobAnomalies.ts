@@ -6,11 +6,11 @@ import type { HTTPValidationError } from './HTTPValidationError'
 import type { JobAnomaly } from './JobAnomaly'
 
 export interface GetJobAnomaliesPath {
-    job_id: string;
+  job_id: string;
 }
 
 export interface GetJobAnomaliesQuery {
-    job_attempt_index?: number | null;
+  job_attempt_index?: number | null;
 }
 
 export type GetJobAnomaliesStatus200 = JobAnomaly[];
@@ -18,22 +18,22 @@ export type GetJobAnomaliesStatus200 = JobAnomaly[];
 /**
  * @example {"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}
  * @type object
-*/
+ */
 export type GetJobAnomaliesStatus422 = HTTPValidationError;
 
 export interface GetJobAnomaliesOptions {
-    body?: never;
-    path: GetJobAnomaliesPath;
-    query?: GetJobAnomaliesQuery;
-    headers?: never;
+  body?: never;
+  path: GetJobAnomaliesPath;
+  query?: GetJobAnomaliesQuery;
+  headers?: never;
 }
 
 export interface GetJobAnomaliesResponses {
-    "200": GetJobAnomaliesStatus200;
-    "422": GetJobAnomaliesStatus422;
+  '200': GetJobAnomaliesStatus200;
+  '422': GetJobAnomaliesStatus422;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type GetJobAnomaliesResponse = (GetJobAnomaliesStatus200 | GetJobAnomaliesStatus422);
+ */
+export type GetJobAnomaliesResponse = GetJobAnomaliesStatus200;

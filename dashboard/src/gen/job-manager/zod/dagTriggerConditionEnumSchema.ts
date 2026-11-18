@@ -4,4 +4,8 @@
 
 import * as z from 'zod'
 
+/**
+ * The condition under which a DAG step should be triggered.
+ * COMPLETED: Trigger when the current job finishes successfully (Slurm COMPLETED state).
+ */
 export const dagTriggerConditionEnumSchema = z.enum(['completed']).describe('The condition under which a DAG step should be triggered.\n\nCOMPLETED: Trigger when the current job finishes successfully (Slurm COMPLETED state).')

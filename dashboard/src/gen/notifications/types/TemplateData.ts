@@ -26,47 +26,47 @@ import type { User } from './User'
 
 /**
  * @description A template_id and the data associated with it.
-*/
-export type TemplateData = ((JobRepr & {
-    template_id: "/partials/JobRepr";
-}) | (JobName & {
-    template_id: "/partials/JobName";
-}) | (User & {
-    template_id: "/partials/User";
-}) | (JobExecutionError & {
-    template_id: "/partials/JobExecutionError";
-}) | (NodeEvent & {
-    template_id: "/partials/NodeEvent";
-}) | (GlobalEvent & {
-    template_id: "/partials/GlobalEvent";
-}) | (ErrorAttribution & {
-    template_id: "/partials/ErrorAttribution";
-}) | (ReachedMaxRequeueTime & {
-    template_id: "/templates/ReachedMaxRequeueTime";
-}) | (InvalidJobConfig & {
-    template_id: "/templates/InvalidJobConfig";
-}) | (JobStopped & {
-    template_id: "/templates/JobStopped";
-}) | (JobRequeued & {
-    template_id: "/templates/JobRequeued";
-}) | (SuccessfullyFinished & {
-    template_id: "/templates/SuccessfullyFinished";
-}) | (GpuThroughputDropped & {
-    template_id: "/templates/GpuThroughputDropped";
-}) | (BadNodesIsolated & {
-    template_id: "/templates/BadNodesIsolated";
-}) | (AnomalyAttributionResult & {
-    template_id: "/templates/AnomalyAttributionResult";
-}) | (ReleasedJob & {
-    template_id: "/templates/ReleasedJob";
-}) | (NoMoreReleasingJobs & {
-    template_id: "/templates/NoMoreReleasingJobs";
-}) | (ManualJobStopped & {
-    template_id: "/templates/ManualJobStopped";
-}) | (ManualJobRequeued & {
-    template_id: "/templates/ManualJobRequeued";
-}) | (ManualJobPaused & {
-    template_id: "/templates/ManualJobPaused";
-}) | (ManualJobStarted & {
-    template_id: "/templates/ManualJobStarted";
-}));
+ */
+export type TemplateData = JobRepr & {
+  template_id: '/partials/JobRepr';
+} | JobName & {
+  template_id: '/partials/JobName';
+} | User & {
+  template_id: '/partials/User';
+} | JobExecutionError & {
+  template_id: '/partials/JobExecutionError';
+} | NodeEvent & {
+  template_id: '/partials/NodeEvent';
+} | GlobalEvent & {
+  template_id: '/partials/GlobalEvent';
+} | ErrorAttribution & {
+  template_id: '/partials/ErrorAttribution';
+} | ReachedMaxRequeueTime & {
+  template_id: '/templates/ReachedMaxRequeueTime';
+} | InvalidJobConfig & {
+  template_id: '/templates/InvalidJobConfig';
+} | JobStopped & {
+  template_id: '/templates/JobStopped';
+} | JobRequeued & {
+  template_id: '/templates/JobRequeued';
+} | SuccessfullyFinished & {
+  template_id: '/templates/SuccessfullyFinished';
+} | GpuThroughputDropped & {
+  template_id: '/templates/GpuThroughputDropped';
+} | BadNodesIsolated & {
+  template_id: '/templates/BadNodesIsolated';
+} | AnomalyAttributionResult & {
+  template_id: '/templates/AnomalyAttributionResult';
+} | ReleasedJob & {
+  template_id: '/templates/ReleasedJob';
+} | NoMoreReleasingJobs & {
+  template_id: '/templates/NoMoreReleasingJobs';
+} | ManualJobStopped & {
+  template_id: '/templates/ManualJobStopped';
+} | ManualJobRequeued & {
+  template_id: '/templates/ManualJobRequeued';
+} | ManualJobPaused & {
+  template_id: '/templates/ManualJobPaused';
+} | ManualJobStarted & {
+  template_id: '/templates/ManualJobStarted';
+};

@@ -5,14 +5,30 @@
 import * as z from 'zod'
 import { jobExecutionErrorSchema } from './jobExecutionErrorSchema'
 
+/**
+ * Represents a global (job-level) event that occurred during job execution.
+ * Unlike NodeEvent, GlobalEvent represents issues that affect the entire job
+ * rather than being attributable to specific nodes. These events don't have
+ * node-specific fields like node name, exclusion_type, job_start_time, job_end_time, or cluster.
+ * Attributes:
+ *     job_id: ID of the job associated with this event
+ *     job_attempt_index: Index of the job attempt
+ *     timestamp: When the event occurred
+ *     job_execution_error: The associated error details
+ *     error_attribution: Classification of the error
+ *     error_attribution_type: Type of telemetry data used for attribution
+ *     error_attribution_origin: Origin of the attribution
+ *     error_attribution_sources: Sources of the attribution
+ *     fact_status: Status of the FACT service
+ */
 export const globalEventSchema = z.object({
   job_id: z.string(),
   job_attempt_index: z.int(),
   timestamp: z.iso.datetime(),
-  job_execution_error: jobExecutionErrorSchema.describe('Represents an error that occurred during job execution.\n\nThis model captures details about errors including their type, code, signature,\nand descriptive information to help with debugging and error tracking.\n\nAttributes:\n    code: The error code if available, zero otherwise\n    message: Short error message\n    description: Detailed description of the error\n    signature: A unique signature identifying this specific error').meta({ examples: [{}] }),
+  job_execution_error: jobExecutionErrorSchema.describe('Represents an error that occurred during job execution.\n\nThis model captures details about errors including their type, code, signature,\nand descriptive information to help with debugging and error tracking.\n\nAttributes:\n    code: The error code if available, zero otherwise\n    message: Short error message\n    description: Detailed description of the error\n    signature: A unique signature identifying this specific error').meta({ examples: [{"code":1,"signature":"signature","description":"description","message":"message"}] }),
   error_attribution: z.string(),
   error_attribution_type: z.string(),
   error_attribution_origin: z.string(),
   error_attribution_sources: z.array(z.string()),
   fact_status: z.string(),
-}).describe('Represents a global (job-level) event that occurred during job execution.\n\nUnlike NodeEvent, GlobalEvent represents issues that affect the entire job\nrather than being attributable to specific nodes. These events don\'t have\nnode-specific fields like node name, exclusion_type, job_start_time, job_end_time, or cluster.\n\nAttributes:\n    job_id: ID of the job associated with this event\n    job_attempt_index: Index of the job attempt\n    timestamp: When the event occurred\n    job_execution_error: The associated error details\n    error_attribution: Classification of the error\n    error_attribution_type: Type of telemetry data used for attribution\n    error_attribution_origin: Origin of the attribution\n    error_attribution_sources: Sources of the attribution\n    fact_status: Status of the FACT service').meta({ examples: [{}] })
+}).describe('Represents a global (job-level) event that occurred during job execution.\n\nUnlike NodeEvent, GlobalEvent represents issues that affect the entire job\nrather than being attributable to specific nodes. These events don\'t have\nnode-specific fields like node name, exclusion_type, job_start_time, job_end_time, or cluster.\n\nAttributes:\n    job_id: ID of the job associated with this event\n    job_attempt_index: Index of the job attempt\n    timestamp: When the event occurred\n    job_execution_error: The associated error details\n    error_attribution: Classification of the error\n    error_attribution_type: Type of telemetry data used for attribution\n    error_attribution_origin: Origin of the attribution\n    error_attribution_sources: Sources of the attribution\n    fact_status: Status of the FACT service').meta({ examples: [{"error_attribution_origin":"error_attribution_origin","error_attribution_sources":["error_attribution_sources","error_attribution_sources"],"fact_status":"fact_status","job_id":"job_id","error_attribution_type":"error_attribution_type","error_attribution":"error_attribution","job_execution_error":{"code":1,"signature":"signature","description":"description","message":"message"},"job_attempt_index":5,"timestamp":"2000-01-23T04:56:07.000+00:00"}] })

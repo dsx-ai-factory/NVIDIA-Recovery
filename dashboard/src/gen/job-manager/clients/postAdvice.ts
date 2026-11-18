@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { PostAdviceOptions, PostAdviceResponses } from '../types/PostAdvice'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `POST /advice`
  * @description Create or update an advice record.
  * This endpoint accepts an advice object and either creates a new record
  * if one doesn't exist, or updates the existing record if it does. The advice
@@ -23,10 +24,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * HTTPException: 409 if advice ID doesn't match job record's canonical heimdall_job_id,
  * 400 on validation error, 500 on server error.
  * @summary Post Advice
- * {@link /advice}
  */
 export function postAdvice<ThrowOnError extends boolean = true>(options: Options<PostAdviceOptions, ThrowOnError>): Unwrappable<RequestResult<PostAdviceResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'POST', url: '/advice', ...config }) as Promise<RequestResult<PostAdviceResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<PostAdviceResponses, ThrowOnError>({ method: 'POST', url: '/advice', contentType: { request: 'application/json' }, ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

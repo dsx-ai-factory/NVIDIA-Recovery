@@ -5,8 +5,11 @@
 import * as z from 'zod'
 import { v1WorkflowSchema } from './v1WorkflowSchema'
 
+/**
+ * GetWorkflowsResponse is the response for the GetWorkflows method.
+ */
 export const v1GetWorkflowsResponseSchema = z.object({
   workflows: z.array(v1WorkflowSchema).optional().describe('The workflows.'),
-  count: z.int().optional().describe('The total count of workflows returned.'),
+  count: z.int32().optional().describe('The total count of workflows returned.'),
   nextPageToken: z.string().optional().describe('The decimal zero-based offset to use for the next page of results.'),
-}).describe('GetWorkflowsResponse is the response for the GetWorkflows method.').meta({ examples: [{}] })
+}).describe('GetWorkflowsResponse is the response for the GetWorkflows method.').meta({ examples: [{"count":1,"workflows":[{"endTime":"2025-06-18T18:37:00.667816956Z","name":"workflow-0","startTime":"2025-06-18T18:17:50.667816956Z","workflowId":"workflow-0"}]}] })

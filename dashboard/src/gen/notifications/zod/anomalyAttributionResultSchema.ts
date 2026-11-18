@@ -5,6 +5,145 @@
 import * as z from 'zod'
 import { errorAttributionSchema } from './errorAttributionSchema'
 
+/**
+ * Anomaly attribution result for job attempt.
+ * Examples:
+ *     If `summary` and `insight` are provided, skip the detailed error attribution:
+ *         >>> message = AnomalyAttributionResult(
+ *         ...     job_id="12345",
+ *         ...     job_attempt_index=0,
+ *         ...     summary="A summary from job manager.",
+ *         ...     insight="Some insights from job manager.",
+ *         ...     anomaly_type="CRASH",
+ *         ...     error_attributions=[
+ *         ...         ErrorAttribution(
+ *         ...             job_execution_error=JobExecutionError(
+ *         ...                 error_message="random error message",
+ *         ...                 error_signature="random error signature",
+ *         ...             ),
+ *         ...             node_events=[
+ *         ...                 NodeEvent(
+ *         ...                     node="node_0",
+ *         ...                     exclusion_type="temporary",
+ *         ...                     error_attribution="system",
+ *         ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+ *         ...                 ),
+ *         ...                 NodeEvent(
+ *         ...                     node="node_1",
+ *         ...                     exclusion_type="confirmed",
+ *         ...                     error_attribution="hardware",
+ *         ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+ *         ...                 ),
+ *         ...             ],
+ *         ...         ),
+ *         ...     ],
+ *         ...     user="some-user",
+ *         ... )
+ *         >>> expected_message = '''\
+ *         ... Attribution for the anomaly of type 'CRASH' for job 12345(0).
+ *         ...
+ *         ... Summary:
+ *         ...   A summary from job manager.
+ *         ...
+ *         ... Insight:
+ *         ...   Some insights from job manager.
+ *         ... '''
+ *         >>> assert_equal(message.render_message(), expected_message)
+ *     If `summary` and `insight` are omitted, should display all the attribution info:
+ *         >>> message = AnomalyAttributionResult(
+ *         ...     job_id="12345",
+ *         ...     job_attempt_index=0,
+ *         ...     anomaly_type="CRASH",
+ *         ...     error_attributions=[
+ *         ...         ErrorAttribution(
+ *         ...             job_execution_error=JobExecutionError(
+ *         ...                 error_message="random error message",
+ *         ...                 error_signature="random error signature",
+ *         ...             ),
+ *         ...             node_events=[
+ *         ...                 NodeEvent(
+ *         ...                     node="node_0",
+ *         ...                     exclusion_type="temporary",
+ *         ...                     error_attribution="system",
+ *         ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+ *         ...                 ),
+ *         ...                 NodeEvent(
+ *         ...                     node="node_1",
+ *         ...                     exclusion_type="confirmed",
+ *         ...                     error_attribution="hardware",
+ *         ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+ *         ...                 ),
+ *         ...             ],
+ *         ...         ),
+ *         ...     ],
+ *         ...     user="some-user",
+ *         ... )
+ *         >>> expected_message = '''\
+ *         ... Attribution for the anomaly of type 'CRASH' for job 12345(0).
+ *         ...
+ *         ... Job execution error:
+ *         ...   Error message: random error message
+ *         ...   Error signature: random error signature
+ *         ...
+ *         ... Node attributions:
+ *         ...   node_0:
+ *         ...     exclusion type 'temporary'
+ *         ...     error attribution 'system'
+ *         ...     error attribution sources: ['APPLICATION_LOG', 'SYSLOG']
+ *         ...   node_1:
+ *         ...     exclusion type 'confirmed'
+ *         ...     error attribution 'hardware'
+ *         ...     error attribution sources: ['APPLICATION_LOG', 'SYSLOG']
+ *         ... '''
+ *         >>> assert_equal(message.render_message(), expected_message)
+ *     The `error_message` can be `None`:
+ *         >>> message_with_none = AnomalyAttributionResult(
+ *         ...     job_id="12345",
+ *         ...     job_attempt_index=0,
+ *         ...     anomaly_type="CRASH",
+ *         ...     error_attributions=[
+ *         ...         ErrorAttribution(
+ *         ...             job_execution_error=JobExecutionError(
+ *         ...                 error_message=None,
+ *         ...                 error_signature="random error signature",
+ *         ...             ),
+ *         ...             node_events=[
+ *         ...                 NodeEvent(
+ *         ...                     node="node_0",
+ *         ...                     exclusion_type="temporary",
+ *         ...                     error_attribution="system",
+ *         ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+ *         ...                 ),
+ *         ...                 NodeEvent(
+ *         ...                     node="node_1",
+ *         ...                     exclusion_type="confirmed",
+ *         ...                     error_attribution="hardware",
+ *         ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]
+ *         ...                 ),
+ *         ...             ],
+ *         ...         ),
+ *         ...     ],
+ *         ...     user="some-user",
+ *         ... )
+ *         >>> expected_message_with_none = '''\
+ *         ... Attribution for the anomaly of type 'CRASH' for job 12345(0).
+ *         ...
+ *         ... Job execution error:
+ *         ...   Error message:
+ *         ...   Error signature: random error signature
+ *         ...
+ *         ... Node attributions:
+ *         ...   node_0:
+ *         ...     exclusion type 'temporary'
+ *         ...     error attribution 'system'
+ *         ...     error attribution sources: ['APPLICATION_LOG', 'SYSLOG']
+ *         ...   node_1:
+ *         ...     exclusion type 'confirmed'
+ *         ...     error attribution 'hardware'
+ *         ...     error attribution sources: ['APPLICATION_LOG', 'SYSLOG']
+ *         ... '''
+ *         >>> assert_equal(message_with_none.render_message(), expected_message_with_none)
+ */
 export const anomalyAttributionResultSchema = z.object({
   template_id: z.enum(['/templates/AnomalyAttributionResult']).optional().default('/templates/AnomalyAttributionResult'),
   job_id: z.string(),
@@ -12,6 +151,6 @@ export const anomalyAttributionResultSchema = z.object({
   anomaly_type: z.string(),
   error_attributions: z.array(errorAttributionSchema),
   user: z.string(),
-  summary: z.union([z.string(), z.null()]).optional(),
-  insight: z.union([z.string(), z.null()]).optional(),
+  summary: z.union([z.string(), z.null().nullable()]).optional(),
+  insight: z.union([z.string(), z.null().nullable()]).optional(),
 }).describe('Anomaly attribution result for job attempt.\n\nExamples:\n    If `summary` and `insight` are provided, skip the detailed error attribution:\n\n        >>> message = AnomalyAttributionResult(\n        ...     job_id="12345",\n        ...     job_attempt_index=0,\n        ...     summary="A summary from job manager.",\n        ...     insight="Some insights from job manager.",\n        ...     anomaly_type="CRASH",\n        ...     error_attributions=[\n        ...         ErrorAttribution(\n        ...             job_execution_error=JobExecutionError(\n        ...                 error_message="random error message",\n        ...                 error_signature="random error signature",\n        ...             ),\n        ...             node_events=[\n        ...                 NodeEvent(\n        ...                     node="node_0",\n        ...                     exclusion_type="temporary",\n        ...                     error_attribution="system",\n        ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]\n        ...                 ),\n        ...                 NodeEvent(\n        ...                     node="node_1",\n        ...                     exclusion_type="confirmed",\n        ...                     error_attribution="hardware",\n        ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]\n        ...                 ),\n        ...             ],\n        ...         ),\n        ...     ],\n        ...     user="some-user",\n        ... )\n        >>> expected_message = \'\'\'\\\n        ... Attribution for the anomaly of type \'CRASH\' for job 12345(0).\n        ...\n        ... Summary:\n        ...   A summary from job manager.\n        ...\n        ... Insight:\n        ...   Some insights from job manager.\n        ... \'\'\'\n        >>> assert_equal(message.render_message(), expected_message)\n\n    If `summary` and `insight` are omitted, should display all the attribution info:\n\n        >>> message = AnomalyAttributionResult(\n        ...     job_id="12345",\n        ...     job_attempt_index=0,\n        ...     anomaly_type="CRASH",\n        ...     error_attributions=[\n        ...         ErrorAttribution(\n        ...             job_execution_error=JobExecutionError(\n        ...                 error_message="random error message",\n        ...                 error_signature="random error signature",\n        ...             ),\n        ...             node_events=[\n        ...                 NodeEvent(\n        ...                     node="node_0",\n        ...                     exclusion_type="temporary",\n        ...                     error_attribution="system",\n        ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]\n        ...                 ),\n        ...                 NodeEvent(\n        ...                     node="node_1",\n        ...                     exclusion_type="confirmed",\n        ...                     error_attribution="hardware",\n        ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]\n        ...                 ),\n        ...             ],\n        ...         ),\n        ...     ],\n        ...     user="some-user",\n        ... )\n        >>> expected_message = \'\'\'\\\n        ... Attribution for the anomaly of type \'CRASH\' for job 12345(0).\n        ...\n        ... Job execution error:\n        ...   Error message: random error message\n        ...   Error signature: random error signature\n        ...\n        ... Node attributions:\n        ...   node_0:\n        ...     exclusion type \'temporary\'\n        ...     error attribution \'system\'\n        ...     error attribution sources: [\'APPLICATION_LOG\', \'SYSLOG\']\n        ...   node_1:\n        ...     exclusion type \'confirmed\'\n        ...     error attribution \'hardware\'\n        ...     error attribution sources: [\'APPLICATION_LOG\', \'SYSLOG\']\n        ... \'\'\'\n        >>> assert_equal(message.render_message(), expected_message)\n\n    The `error_message` can be `None`:\n\n        >>> message_with_none = AnomalyAttributionResult(\n        ...     job_id="12345",\n        ...     job_attempt_index=0,\n        ...     anomaly_type="CRASH",\n        ...     error_attributions=[\n        ...         ErrorAttribution(\n        ...             job_execution_error=JobExecutionError(\n        ...                 error_message=None,\n        ...                 error_signature="random error signature",\n        ...             ),\n        ...             node_events=[\n        ...                 NodeEvent(\n        ...                     node="node_0",\n        ...                     exclusion_type="temporary",\n        ...                     error_attribution="system",\n        ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]\n        ...                 ),\n        ...                 NodeEvent(\n        ...                     node="node_1",\n        ...                     exclusion_type="confirmed",\n        ...                     error_attribution="hardware",\n        ...                     error_attribution_sources=["APPLICATION_LOG", "SYSLOG"]\n        ...                 ),\n        ...             ],\n        ...         ),\n        ...     ],\n        ...     user="some-user",\n        ... )\n        >>> expected_message_with_none = \'\'\'\\\n        ... Attribution for the anomaly of type \'CRASH\' for job 12345(0).\n        ...\n        ... Job execution error:\n        ...   Error message:\n        ...   Error signature: random error signature\n        ...\n        ... Node attributions:\n        ...   node_0:\n        ...     exclusion type \'temporary\'\n        ...     error attribution \'system\'\n        ...     error attribution sources: [\'APPLICATION_LOG\', \'SYSLOG\']\n        ...   node_1:\n        ...     exclusion type \'confirmed\'\n        ...     error attribution \'hardware\'\n        ...     error attribution sources: [\'APPLICATION_LOG\', \'SYSLOG\']\n        ... \'\'\'\n        >>> assert_equal(message_with_none.render_message(), expected_message_with_none)')

@@ -7,10 +7,10 @@ import type { AuditEventPartialSuccess } from './AuditEventPartialSuccess'
 /**
  * @description Result of accepting an audit-event batch.
  * @type object
-*/
+ */
 export interface AuditEventIngestionResponse {
-    /**
-     * @description Present only when the server rejected some events.
-    */
-    partial_success?: (AuditEventPartialSuccess | null);
+  /**
+   * @description Present only when the server rejected some events.
+   */
+  partial_success?: AuditEventPartialSuccess | (null | null);
 }

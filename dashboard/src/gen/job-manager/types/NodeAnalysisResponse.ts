@@ -5,28 +5,31 @@
 import type { NodeAnalysisResult } from './NodeAnalysisResult'
 
 /**
- * @description Response model for node set analysis endpoint.\n\nThis response contains the result of evaluating a set algebra expression\nover job node lists, optionally grouped by rack.
+ * @description Response model for node set analysis endpoint.
+ *
+ * This response contains the result of evaluating a set algebra expression
+ * over job node lists, optionally grouped by rack.
  * @example {"result":{"nodes":["nodes","nodes"],"count":0},"expression":"expression","jobsQueried":["jobsQueried","jobsQueried"],"groupedByRack":{"key":["groupedByRack","groupedByRack"]}}
  * @type object
-*/
+ */
 export interface NodeAnalysisResponse {
-    /**
-     * @description The original expression that was evaluated
-     * @type string
-    */
-    expression: string;
-    /**
-     * @description Result of node set analysis containing the computed node set.
-     * @example {"nodes":["nodes","nodes"],"count":0}
-     * @type object
-    */
-    result: NodeAnalysisResult;
-    groupedByRack?: {
-        [key: string]: string[];
-    } | null;
-    /**
-     * @description List of job IDs (format: job_id/attempt_index) that were queried
-     * @type array
-    */
-    jobsQueried: string[];
+  /**
+   * @description The original expression that was evaluated
+   * @type string
+   */
+  expression: string;
+  /**
+   * @description Result of node set analysis containing the computed node set.
+   * @example {"nodes":["nodes","nodes"],"count":0}
+   * @type object
+   */
+  result: NodeAnalysisResult;
+  groupedByRack?: {
+    [key: string]: string[];
+  } | null;
+  /**
+   * @description List of job IDs (format: job_id/attempt_index) that were queried
+   * @type array
+   */
+  jobsQueried: string[];
 }

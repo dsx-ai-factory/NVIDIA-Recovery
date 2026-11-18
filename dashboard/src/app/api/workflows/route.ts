@@ -6,6 +6,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   type GetWorkflowsWorkflowIdMatchKey,
   getWorkflows,
+  isResponseError,
 } from "~/gen/job-manager";
 import { logger } from "~/pino";
 import { getServerAuthSession } from "~/server/auth";
@@ -50,13 +51,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       item_count,
     });
   } catch (_error) {
-    const error = _error as AxiosError;
-    const publicErrorDetails = {
-      code: error.code,
-      name: error.name,
-      message: error.message,
-      cause: error.cause,
-    };
+    const error = _error as Error;
+    const publicErrorDetails = isResponseError(error)
+      ? { name: error.name, message: error.message, status: error.status }
+      : {
+          code: (error as AxiosError).code,
+          name: error.name,
+          message: error.message,
+          cause: error.cause,
+        };
     logger.error(
       `GET /api/workflows?${req.nextUrl.searchParams.toString()} failed: ${JSON.stringify({ ...publicErrorDetails, stack: error.stack?.substring(0, 200) })}`,
     );

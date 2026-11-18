@@ -4,14 +4,14 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { NotificationsGetOptions, NotificationsGetResponses } from '../types/NotificationsGet'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /notifications`
  * @summary Get notifications
- * {@link /notifications}
  */
 export function notificationsGet<ThrowOnError extends boolean = true>(options: Options<NotificationsGetOptions, ThrowOnError> = {}): Unwrappable<RequestResult<NotificationsGetResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/notifications', ...config }) as Promise<RequestResult<NotificationsGetResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<NotificationsGetResponses, ThrowOnError>({ method: 'GET', url: '/notifications', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

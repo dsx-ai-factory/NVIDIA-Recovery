@@ -9,30 +9,31 @@ import type { V1CreateOrUpdateJobResponse } from './V1CreateOrUpdateJobResponse'
 /**
  * @description CreateOrUpdateJobResponse is the response for creating or updating a job.
  * @type object
-*/
+ */
 export type HeimdallServiceCreateOrUpdateJobStatus200 = V1CreateOrUpdateJobResponse;
 
 export type HeimdallServiceCreateOrUpdateJobStatusDefault = RpcStatus;
 
 /**
- * @description CreateOrUpdateJobRequest is used to create or update a job.\nIf a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
+ * @description CreateOrUpdateJobRequest is used to create or update a job.
+ * If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
  * @type object
-*/
+ */
 export type HeimdallServiceCreateOrUpdateJobBody = V1CreateOrUpdateJobRequest;
 
 export interface HeimdallServiceCreateOrUpdateJobOptions {
-    body: HeimdallServiceCreateOrUpdateJobBody;
-    path?: never;
-    query?: never;
-    headers?: never;
+  body: HeimdallServiceCreateOrUpdateJobBody;
+  path?: never;
+  query?: never;
+  headers?: never;
 }
 
 export interface HeimdallServiceCreateOrUpdateJobResponses {
-    "200": HeimdallServiceCreateOrUpdateJobStatus200;
-    default: HeimdallServiceCreateOrUpdateJobStatusDefault;
+  '200': HeimdallServiceCreateOrUpdateJobStatus200;
+  default: HeimdallServiceCreateOrUpdateJobStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type HeimdallServiceCreateOrUpdateJobResponse = (HeimdallServiceCreateOrUpdateJobStatus200 | HeimdallServiceCreateOrUpdateJobStatusDefault);
+ */
+export type HeimdallServiceCreateOrUpdateJobResponse = HeimdallServiceCreateOrUpdateJobStatus200;

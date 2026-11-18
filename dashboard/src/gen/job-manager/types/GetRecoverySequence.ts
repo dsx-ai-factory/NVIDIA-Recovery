@@ -7,53 +7,58 @@ import type { HTTPValidationError } from './HTTPValidationError'
 import type { RecoveryOperationKey } from './RecoveryOperation'
 
 export interface GetRecoverySequenceQuery {
-    /**
-     * @minLength 1
-     * @maxLength 32
-     * @type string
-    */
-    scheduler_system: string;
-    /**
-     * @minLength 1
-     * @maxLength 256
-     * @type string
-    */
-    scheduler_scope: string;
-    /**
-     * @minLength 1
-     * @maxLength 256
-     * @type string
-    */
-    job_id: string;
-    /**
-     * @minLength 0
-     * @type integer
-    */
-    source_attempt_index: number;
-    operation: RecoveryOperationKey;
+  /**
+   * @minLength 1
+   * @maxLength 32
+   * @type string
+   */
+  scheduler_system: string;
+  /**
+   * @minLength 1
+   * @maxLength 256
+   * @type string
+   */
+  scheduler_scope: string;
+  /**
+   * @minLength 1
+   * @maxLength 256
+   * @type string
+   */
+  job_id: string;
+  /**
+   * @minimum 0
+   * @type integer
+   */
+  source_attempt_index: number;
+  operation: RecoveryOperationKey;
 }
 
 /**
  * @description Canonical context of an existing backend-owned recovery sequence.
  * @example {"recoveryContext":{"tracestate":"tracestate","traceparent":"traceparent","triggeredAt":"2000-01-23T04:56:07.000+00:00","sequenceId":"sequenceId","operation":"restart"}}
  * @type object
-*/
+ */
 export type GetRecoverySequenceStatus200 = GetRecoverySequenceResponse;
 
 /**
  * @example {"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}
  * @type object
-*/
+ */
 export type GetRecoverySequenceStatus422 = HTTPValidationError;
 
 export interface GetRecoverySequenceOptions {
-    body?: never;
-    path?: never;
-    query: GetRecoverySequenceQuery;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query: GetRecoverySequenceQuery;
+  headers?: never;
 }
 
 export interface GetRecoverySequenceResponses {
-    "200": GetRecoverySequenceStatus200;
-    "422": GetRecoverySequenceStatus422;
+  '200': GetRecoverySequenceStatus200;
+  '422': GetRecoverySequenceStatus422;
 }
+
+/**
+ * @description Union of all possible responses
+ */
+export type GetRecoverySequenceResponse2 = GetRecoverySequenceStatus200;

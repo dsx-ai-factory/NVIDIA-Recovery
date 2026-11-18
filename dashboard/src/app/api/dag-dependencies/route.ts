@@ -3,7 +3,7 @@
 
 import type { AxiosError } from "axios";
 import { type NextRequest, NextResponse } from "next/server";
-import { getDagDependencies } from "~/gen/job-manager";
+import { getDagDependencies, isResponseError } from "~/gen/job-manager";
 import { logger } from "~/pino";
 import { getServerAuthSession } from "~/server/auth";
 import { isAuthAvailable } from "~/utils/auth";
@@ -40,12 +40,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     logger.debug(`GET /api/dag-dependencies?${searchParams.toString()}`);
     return NextResponse.json(dependencies);
   } catch (_error) {
-    const error = _error as AxiosError;
-    const publicErrorDetails = {
-      code: error.code,
-      name: error.name,
-      message: error.message,
-    };
+    const error = _error as Error;
+    const publicErrorDetails = isResponseError(error)
+      ? { name: error.name, message: error.message, status: error.status }
+      : {
+          code: (error as AxiosError).code,
+          name: error.name,
+          message: error.message,
+        };
     logger.error(
       `GET /api/dag-dependencies?${searchParams.toString()} failed: ${JSON.stringify({ ...publicErrorDetails, stack: error.stack?.substring(0, 200) })}`,
     );

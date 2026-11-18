@@ -4,4 +4,10 @@
 
 import * as z from 'zod'
 
+/**
+ * AutoResumeMode defines how the system should resume a recoverable job.
+ *  - AUTO_RESUME_MODE_UNSPECIFIED: No job-level auto-resume mode was specified.
+ *  - AUTO_RESUME_MODE_REQUEUE: Requeue the same scheduler job to resume progress.
+ *  - AUTO_RESUME_MODE_SINGLETON_DEPENDENCY: Use singleton dependency jobs to resume progress.
+ */
 export const jobRecoveryConfigAutoResumeModeSchema = z.enum(['AUTO_RESUME_MODE_UNSPECIFIED', 'AUTO_RESUME_MODE_REQUEUE', 'AUTO_RESUME_MODE_SINGLETON_DEPENDENCY']).default('AUTO_RESUME_MODE_UNSPECIFIED').describe('AutoResumeMode defines how the system should resume a recoverable job.\n\n - AUTO_RESUME_MODE_UNSPECIFIED: No job-level auto-resume mode was specified.\n - AUTO_RESUME_MODE_REQUEUE: Requeue the same scheduler job to resume progress.\n - AUTO_RESUME_MODE_SINGLETON_DEPENDENCY: Use singleton dependency jobs to resume progress.')

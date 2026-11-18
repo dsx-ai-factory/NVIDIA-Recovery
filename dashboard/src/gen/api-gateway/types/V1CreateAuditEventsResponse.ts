@@ -7,11 +7,11 @@ import type { V1AuditEventPartialSuccess } from './V1AuditEventPartialSuccess'
 /**
  * @description CreateAuditEventsResponse reports full or partial batch acceptance.
  * @type object
-*/
+ */
 export interface V1CreateAuditEventsResponse {
-    /**
-     * @description Present only when the downstream audit service rejected some events.
-     * @type object | undefined
-    */
-    partialSuccess?: V1AuditEventPartialSuccess;
+  /**
+   * @description Present only when the downstream audit service rejected some events.
+   * @type object | undefined
+   */
+  partialSuccess?: V1AuditEventPartialSuccess;
 }

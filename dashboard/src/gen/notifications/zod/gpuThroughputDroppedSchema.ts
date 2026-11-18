@@ -4,12 +4,43 @@
 
 import * as z from 'zod'
 
+/**
+ * Show that autonomous recovery engine has found a straggler.
+ * Examples:
+ *     >>> message = GpuThroughputDropped(
+ *     ...     job_id="456",
+ *     ...     job_attempt_index=7,
+ *     ...     job_name="some-job",
+ *     ...     event_type="SILLY",
+ *     ...     event_body="this is the event body",
+ *     ...     user="some-user",
+ *     ... )
+ *     >>> expected_message = '''\
+ *     ... Job 456(7) (some-job) `GPU throughput dropped`: `SILLY`.
+ *     ... Log: `this is the event body`
+ *     ... '''
+ *     >>> assert_equal(message.render_message(), expected_message)
+ *     >>> expected_title = "Performance alert: GPU throughput dropped for job 456"
+ *     >>> assert_equal(message.render_title(), expected_title)
+ *     The `event_body` is optional:
+ *     >>> message = GpuThroughputDropped(
+ *     ...     job_id="456",
+ *     ...     job_attempt_index=7,
+ *     ...     job_name="some-job",
+ *     ...     event_type="SILLY",
+ *     ...     user="some-user",
+ *     ... )
+ *     >>> expected_message = '''\
+ *     ... Job 456(7) (some-job) `GPU throughput dropped`: `SILLY`.
+ *     ... '''
+ *     >>> assert_equal(message.render_message(), expected_message)
+ */
 export const gpuThroughputDroppedSchema = z.object({
   template_id: z.enum(['/templates/GpuThroughputDropped']).optional().default('/templates/GpuThroughputDropped'),
   job_id: z.string(),
   job_attempt_index: z.int(),
   job_name: z.string(),
   event_type: z.string(),
-  event_body: z.union([z.string(), z.null()]).optional(),
+  event_body: z.union([z.string(), z.null().nullable()]).optional(),
   user: z.string(),
 }).describe('Show that autonomous recovery engine has found a straggler.\n\nExamples:\n    >>> message = GpuThroughputDropped(\n    ...     job_id="456",\n    ...     job_attempt_index=7,\n    ...     job_name="some-job",\n    ...     event_type="SILLY",\n    ...     event_body="this is the event body",\n    ...     user="some-user",\n    ... )\n    >>> expected_message = \'\'\'\\\n    ... Job 456(7) (some-job) `GPU throughput dropped`: `SILLY`.\n    ... Log: `this is the event body`\n    ... \'\'\'\n    >>> assert_equal(message.render_message(), expected_message)\n\n    >>> expected_title = "Performance alert: GPU throughput dropped for job 456"\n    >>> assert_equal(message.render_title(), expected_title)\n\n    The `event_body` is optional:\n\n    >>> message = GpuThroughputDropped(\n    ...     job_id="456",\n    ...     job_attempt_index=7,\n    ...     job_name="some-job",\n    ...     event_type="SILLY",\n    ...     user="some-user",\n    ... )\n    >>> expected_message = \'\'\'\\\n    ... Job 456(7) (some-job) `GPU throughput dropped`: `SILLY`.\n    ... \'\'\'\n    >>> assert_equal(message.render_message(), expected_message)')

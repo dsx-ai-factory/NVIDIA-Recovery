@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { notificationTypePreferencesSchema } from './notificationTypePreferencesSchema'
 
+/**
+ * A user's notification preferences.
+ */
 export const userPreferencesPublicSchema = z.object({
   notification_types: notificationTypePreferencesSchema,
 }).describe('A user\'s notification preferences.')

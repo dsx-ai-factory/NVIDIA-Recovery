@@ -4,7 +4,11 @@
 
 import * as z from 'zod'
 
+/**
+ * Contains scheduling constraints for a job.
+ * This model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
+ */
 export const nodeConstraintsSchema = z.object({
   exclusions: z.array(z.string()).nullish(),
   inclusions: z.array(z.string()).nullish(),
-}).describe('Contains scheduling constraints for a job.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{}] })
+}).describe('Contains scheduling constraints for a job.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{"exclusions":["exclusions","exclusions"],"inclusions":["inclusions","inclusions"]}] })

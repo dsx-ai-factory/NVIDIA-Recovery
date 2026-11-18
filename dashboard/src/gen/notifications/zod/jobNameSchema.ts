@@ -4,6 +4,10 @@
 
 import * as z from 'zod'
 
+/**
+ * A representation of the job name.
+ * The default template just shows the job name, but it can be overridden to show more interesting representations.
+ */
 export const jobNameSchema = z.object({
   template_id: z.enum(['/partials/JobName']).optional().default('/partials/JobName'),
   job_name: z.string(),

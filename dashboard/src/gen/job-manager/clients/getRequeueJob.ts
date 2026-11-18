@@ -4,19 +4,19 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetRequeueJobOptions, GetRequeueJobResponses } from '../types/GetRequeueJob'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /config/requeue`
  * @description Retrieve the system-wide requeue configuration.
  * Returns:
  * SystemRequeueConfig:
  * An object containing configuration settings that define how and when jobs are automatically requeued
  * by the system.
  * @summary Get System Requeue Config
- * {@link /config/requeue}
  */
 export function getRequeueJob<ThrowOnError extends boolean = true>(options: Options<GetRequeueJobOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetRequeueJobResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/config/requeue', ...config }) as Promise<RequestResult<GetRequeueJobResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetRequeueJobResponses, ThrowOnError>({ method: 'GET', url: '/config/requeue', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

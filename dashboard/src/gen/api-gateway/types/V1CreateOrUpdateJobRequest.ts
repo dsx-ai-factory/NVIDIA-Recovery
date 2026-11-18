@@ -8,75 +8,76 @@ import type { V1JobStatusKey } from './V1JobStatus'
 import type { V1NodeConstraints } from './V1NodeConstraints'
 
 /**
- * @description CreateOrUpdateJobRequest is used to create or update a job.\nIf a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
+ * @description CreateOrUpdateJobRequest is used to create or update a job.
+ * If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
  * @type object
-*/
+ */
 export interface V1CreateOrUpdateJobRequest {
-    /**
-     * @description The UUID for the job. If not provided, will be computed from job_id and attempt_index.
-     * @type string | undefined
-    */
-    heimdallJobId?: string;
-    /**
-     * @description Scheduler-specific job identifier.
-     * @type string | undefined
-    */
-    jobId?: string;
-    /**
-     * @description The workflow ID this job belongs to.
-     * @minLength 1
-     * @maxLength 256
-     * @type string
-    */
-    workflowId: string;
-    /**
-     * @description The attempt index for this job.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    attemptIndex?: number;
-    /**
-     * @description The name of the job.
-     * @type string | undefined
-    */
-    jobName?: string;
-    /**
-     * @description List of nodes allocated to the job.
-     * @type array | undefined
-    */
-    allocatedNodes?: string[];
-    /**
-     * @description Number of GPUs per node.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    gpuCountPerNode?: number;
-    /**
-     * @description Node constraints for the job.
-     * @type object | undefined
-    */
-    nodeConstraints?: V1NodeConstraints;
-    /**
-     * @description Additional properties for the job.
-     * @type object | undefined
-    */
-    additionalProperties?: V1JobAdditionalProperties;
-    /**
-     * @description The state of the job.
-     * @default 'JOB_STATUS_UNSPECIFIED'
-     * @type string | undefined
-    */
-    state?: V1JobStatusKey;
-    /**
-     * @description Scheduler-specific metadata (e.g., CRD kind, namespace, labels, annotations).
-     * @type object | undefined
-    */
-    schedulerMetadata?: object;
-    /**
-     * @description Typed recovery policy for scheduler recovery behavior.
-     * @type object | undefined
-    */
-    recoveryConfig?: V1JobRecoveryConfig;
+  /**
+   * @description The UUID for the job. If not provided, will be computed from job_id and attempt_index.
+   * @type string | undefined
+   */
+  heimdallJobId?: string;
+  /**
+   * @description Scheduler-specific job identifier.
+   * @type string | undefined
+   */
+  jobId?: string;
+  /**
+   * @description The workflow ID this job belongs to.
+   * @minLength 1
+   * @maxLength 256
+   * @type string
+   */
+  workflowId: string;
+  /**
+   * @description The attempt index for this job.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  attemptIndex?: number;
+  /**
+   * @description The name of the job.
+   * @type string | undefined
+   */
+  jobName?: string;
+  /**
+   * @description List of nodes allocated to the job.
+   * @type array | undefined
+   */
+  allocatedNodes?: string[];
+  /**
+   * @description Number of GPUs per node.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  gpuCountPerNode?: number;
+  /**
+   * @description Node constraints for the job.
+   * @type object | undefined
+   */
+  nodeConstraints?: V1NodeConstraints;
+  /**
+   * @description Additional properties for the job.
+   * @type object | undefined
+   */
+  additionalProperties?: V1JobAdditionalProperties;
+  /**
+   * @description The state of the job.
+   * @default 'JOB_STATUS_UNSPECIFIED'
+   * @type string | undefined
+   */
+  state?: V1JobStatusKey;
+  /**
+   * @description Scheduler-specific metadata (e.g., CRD kind, namespace, labels, annotations).
+   * @type object | undefined
+   */
+  schedulerMetadata?: object;
+  /**
+   * @description Typed recovery policy for scheduler recovery behavior.
+   * @type object | undefined
+   */
+  recoveryConfig?: V1JobRecoveryConfig;
 }

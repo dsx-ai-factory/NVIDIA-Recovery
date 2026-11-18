@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { v1AuditEventPartialSuccessSchema } from './v1AuditEventPartialSuccessSchema'
 
+/**
+ * CreateAuditEventsResponse reports full or partial batch acceptance.
+ */
 export const v1CreateAuditEventsResponseSchema = z.object({
   partialSuccess: v1AuditEventPartialSuccessSchema.optional().describe('Present only when the downstream audit service rejected some events.'),
 }).describe('CreateAuditEventsResponse reports full or partial batch acceptance.')

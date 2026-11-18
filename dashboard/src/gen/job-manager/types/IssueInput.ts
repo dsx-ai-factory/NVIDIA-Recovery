@@ -5,19 +5,22 @@
 import type { RemediationAction } from './RemediationAction'
 
 /**
- * @description Describes a detected issue for a job.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.\nIssue types include: CRASH, HANG, STRAGGLER, etc.
+ * @description Describes a detected issue for a job.
+ *
+ * This model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
+ * Issue types include: CRASH, HANG, STRAGGLER, etc.
  * @example {"issueType":"issueType","detectedBy":"detectedBy","remediationActions":[{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"},{"actionType":"actionType","reason":"reason","resourceDetails":[{"resourceId":"resourceId","details":"details","resourceType":"resourceType"},{"resourceId":"resourceId","details":"details","resourceType":"resourceType"}],"timestamp":"2000-01-23T04:56:07.000+00:00"}],"relevantLogLines":["relevantLogLines","relevantLogLines"],"timestamp":"2000-01-23T04:56:07.000+00:00"}
  * @type object
-*/
+ */
 export interface IssueInput {
-    issueType: string;
-    /**
-     * @description
-     * Format: `date-time`
-     * @type string
-    */
-    timestamp: string;
-    detectedBy?: string | null;
-    relevantLogLines?: string[] | null;
-    remediationActions?: RemediationAction[] | null;
+  issueType: string;
+  /**
+   * @description
+   * Format: `date-time`
+   * @type string
+   */
+  timestamp: string;
+  detectedBy?: string | null;
+  relevantLogLines?: string[] | null;
+  remediationActions?: RemediationAction[] | null;
 }

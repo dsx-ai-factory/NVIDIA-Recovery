@@ -8,4 +8,4 @@ export const recordRecoveryMilestoneResponseSchema = z.object({
   duplicate: z.boolean(),
   sequenceCompleted: z.boolean(),
   endToEndDurationSeconds: z.number().min(0).nullish(),
-}).meta({ examples: [{}] })
+}).meta({ examples: [{"duplicate":true,"endToEndDurationSeconds":0.08008281904610115,"sequenceCompleted":true}] })

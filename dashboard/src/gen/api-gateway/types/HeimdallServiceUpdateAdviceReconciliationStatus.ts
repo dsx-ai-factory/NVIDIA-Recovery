@@ -7,17 +7,17 @@ import type { V1AdviceReconciliationStatus } from './V1AdviceReconciliationStatu
 import type { V1UpdateAdviceReconciliationStatusResponse } from './V1UpdateAdviceReconciliationStatusResponse'
 
 export interface HeimdallServiceUpdateAdviceReconciliationStatusPath {
-    /**
-     * @description UUID of the Advice record being observed.
-     * @type string
-    */
-    heimdallJobId: string;
+  /**
+   * @description UUID of the Advice record being observed.
+   * @type string
+   */
+  heimdallJobId: string;
 }
 
 /**
  * @description UpdateAdviceReconciliationStatusResponse returns the persisted status.
  * @type object
-*/
+ */
 export type HeimdallServiceUpdateAdviceReconciliationStatusStatus200 = V1UpdateAdviceReconciliationStatusResponse;
 
 export type HeimdallServiceUpdateAdviceReconciliationStatusStatusDefault = RpcStatus;
@@ -25,22 +25,22 @@ export type HeimdallServiceUpdateAdviceReconciliationStatusStatusDefault = RpcSt
 /**
  * @description Generation-scoped reconciliation status.
  * @type object
-*/
+ */
 export type HeimdallServiceUpdateAdviceReconciliationStatusBody = V1AdviceReconciliationStatus;
 
 export interface HeimdallServiceUpdateAdviceReconciliationStatusOptions {
-    body: HeimdallServiceUpdateAdviceReconciliationStatusBody;
-    path: HeimdallServiceUpdateAdviceReconciliationStatusPath;
-    query?: never;
-    headers?: never;
+  body: HeimdallServiceUpdateAdviceReconciliationStatusBody;
+  path: HeimdallServiceUpdateAdviceReconciliationStatusPath;
+  query?: never;
+  headers?: never;
 }
 
 export interface HeimdallServiceUpdateAdviceReconciliationStatusResponses {
-    "200": HeimdallServiceUpdateAdviceReconciliationStatusStatus200;
-    default: HeimdallServiceUpdateAdviceReconciliationStatusStatusDefault;
+  '200': HeimdallServiceUpdateAdviceReconciliationStatusStatus200;
+  default: HeimdallServiceUpdateAdviceReconciliationStatusStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type HeimdallServiceUpdateAdviceReconciliationStatusResponse = (HeimdallServiceUpdateAdviceReconciliationStatusStatus200 | HeimdallServiceUpdateAdviceReconciliationStatusStatusDefault);
+ */
+export type HeimdallServiceUpdateAdviceReconciliationStatusResponse = HeimdallServiceUpdateAdviceReconciliationStatusStatus200;

@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetAdminUsersOptions, GetAdminUsersResponses } from '../types/GetAdminUsers'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /admin/users`
  * @description Retrieve a list of users filtered by optional job states, with pagination and sorting.
  * Parameters:
  * job_states (Optional[list[str]], optional):
@@ -21,10 +22,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * List[str]:
  * A list of usernames matching the provided filters.
  * @summary Get Users
- * {@link /admin/users}
  */
 export function getAdminUsers<ThrowOnError extends boolean = true>(options: Options<GetAdminUsersOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetAdminUsersResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/admin/users', styles: { query: { job_states: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, desc: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetAdminUsersResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetAdminUsersResponses, ThrowOnError>({ method: 'GET', url: '/admin/users', ...config, styles: { ...config.styles, query: { job_states: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, desc: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

@@ -8,14 +8,18 @@ import { v1JobRecoveryConfigSchema } from './v1JobRecoveryConfigSchema'
 import { v1JobStatusSchema } from './v1JobStatusSchema'
 import { v1NodeConstraintsSchema } from './v1NodeConstraintsSchema'
 
+/**
+ * CreateOrUpdateJobRequest is used to create or update a job.
+ * If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
+ */
 export const v1CreateOrUpdateJobRequestSchema = z.object({
   heimdallJobId: z.string().optional().describe('The UUID for the job. If not provided, will be computed from job_id and attempt_index.'),
   jobId: z.string().optional().describe('Scheduler-specific job identifier.'),
   workflowId: z.string().min(1).refine((value) => { const characters = Array.from(value); return characters.length <= 256 && characters.every((character) => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff); }, { message: "Must contain at most 256 Unicode scalar values" }).describe('The workflow ID this job belongs to.'),
-  attemptIndex: z.int().optional().describe('The attempt index for this job.'),
+  attemptIndex: z.int32().optional().describe('The attempt index for this job.'),
   jobName: z.string().optional().describe('The name of the job.'),
   allocatedNodes: z.array(z.string()).optional().describe('List of nodes allocated to the job.'),
-  gpuCountPerNode: z.int().optional().describe('Number of GPUs per node.'),
+  gpuCountPerNode: z.int32().optional().describe('Number of GPUs per node.'),
   nodeConstraints: v1NodeConstraintsSchema.optional().describe('Node constraints for the job.'),
   additionalProperties: v1JobAdditionalPropertiesSchema.optional().describe('Additional properties for the job.'),
   state: v1JobStatusSchema.optional().default('JOB_STATUS_UNSPECIFIED').describe('The state of the job.'),

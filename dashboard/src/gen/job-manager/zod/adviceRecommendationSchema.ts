@@ -6,7 +6,11 @@ import * as z from 'zod'
 import { adviceStateSchema } from './adviceStateSchema'
 import { nodeConstraintsSchema } from './nodeConstraintsSchema'
 
+/**
+ * Represents the recommendation portion of advice.
+ * This model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
+ */
 export const adviceRecommendationSchema = z.object({
   state: adviceStateSchema.optional().describe('Possible states for job advice from the NVIDIA Recovery system.\n\nMatches the Go client schema for NVIDIA Recovery Advice CRD.'),
-  nodeConstraints: nodeConstraintsSchema.optional().describe('Contains scheduling constraints for a job.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{}] }),
-}).describe('Represents the recommendation portion of advice.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{}] })
+  nodeConstraints: nodeConstraintsSchema.optional().describe('Contains scheduling constraints for a job.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{"exclusions":["exclusions","exclusions"],"inclusions":["inclusions","inclusions"]}] }),
+}).describe('Represents the recommendation portion of advice.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{"nodeConstraints":{"exclusions":["exclusions","exclusions"],"inclusions":["inclusions","inclusions"]},"state":"Restarted"}] })

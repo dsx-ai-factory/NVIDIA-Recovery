@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * ResourceDetail represents details about a specific resource.
+ */
 export const v1ResourceDetailSchema = z.object({
   resourceType: z.string().optional().describe('The type of resource (e.g., "node", "gpu").'),
   resourceId: z.string().optional().describe('The unique identifier of the resource.'),

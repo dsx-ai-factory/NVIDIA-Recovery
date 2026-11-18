@@ -7,6 +7,9 @@ import { apiKeysServiceUpdateApiKeyAuthorizationsBodySchema } from './apiKeysSer
 import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1UpdateApiKeyAuthorizationsResponseSchema } from './v1UpdateApiKeyAuthorizationsResponseSchema'
 
+/**
+ * Legacy key ID path parameter retained for compatibility.
+ */
 export const apiKeysServiceUpdateApiKeyAuthorizationsPathKeyIdSchema = z.string().describe('Legacy key ID path parameter retained for compatibility.')
 
 export const apiKeysServiceUpdateApiKeyAuthorizationsStatus200Schema = v1UpdateApiKeyAuthorizationsResponseSchema
@@ -20,3 +23,7 @@ export const apiKeysServiceUpdateApiKeyAuthorizationsResponseSchema = apiKeysSer
 export const apiKeysServiceUpdateApiKeyAuthorizationsErrorSchema = z.union([apiKeysServiceUpdateApiKeyAuthorizationsStatus500Schema, apiKeysServiceUpdateApiKeyAuthorizationsStatusDefaultSchema])
 
 export const apiKeysServiceUpdateApiKeyAuthorizationsBodyRequestSchema = apiKeysServiceUpdateApiKeyAuthorizationsBodySchema
+
+export const apiKeysServiceUpdateApiKeyAuthorizationsPathSchema = z.object({
+  keyId: apiKeysServiceUpdateApiKeyAuthorizationsPathKeyIdSchema,
+})

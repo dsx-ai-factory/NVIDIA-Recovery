@@ -9,7 +9,7 @@ import type { ProducerAuditEventBatch } from './ProducerAuditEventBatch'
 /**
  * @description Result of accepting an audit-event batch.
  * @type object
-*/
+ */
 export type AuditEventsCreateStatus202 = AuditEventIngestionResponse;
 
 export type AuditEventsCreateStatus413 = unknown;
@@ -21,24 +21,24 @@ export type AuditEventsCreateStatus429 = unknown;
 /**
  * @description A batch of audit events to ingest.
  * @type object
-*/
+ */
 export type AuditEventsCreateBody = ProducerAuditEventBatch;
 
 export interface AuditEventsCreateOptions {
-    body: AuditEventsCreateBody;
-    path?: never;
-    query?: never;
-    headers?: never;
+  body: AuditEventsCreateBody;
+  path?: never;
+  query?: never;
+  headers?: never;
 }
 
 export interface AuditEventsCreateResponses {
-    "202": AuditEventsCreateStatus202;
-    "413": AuditEventsCreateStatus413;
-    "422": AuditEventsCreateStatus422;
-    "429": AuditEventsCreateStatus429;
+  '202': AuditEventsCreateStatus202;
+  '413': AuditEventsCreateStatus413;
+  '422': AuditEventsCreateStatus422;
+  '429': AuditEventsCreateStatus429;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type AuditEventsCreateResponse = (AuditEventsCreateStatus202 | AuditEventsCreateStatus413 | AuditEventsCreateStatus422 | AuditEventsCreateStatus429);
+ */
+export type AuditEventsCreateResponse = AuditEventsCreateStatus202;

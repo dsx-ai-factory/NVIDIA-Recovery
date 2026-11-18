@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * A representation of a node attribution event.
+ */
 export const nodeEventSchema = z.object({
   template_id: z.enum(['/partials/NodeEvent']).optional().default('/partials/NodeEvent'),
   node: z.string(),
