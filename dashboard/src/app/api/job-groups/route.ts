@@ -42,7 +42,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(jobGroupsData);
   } catch (_error) {
-    const error = _error as AxiosError<{ detail?: string }>;
+    const error = _error as AxiosError<unknown>;
     const publicErrorDetails = {
       code: error.code,
       name: error.name,
@@ -52,11 +52,27 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     logger.error(
       `GET /api/job-groups?${req.nextUrl.searchParams.toString()} failed: ${JSON.stringify({ ...publicErrorDetails, stack: error.stack?.substring(0, 200) })}`,
     );
+    const responseData = error.response?.data;
+    const detail =
+      typeof responseData === "object" &&
+      responseData !== null &&
+      "detail" in responseData
+        ? responseData.detail
+        : "";
+    const upstreamStatus = error.response?.status;
+    // A rejected redirect or other non-error status is a bad gateway result;
+    // statuses such as 304 cannot carry the JSON error body.
+    const status =
+      upstreamStatus === undefined
+        ? 500
+        : upstreamStatus >= 400 && upstreamStatus <= 599
+          ? upstreamStatus
+          : 502;
     return NextResponse.json(
       {
-        detail: error.response?.data?.detail ?? "",
+        detail: detail ?? "",
       },
-      { status: error.response?.status || 500 },
+      { status },
     );
   }
 }
