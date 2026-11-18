@@ -457,6 +457,7 @@ def post_jobs(
             job.total_gpu_count,
             job.total_cpu_count,
             job.total_memory_mb,
+            job.job_group_id,
         ) = project_job_scheduler_fields(
             scheduler_metadata=job.scheduler_metadata,
             cluster=job.cluster,
@@ -468,6 +469,8 @@ def post_jobs(
             total_gpu_count=job.total_gpu_count,
             total_cpu_count=job.total_cpu_count,
             total_memory_mb=job.total_memory_mb,
+            job_id=job.job_id,
+            job_group_id=job.job_group_id,
         )
 
         # Defaults are for scheduler-neutral operator ingress. A partial Slurm
