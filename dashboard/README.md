@@ -4,7 +4,7 @@ The web dashboard for monitoring workloads and recovery in NVIDIA Recovery.
 
 ## Setting up
 
-- Install [NodeJS](https://nodejs.org/en), v20.17.0
+- Install [NodeJS](https://nodejs.org/en), v22.22.0
 - Install pnpm by following [this](https://pnpm.io/installation).
 - Install dependency packages with `pnpm install`.
 
