@@ -4,7 +4,13 @@ Status: accepted
 
 Date: 2026-11-11
 
-> **Implementation note (2026-11-11):** Advice Operator build/CI wiring and source archive inclusion are implemented in the [component workflow](../../advice-operator/README.md#development); Go module publication and published sibling dependencies remain pending.
+> **Implementation note (2026-11-11):** Advice Operator build/CI wiring and
+> source archive inclusion are implemented in the
+> [component workflow](../../advice-operator/README.md#development). Go module
+> publication and published sibling dependencies remain pending. Evidence:
+> [PR #53](https://github.com/dsx-ai-factory/NVIDIA-Recovery/pull/53) and the
+> [root-tag release workflow](../../.github/workflows/tag-release.yml) at
+> `9e1a0e259f1ed0afac694679098d41c6812b37a4`.
 
 ## Context
 
@@ -45,23 +51,12 @@ extends its public API scope to exported Go packages in all repository modules.
 
 ## Consequences
 
-Release packaging must retain the operator and chart, and archive verification
-must require their presence. The standalone chart remains separate from the
-umbrella chart.
-
-Sibling dependencies must reference published module versions. Release API
-Gateway before publishing controllers that require its generated gRPC packages;
-replace their placeholder `v0.0.0` requirements with the released version.
+The standalone Advice Operator chart remains separate from the umbrella chart.
+Sibling dependencies must reference published module versions.
 Optional local workspaces may support coordinated development, but must not be
 required by consumers.
 
-Complete module tagging, dependency reconciliation, and build and CI checks
-before treating a Go module release as ready. Publishing a module does not
-expose its `internal/` packages; reusable APIs must be deliberately exported.
-
-Module publication requires protected, immutable tags. The existing root-tag
-source/chart workflow does not publish Go modules. Existing maintainer publication
-controls continue to apply.
+The existing root-tag source/chart workflow does not publish Go modules.
 
 ## Alternatives Rejected
 
