@@ -90,7 +90,7 @@ lifecycle check. A separate failing workload exercises the native restart budget
 Writes preserve the original UID and resourceVersion, and cleanup uses the
 launcher's exact-object ownership checks. The runner creates no cluster or
 namespace and installs no controllers. Use a dedicated test namespace with
-permission to create/delete/update the selected JobSets or PyTorchJobs, list their
+permission to get/create/delete/update the selected JobSets or PyTorchJobs, list their
 Jobs and Pods, and read diagnostics. KAI lifecycle runs also require listing
 Events in that test namespace to establish scheduler provenance.
 
