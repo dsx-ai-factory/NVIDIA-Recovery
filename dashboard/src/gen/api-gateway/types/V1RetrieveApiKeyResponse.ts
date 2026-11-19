@@ -5,9 +5,9 @@
 import type { V1ApiKey } from './V1ApiKey'
 
 export interface V1RetrieveApiKeyResponse {
-    /**
-     * @description API-key metadata retained for disabled compatibility endpoints.
-     * @type object | undefined
-    */
-    key?: V1ApiKey;
+  /**
+   * @description API-key metadata retained for disabled compatibility endpoints.
+   * @type object | undefined
+   */
+  key?: V1ApiKey;
 }

@@ -11,4 +11,4 @@ export const validationErrorSchema = z.object({
   type: z.string(),
   input: z.unknown().optional(),
   ctx: z.object({}).optional(),
-}).meta({ examples: [{}] })
+}).meta({ examples: [{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}] })

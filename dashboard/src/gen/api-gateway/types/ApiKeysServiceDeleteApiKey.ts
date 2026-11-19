@@ -6,11 +6,11 @@ import type { RpcStatus } from './RpcStatus'
 import type { V1DeleteApiKeyResponse } from './V1DeleteApiKeyResponse'
 
 export interface ApiKeysServiceDeleteApiKeyPath {
-    /**
-     * @description Legacy key ID path parameter retained for compatibility.
-     * @type string
-    */
-    keyId: string;
+  /**
+   * @description Legacy key ID path parameter retained for compatibility.
+   * @type string
+   */
+  keyId: string;
 }
 
 export type ApiKeysServiceDeleteApiKeyStatus200 = V1DeleteApiKeyResponse;
@@ -20,19 +20,19 @@ export type ApiKeysServiceDeleteApiKeyStatus500 = unknown;
 export type ApiKeysServiceDeleteApiKeyStatusDefault = RpcStatus;
 
 export interface ApiKeysServiceDeleteApiKeyOptions {
-    body?: never;
-    path: ApiKeysServiceDeleteApiKeyPath;
-    query?: never;
-    headers?: never;
+  body?: never;
+  path: ApiKeysServiceDeleteApiKeyPath;
+  query?: never;
+  headers?: never;
 }
 
 export interface ApiKeysServiceDeleteApiKeyResponses {
-    "200": ApiKeysServiceDeleteApiKeyStatus200;
-    "500": ApiKeysServiceDeleteApiKeyStatus500;
-    default: ApiKeysServiceDeleteApiKeyStatusDefault;
+  '200': ApiKeysServiceDeleteApiKeyStatus200;
+  '500': ApiKeysServiceDeleteApiKeyStatus500;
+  default: ApiKeysServiceDeleteApiKeyStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type ApiKeysServiceDeleteApiKeyResponse = (ApiKeysServiceDeleteApiKeyStatus200 | ApiKeysServiceDeleteApiKeyStatus500 | ApiKeysServiceDeleteApiKeyStatusDefault);
+ */
+export type ApiKeysServiceDeleteApiKeyResponse = ApiKeysServiceDeleteApiKeyStatus200;

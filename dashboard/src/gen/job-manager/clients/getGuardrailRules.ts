@@ -4,17 +4,17 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetGuardrailRulesOptions, GetGuardrailRulesResponses } from '../types/GetGuardrailRules'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /guardrail_rules`
  * @description Retrieve the list of guardrail rules.
  * :return:
  * :rtype:
  * @summary Get Guardrail Rules
- * {@link /guardrail_rules}
  */
 export function getGuardrailRules<ThrowOnError extends boolean = true>(options: Options<GetGuardrailRulesOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetGuardrailRulesResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/guardrail_rules', ...config }) as Promise<RequestResult<GetGuardrailRulesResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetGuardrailRulesResponses, ThrowOnError>({ method: 'GET', url: '/guardrail_rules', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

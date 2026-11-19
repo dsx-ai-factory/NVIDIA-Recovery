@@ -7,7 +7,7 @@ import type { ValidationError } from './ValidationError'
 /**
  * @example {"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}
  * @type object
-*/
+ */
 export interface HTTPValidationError {
-    detail?: ValidationError[];
+  detail?: ValidationError[];
 }

@@ -5,8 +5,8 @@
 import type { JobReferenceById } from './JobReferenceById'
 import type { JobReferenceByName } from './JobReferenceByName'
 
-export type Target = ((JobReferenceByName & {
-    type: "name";
-}) | (JobReferenceById & {
-    type: "id";
-}));
+export type Target = JobReferenceByName & {
+  type: 'name';
+} | JobReferenceById & {
+  type: 'id';
+};

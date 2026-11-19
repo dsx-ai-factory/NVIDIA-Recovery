@@ -6,10 +6,12 @@ import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { recordRecoveryMilestoneRequestSchema } from './recordRecoveryMilestoneRequestSchema'
 import { recordRecoveryMilestoneResponseSchema } from './recordRecoveryMilestoneResponseSchema'
 
-export const recordRecoveryMilestoneStatus200Schema = recordRecoveryMilestoneResponseSchema.meta({ examples: [{}] })
+export const recordRecoveryMilestoneStatus200Schema = recordRecoveryMilestoneResponseSchema.meta({ examples: [{"duplicate":true,"endToEndDurationSeconds":0.08008281904610115,"sequenceCompleted":true}] })
 
-export const recordRecoveryMilestoneStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const recordRecoveryMilestoneStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
+
+export const recordRecoveryMilestoneResponseSchema2 = recordRecoveryMilestoneStatus200Schema
 
 export const recordRecoveryMilestoneErrorSchema = recordRecoveryMilestoneStatus422Schema
 
-export const recordRecoveryMilestoneBodySchema = recordRecoveryMilestoneRequestSchema.meta({ examples: [{}] })
+export const recordRecoveryMilestoneBodySchema = recordRecoveryMilestoneRequestSchema.meta({ examples: [{"completedAt":"2000-01-23T04:56:07.000+00:00","idempotencyKey":"idempotencyKey","action":"slurm.requeue_hold","sequenceId":"sequenceId","operation":"restart","outcome":"planned","completesSequence":true}] })

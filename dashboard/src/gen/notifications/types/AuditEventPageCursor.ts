@@ -5,16 +5,16 @@
 /**
  * @description Opaque cursors for navigating between audit event pages.
  * @type object
-*/
+ */
 export interface AuditEventPageCursor {
-    /**
-     * @description Cursor for the previous page; empty on the first page.
-     * @type string
-    */
-    prev_cursor: string;
-    /**
-     * @description Cursor for the next page, or an empty string at the end.
-     * @type string
-    */
-    next_cursor: string;
+  /**
+   * @description Cursor for the previous page; empty on the first page.
+   * @type string
+   */
+  prev_cursor: string;
+  /**
+   * @description Cursor for the next page, or an empty string at the end.
+   * @type string
+   */
+  next_cursor: string;
 }

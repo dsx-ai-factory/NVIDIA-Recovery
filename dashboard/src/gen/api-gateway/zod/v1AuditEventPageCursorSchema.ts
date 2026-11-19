@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * AuditEventPageCursor identifies adjacent pages without exposing storage keys.
+ */
 export const v1AuditEventPageCursorSchema = z.object({
   prevCursor: z.string().optional().describe('Previous page cursor; empty when no previous page exists.'),
   nextCursor: z.string().optional().describe('Next page cursor; empty when no next page exists.'),

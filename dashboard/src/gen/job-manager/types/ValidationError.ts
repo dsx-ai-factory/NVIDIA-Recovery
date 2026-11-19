@@ -7,11 +7,11 @@ import type { ValidationErrorLocInner } from './ValidationErrorLocInner'
 /**
  * @example {"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}
  * @type object
-*/
+ */
 export interface ValidationError {
-    loc: ValidationErrorLocInner[];
-    msg: string;
-    type: string;
-    input?: unknown;
-    ctx?: object;
+  loc: ValidationErrorLocInner[];
+  msg: string;
+  type: string;
+  input?: unknown;
+  ctx?: object;
 }

@@ -5,13 +5,13 @@
 /**
  * @description A representation of a job execution error.
  * @type object
-*/
+ */
 export interface JobExecutionError {
-    /**
-     * @default '/partials/JobExecutionError'
-     * @type string | undefined
-    */
-    template_id?: "/partials/JobExecutionError";
-    error_message?: (string | null);
-    error_signature?: (string | null);
+  /**
+   * @default '/partials/JobExecutionError'
+   * @type string | undefined
+   */
+  template_id?: '/partials/JobExecutionError';
+  error_message?: string | (null | null);
+  error_signature?: string | (null | null);
 }

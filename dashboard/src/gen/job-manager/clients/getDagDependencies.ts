@@ -4,19 +4,19 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetDagDependenciesOptions, GetDagDependenciesResponses } from '../types/GetDagDependencies'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /dag_dependencies`
  * @description Query DAG dependency records.
  * GET /dag_dependencies
  * Retrieves a list of DAG dependency records with optional filtering, pagination, and sorting.
  * Each record represents a dependency relationship between a dependent (child) job and a
  * dependency (parent) job in a DAG workflow.
  * @summary Get Dag Dependencies
- * {@link /dag_dependencies}
  */
 export function getDagDependencies<ThrowOnError extends boolean = true>(options: Options<GetDagDependenciesOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetDagDependenciesResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/dag_dependencies', styles: { query: { dependent_job_id: { style: 'form', explode: true }, dependency_job_identifier: { style: 'form', explode: true }, dependency_job_identifier_type: { style: 'form', explode: true }, action_status: { style: 'form', explode: true }, action_time_before: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, sort_by: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetDagDependenciesResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetDagDependenciesResponses, ThrowOnError>({ method: 'GET', url: '/dag_dependencies', ...config, styles: { ...config.styles, query: { dependent_job_id: { style: 'form', explode: true }, dependency_job_identifier: { style: 'form', explode: true }, dependency_job_identifier_type: { style: 'form', explode: true }, action_status: { style: 'form', explode: true }, action_time_before: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, sort_by: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

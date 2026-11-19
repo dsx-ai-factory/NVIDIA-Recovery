@@ -102,9 +102,11 @@ locally; no project-published application images are required:
 make build-local SERVICES="job-manager watcher" IMAGE_TAG=dev
 ```
 
-Omit `SERVICES` to build all eight public services. This loads native-architecture
-images into the local Docker image store. The defaults exclude Attribution and
-Advice Operator. List accepted service names with:
+Omit `SERVICES` to build all ten stack services, including Attribution. This
+loads images into the local Docker image store (native architecture, except
+Attribution, which uses amd64). Attribution is optional but enabled by default;
+set `ATTRIBUTION_ENABLED=false` for a degraded build without it. The defaults
+exclude Advice Operator. List accepted service names with:
 
 ```bash
 scripts/build-images.sh --list
@@ -127,10 +129,13 @@ make build-publish \
   SERVICES="job-manager watcher"
 ```
 
-The default `PLATFORMS=linux/amd64,linux/arm64` publishes a shared image index
-for both architectures. For example, the Job Manager reference is
-`registry.example.com/acme/nvidia-recovery/job-manager:dev`. Override
-`PLATFORMS=linux/arm64` when only that platform is needed.
+`PLATFORMS` defaults to `linux/amd64`. For example, the Job Manager reference
+is `registry.example.com/acme/nvidia-recovery/job-manager:dev`. Set
+`PLATFORMS=linux/amd64,linux/arm64` to publish a shared image index for both
+architectures, or `PLATFORMS=linux/arm64` for arm64 only. Attribution arm64
+qualification is pending, so any platform other than `linux/amd64` requires
+`SERVICES` without `attribution-adapter` and `attribution-service`, or
+`ATTRIBUTION_ENABLED=false` with `SERVICES` omitted.
 
 Docker Desktop's containerd image store can support multi-platform builds.
 If the selected builder cannot, create a container-backed builder:

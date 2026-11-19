@@ -5,22 +5,40 @@
 import type { User } from './User'
 
 /**
- * @description A user has manually stopped a job via cockpit.\n\nExamples:\n    >>> message = ManualJobStopped(\n    ...     job_id=\"456\",\n    ...     job_attempt_index=7,\n    ...     job_name=\"some-job\",\n    ...     triggerer=User(user=\"job-killer-guy\"),\n    ...     user=\"some-person\",\n    ... )\n    >>> expected_message = \'\'\'\\\n    ... Job 456(7) (job name: some-job) has been `STOPPED` manually via Cockpit by job-killer-guy.\n    ... \'\'\'\n    >>> assert_equal(message.render_message(), expected_message)\n\n    >>> expected_title = \"Manually stopped job 456\"\n    >>> assert_equal(message.render_title(), expected_title)
+ * @description A user has manually stopped a job via cockpit.
+ *
+ * Examples:
+ *     >>> message = ManualJobStopped(
+ *     ...     job_id="456",
+ *     ...     job_attempt_index=7,
+ *     ...     job_name="some-job",
+ *     ...     triggerer=User(user="job-killer-guy"),
+ *     ...     user="some-person",
+ *     ... )
+ *     >>> expected_message = '''\
+ *     ... Job 456(7) (job name: some-job) has been `STOPPED` manually via Cockpit by job-killer-guy.
+ *     ... '''
+ *     >>> assert_equal(message.render_message(), expected_message)
+ *
+ *     >>> expected_title = "Manually stopped job 456"
+ *     >>> assert_equal(message.render_title(), expected_title)
  * @type object
-*/
+ */
 export interface ManualJobStopped {
-    /**
-     * @default '/templates/ManualJobStopped'
-     * @type string | undefined
-    */
-    template_id?: "/templates/ManualJobStopped";
-    job_id: string;
-    job_attempt_index: number;
-    job_name: string;
-    /**
-     * @description A representation of a user.\n\nThe default template just shows the user, but it can be overridden to show more interesting representations.
-     * @type object
-    */
-    triggerer: User;
-    user: string;
+  /**
+   * @default '/templates/ManualJobStopped'
+   * @type string | undefined
+   */
+  template_id?: '/templates/ManualJobStopped';
+  job_id: string;
+  job_attempt_index: number;
+  job_name: string;
+  /**
+   * @description A representation of a user.
+   *
+   * The default template just shows the user, but it can be overridden to show more interesting representations.
+   * @type object
+   */
+  triggerer: User;
+  user: string;
 }

@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetJobsOptions, GetJobsResponses } from '../types/GetJobs'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /jobs`
  * @description Query all available jobs.
  * GET /jobs
  * Retrieves a list of job execution records with optional filtering, pagination, and sorting.
@@ -59,10 +60,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * Returns:
  * A JobExecutionStatuses object containing the list of job execution records that match the filter criteria.
  * @summary Get Jobs
- * {@link /jobs}
  */
 export function getJobs<ThrowOnError extends boolean = true>(options: Options<GetJobsOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetJobsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/jobs', styles: { query: { complete_data: { style: 'form', explode: true }, job_id: { style: 'form', explode: true }, job_attempt_index: { style: 'form', explode: true }, heimdall_job_id: { style: 'form', explode: true }, user: { style: 'form', explode: true }, job_name: { style: 'form', explode: true }, workflow_id: { style: 'form', explode: true }, job_name_match: { style: 'form', explode: true }, state: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, completed_jobs: { style: 'form', explode: true }, reconciliation_eligible_jobs: { style: 'form', explode: true }, time_filter_target: { style: 'form', explode: true }, time_filter_from: { style: 'form', explode: true }, time_filter_to: { style: 'form', explode: true }, sort_by: { style: 'form', explode: true }, job_group_id: { style: 'form', explode: true }, include_job_group_attempts: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetJobsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetJobsResponses, ThrowOnError>({ method: 'GET', url: '/jobs', ...config, styles: { ...config.styles, query: { complete_data: { style: 'form', explode: true }, job_id: { style: 'form', explode: true }, job_attempt_index: { style: 'form', explode: true }, heimdall_job_id: { style: 'form', explode: true }, user: { style: 'form', explode: true }, job_name: { style: 'form', explode: true }, workflow_id: { style: 'form', explode: true }, job_name_match: { style: 'form', explode: true }, state: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, completed_jobs: { style: 'form', explode: true }, reconciliation_eligible_jobs: { style: 'form', explode: true }, time_filter_target: { style: 'form', explode: true }, time_filter_from: { style: 'form', explode: true }, time_filter_to: { style: 'form', explode: true }, sort_by: { style: 'form', explode: true }, job_group_id: { style: 'form', explode: true }, include_job_group_attempts: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

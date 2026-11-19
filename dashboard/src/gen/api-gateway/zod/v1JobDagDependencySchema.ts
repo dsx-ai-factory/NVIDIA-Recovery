@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { jobDagDependencyTriggerConditionSchema } from './jobDagDependencyTriggerConditionSchema'
 
+/**
+ * JobDagDependency identifies one parent gate for a DAG child.
+ */
 export const v1JobDagDependencySchema = z.object({
   jobId: z.string().optional().describe('Scheduler job ID of the parent.'),
   jobName: z.string().optional().describe('Workflow-scoped job name of the parent.'),

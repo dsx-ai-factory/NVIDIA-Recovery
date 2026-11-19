@@ -4,12 +4,45 @@
 
 import * as z from 'zod'
 
+/**
+ * Advice to requeue a job attempt has been issued.
+ * Examples:
+ *     >>> message = JobRequeued(
+ *     ...     job_id="456",
+ *     ...     job_attempt_index=7,
+ *     ...     job_name="some-job",
+ *     ...     event_type="SILLY",
+ *     ...     event_body="this is the event body",
+ *     ...     user="some-user",
+ *     ... )
+ *     >>> expected_message = '''\
+ *     ... Advice to requeue job 456(7) (job name: some-job) issued.
+ *     ... Reason: `SILLY`.
+ *     ... Log: `this is the event body`.
+ *     ... '''
+ *     >>> assert_equal(message.render_message(), expected_message)
+ *     >>> expected_title = "Advice to requeue job 456 issued"
+ *     >>> assert_equal(message.render_title(), expected_title)
+ *     The `event_body` is optional:
+ *     >>> message = JobRequeued(
+ *     ...     job_id="456",
+ *     ...     job_attempt_index=7,
+ *     ...     job_name="some-job",
+ *     ...     event_type="SILLY",
+ *     ...     user="some-user",
+ *     ... )
+ *     >>> expected_message = '''\
+ *     ... Advice to requeue job 456(7) (job name: some-job) issued.
+ *     ... Reason: `SILLY`.
+ *     ... '''
+ *     >>> assert_equal(message.render_message(), expected_message)
+ */
 export const jobRequeuedSchema = z.object({
   template_id: z.enum(['/templates/JobRequeued']).optional().default('/templates/JobRequeued'),
   job_id: z.string(),
   job_attempt_index: z.int(),
   job_name: z.string(),
   event_type: z.string(),
-  event_body: z.union([z.string(), z.null()]).optional(),
+  event_body: z.union([z.string(), z.null().nullable()]).optional(),
   user: z.string(),
 }).describe('Advice to requeue a job attempt has been issued.\n\nExamples:\n    >>> message = JobRequeued(\n    ...     job_id="456",\n    ...     job_attempt_index=7,\n    ...     job_name="some-job",\n    ...     event_type="SILLY",\n    ...     event_body="this is the event body",\n    ...     user="some-user",\n    ... )\n    >>> expected_message = \'\'\'\\\n    ... Advice to requeue job 456(7) (job name: some-job) issued.\n    ... Reason: `SILLY`.\n    ... Log: `this is the event body`.\n    ... \'\'\'\n    >>> assert_equal(message.render_message(), expected_message)\n\n    >>> expected_title = "Advice to requeue job 456 issued"\n    >>> assert_equal(message.render_title(), expected_title)\n\n    The `event_body` is optional:\n\n    >>> message = JobRequeued(\n    ...     job_id="456",\n    ...     job_attempt_index=7,\n    ...     job_name="some-job",\n    ...     event_type="SILLY",\n    ...     user="some-user",\n    ... )\n    >>> expected_message = \'\'\'\\\n    ... Advice to requeue job 456(7) (job name: some-job) issued.\n    ... Reason: `SILLY`.\n    ... \'\'\'\n    >>> assert_equal(message.render_message(), expected_message)')

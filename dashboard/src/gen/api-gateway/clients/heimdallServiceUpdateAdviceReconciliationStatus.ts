@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { HeimdallServiceUpdateAdviceReconciliationStatusOptions, HeimdallServiceUpdateAdviceReconciliationStatusResponses } from '../types/HeimdallServiceUpdateAdviceReconciliationStatus'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `PUT /v1/advice/{heimdallJobId}/reconciliation-status`
  * @description Record an idempotent, generation-scoped reconciliation observation.
  * @summary Update Advice reconciliation status
- * {@link /v1/advice/:heimdallJobId/reconciliation-status}
  */
 export function heimdallServiceUpdateAdviceReconciliationStatus<ThrowOnError extends boolean = true>(options: Options<HeimdallServiceUpdateAdviceReconciliationStatusOptions, ThrowOnError>): Unwrappable<RequestResult<HeimdallServiceUpdateAdviceReconciliationStatusResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'PUT', url: '/v1/advice/{heimdallJobId}/reconciliation-status', ...config }) as Promise<RequestResult<HeimdallServiceUpdateAdviceReconciliationStatusResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<HeimdallServiceUpdateAdviceReconciliationStatusResponses, ThrowOnError>({ method: 'PUT', url: '/v1/advice/{heimdallJobId}/reconciliation-status', contentType: { request: 'application/json' }, ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

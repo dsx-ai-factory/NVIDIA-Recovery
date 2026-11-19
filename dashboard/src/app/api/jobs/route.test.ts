@@ -202,65 +202,65 @@ describe("GET /api/jobs", () => {
     ]);
   });
 
-  it.each([
-    "root_cause",
-    "job_group_pattern",
-  ])("preserves the other analysis type when %s lookup fails", async (failedType) => {
-    getAgentApiUrlMock.mockReturnValue("http://agent-api:8111");
-    getJobsMock.mockResolvedValue({
-      data: {
-        statuses: [
-          { job_id: "standalone", job_attempt_index: 1 },
-          { job_id: "42_1", job_attempt_index: 0, job_group_id: "42" },
-        ],
-        item_count: 2,
-      },
-    });
-    agentLookupMock.mockImplementation(
-      async (_url: string, init: RequestInit) => {
-        const body = JSON.parse(init.body as string) as {
-          analysis_type: "root_cause" | "job_group_pattern";
-          attempts: Array<{
-            job_id: string;
-            job_attempt_index: number;
-            job_group_id?: string;
-          }>;
-        };
-        if (body.analysis_type === failedType) {
-          return Response.json({ error: "unavailable" }, { status: 503 });
-        }
-        return Response.json({
-          results: body.attempts.map((attempt) => ({
-            ...attempt,
-            analysis: {
-              session_id: `${body.analysis_type}-session`,
-              analysis_type: body.analysis_type,
-              status: "completed",
-            },
-          })),
-        });
-      },
-    );
+  it.each(["root_cause", "job_group_pattern"])(
+    "preserves the other analysis type when %s lookup fails",
+    async (failedType) => {
+      getAgentApiUrlMock.mockReturnValue("http://agent-api:8111");
+      getJobsMock.mockResolvedValue({
+        data: {
+          statuses: [
+            { job_id: "standalone", job_attempt_index: 1 },
+            { job_id: "42_1", job_attempt_index: 0, job_group_id: "42" },
+          ],
+          item_count: 2,
+        },
+      });
+      agentLookupMock.mockImplementation(
+        async (_url: string, init: RequestInit) => {
+          const body = JSON.parse(init.body as string) as {
+            analysis_type: "root_cause" | "job_group_pattern";
+            attempts: Array<{
+              job_id: string;
+              job_attempt_index: number;
+              job_group_id?: string;
+            }>;
+          };
+          if (body.analysis_type === failedType) {
+            return Response.json({ error: "unavailable" }, { status: 503 });
+          }
+          return Response.json({
+            results: body.attempts.map((attempt) => ({
+              ...attempt,
+              analysis: {
+                session_id: `${body.analysis_type}-session`,
+                analysis_type: body.analysis_type,
+                status: "completed",
+              },
+            })),
+          });
+        },
+      );
 
-    const response = await GET(
-      new NextRequest("http://dashboard.test/api/jobs"),
-    );
+      const response = await GET(
+        new NextRequest("http://dashboard.test/api/jobs"),
+      );
 
-    expect(agentLookupMock).toHaveBeenCalledTimes(2);
-    const payload = await response.json();
-    expect(payload.statuses[0].agent_analysis).toEqual(
-      failedType === "root_cause"
-        ? null
-        : expect.objectContaining({ session_id: "root_cause-session" }),
-    );
-    expect(payload.statuses[1].agent_analysis).toEqual(
-      failedType === "job_group_pattern"
-        ? null
-        : expect.objectContaining({
-            session_id: "job_group_pattern-session",
-          }),
-    );
-  });
+      expect(agentLookupMock).toHaveBeenCalledTimes(2);
+      const payload = await response.json();
+      expect(payload.statuses[0].agent_analysis).toEqual(
+        failedType === "root_cause"
+          ? null
+          : expect.objectContaining({ session_id: "root_cause-session" }),
+      );
+      expect(payload.statuses[1].agent_analysis).toEqual(
+        failedType === "job_group_pattern"
+          ? null
+          : expect.objectContaining({
+              session_id: "job_group_pattern-session",
+            }),
+      );
+    },
+  );
 
   it("rejects a group lookup response for another group", async () => {
     getAgentApiUrlMock.mockReturnValue("http://agent-api:8111");

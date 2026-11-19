@@ -1,4 +1,4 @@
-# ADR 0057: Support header identity on loopback API listeners
+# ADR 0059: Support header identity on loopback API listeners
 
 Status: accepted
 

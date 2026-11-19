@@ -4,9 +4,19 @@
 
 import * as z from 'zod'
 
+/**
+ * Represents an error that occurred during job execution.
+ * This model captures details about errors including their type, code, signature,
+ * and descriptive information to help with debugging and error tracking.
+ * Attributes:
+ *     code: The error code if available, zero otherwise
+ *     message: Short error message
+ *     description: Detailed description of the error
+ *     signature: A unique signature identifying this specific error
+ */
 export const jobExecutionErrorSchema = z.object({
   code: z.int(),
   message: z.string(),
   description: z.string(),
   signature: z.string(),
-}).describe('Represents an error that occurred during job execution.\n\nThis model captures details about errors including their type, code, signature,\nand descriptive information to help with debugging and error tracking.\n\nAttributes:\n    code: The error code if available, zero otherwise\n    message: Short error message\n    description: Detailed description of the error\n    signature: A unique signature identifying this specific error').meta({ examples: [{}] })
+}).describe('Represents an error that occurred during job execution.\n\nThis model captures details about errors including their type, code, signature,\nand descriptive information to help with debugging and error tracking.\n\nAttributes:\n    code: The error code if available, zero otherwise\n    message: Short error message\n    description: Detailed description of the error\n    signature: A unique signature identifying this specific error').meta({ examples: [{"code":1,"signature":"signature","description":"description","message":"message"}] })

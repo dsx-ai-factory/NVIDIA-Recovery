@@ -6,6 +6,9 @@ import * as z from 'zod'
 import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1GetWorkflowResponseSchema } from './v1GetWorkflowResponseSchema'
 
+/**
+ * The opaque identifier of the workflow to get.
+ */
 export const heimdallServiceGetWorkflow2PathWorkflowIdSchema = z.string().min(1).refine((value) => { const characters = Array.from(value); return characters.length <= 256 && characters.every((character) => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff); }, { message: "Must contain at most 256 Unicode scalar values" }).describe('The opaque identifier of the workflow to get.')
 
 export const heimdallServiceGetWorkflow2Status200Schema = v1GetWorkflowResponseSchema.describe('GetWorkflowResponse is the response for the GetWorkflow method.')
@@ -15,3 +18,7 @@ export const heimdallServiceGetWorkflow2StatusDefaultSchema = rpcStatusSchema
 export const heimdallServiceGetWorkflow2ResponseSchema = heimdallServiceGetWorkflow2Status200Schema
 
 export const heimdallServiceGetWorkflow2ErrorSchema = heimdallServiceGetWorkflow2StatusDefaultSchema
+
+export const heimdallServiceGetWorkflow2PathSchema = z.object({
+  workflowId: heimdallServiceGetWorkflow2PathWorkflowIdSchema,
+})

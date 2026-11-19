@@ -6,11 +6,20 @@ import * as z from 'zod'
 import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1GetJobsBySchedulerIdResponseSchema } from './v1GetJobsBySchedulerIdResponseSchema'
 
+/**
+ * The scheduler job ID to search for.
+ */
 export const heimdallServiceGetJobsBySchedulerIdPathSchedulerJobIdSchema = z.string().describe('The scheduler job ID to search for.')
 
+/**
+ * A decimal zero-based offset from the previous response's next_page_token field.
+ */
 export const heimdallServiceGetJobsBySchedulerIdQueryPageSchema = z.string().optional().describe('A decimal zero-based offset from the previous response\'s next_page_token field.')
 
-export const heimdallServiceGetJobsBySchedulerIdQueryLimitSchema = z.int().optional().describe('The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.')
+/**
+ * The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.
+ */
+export const heimdallServiceGetJobsBySchedulerIdQueryLimitSchema = z.int32().optional().describe('The maximum number of jobs to return. Defaults to 100 and cannot exceed 250.')
 
 export const heimdallServiceGetJobsBySchedulerIdStatus200Schema = v1GetJobsBySchedulerIdResponseSchema.describe('GetJobsBySchedulerIdResponse is the response for getting jobs by scheduler ID.')
 
@@ -19,3 +28,12 @@ export const heimdallServiceGetJobsBySchedulerIdStatusDefaultSchema = rpcStatusS
 export const heimdallServiceGetJobsBySchedulerIdResponseSchema = heimdallServiceGetJobsBySchedulerIdStatus200Schema
 
 export const heimdallServiceGetJobsBySchedulerIdErrorSchema = heimdallServiceGetJobsBySchedulerIdStatusDefaultSchema
+
+export const heimdallServiceGetJobsBySchedulerIdPathSchema = z.object({
+  schedulerJobId: heimdallServiceGetJobsBySchedulerIdPathSchedulerJobIdSchema,
+})
+
+export const heimdallServiceGetJobsBySchedulerIdQuerySchema = z.object({
+  page: heimdallServiceGetJobsBySchedulerIdQueryPageSchema,
+  limit: heimdallServiceGetJobsBySchedulerIdQueryLimitSchema,
+})

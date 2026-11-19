@@ -14,13 +14,19 @@ from unittest.mock import MagicMock, call, patch
 import pika
 import uvicorn
 from job_manager.advice_mapping import storage_to_http_advice
-from job_manager.audit.events import AdviceCreatedEvent, AdviceUpdatedEvent, JobAttemptUpdatedEvent
+from job_manager.audit.events import (
+    AdviceCreatedEvent,
+    AdviceUpdatedEvent,
+    ApplicationTerminationRequestedEvent,
+    JobAttemptUpdatedEvent,
+)
 from job_manager.constants import ANOMALY_ISOLATOR, DEFAULT_SYSTEM_MAX_REQUEUE_TIMES, WATCHER
 from job_manager.main import app, start_http_server
 from job_manager.metrics import LEADER_STATUS_GAUGE
 from job_manager.periodic_tasks import reconcile_timed_out_dag_actions
 from job_manager.service import (
     MESSAGE_MAX_DELIVERY_TIMES,
+    ApplicationIntentionReconciliation,
     JobManager,
     StorageMode,
     resolve_effective_final_state,
@@ -38,9 +44,12 @@ from recovery_libs.schema.aps_spec.spec import (
 from recovery_libs.schema.event_type import EventType
 from recovery_libs.schema.job_manager.models import (
     AdviceState,
+    ApplicationIntentionDesiredState,
+    ApplicationIntentionInput,
     Issue,
     JobAnomaly,
     JobAnomalyHandledBy,
+    JobTerminalAdvice,
     SortOrderEnum,
 )
 from recovery_libs.schema.watcher.model import Attributes
@@ -48,6 +57,7 @@ from recovery_libs.schema.watcher.model import Event as EventWatcher
 from recovery_libs.storage.attribution_storage import AttributionStorage
 from recovery_libs.storage.base import RecoveryStorageException, UpdateJobResult
 from recovery_libs.storage.dataclass import (
+    ApplicationIntentionRecord,
     DagDependency,
     DagDependencyActionStatus,
     SlurmJobNonFinalStates,
@@ -96,6 +106,7 @@ class TestJobManager(unittest.TestCase):
         self._config = create_basic_service_config()
         self._job_manager = JobManager(config=self._config, shutdown_event=Event())
         self._job_manager.storage = MagicMock(spec=MySQLStorage)
+        self._job_manager.storage.claim_application_intention_audit_attempt.return_value = (None, False)
         self._job_manager.attribution_storage = MagicMock(spec=AttributionStorage)
         self._job_manager.notifications_client = MagicMock(spec=NotificationsApi)
 
@@ -130,6 +141,271 @@ class TestJobManager(unittest.TestCase):
             publisher.call_args.kwargs["publisher_config"].exchange_name,
             "attribution_request_exchange",
         )
+
+    def test_attribution_consumer_uses_existing_delayed_retry_route(self):
+        """Attribution retries use the same bounded delayed route as anomaly delivery."""
+        event_bus = self._config["service"]["event_bus"]
+        event_bus["anomaly_queue_delivery_retry_delay_secs"] = 17
+
+        with patch("job_manager.service.RabbitMQConsumer") as consumer:
+            self._job_manager.initialize_event_bus_consumers()
+
+        attribution_config = next(
+            entry.kwargs["consumer_config"]
+            for entry in consumer.call_args_list
+            if entry.kwargs["consumer_config"].queue_name == event_bus["anomaly_attribution_queue"]
+        )
+        self.assertEqual(attribution_config.delay_secs, 17)
+        self.assertEqual(attribution_config.dead_letter_routing_key, event_bus["anomaly_dead_letter_routing_key"])
+        self.assertEqual(
+            attribution_config.dead_letter_redelivery_routing_key,
+            event_bus["anomaly_dead_letter_redelivery_routing_key"],
+        )
+
+    def _configure_pending_application_cancellation(self, job_id: str, attempt_index: int) -> None:
+        """Make the storage mock expose a durable request accepted before observation."""
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id=job_id,
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="application finished",
+            audit_attempt_index=attempt_index,
+            created_at=datetime.now(UTC),
+        )
+        self._job_manager.storage.read_advice_by_job.return_value = None
+
+    def test_create_application_intention_accepts_request_before_job_registration(self):
+        created_at = datetime.now(UTC)
+        stored = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="training converged",
+            created_at=created_at,
+        )
+        stored.id = 7
+        self._job_manager.storage.create_or_get_application_intention.return_value = (stored, True)
+        self._job_manager.storage.read_job_record.return_value = None
+        self._job_manager.audit_buffer = MagicMock()
+
+        result = self._job_manager.create_application_intention(
+            ApplicationIntentionInput(
+                job_id="job-42",
+                desired_state=ApplicationIntentionDesiredState.CANCELLED,
+                reason="training converged",
+            )
+        )
+
+        self.assertEqual(result.id, 7)
+        self.assertEqual(result.job_id, "job-42")
+        self.assertEqual(result.reason, "training converged")
+        self._job_manager.storage.read_job_record.assert_not_called()
+        self._job_manager.audit_buffer.add.assert_not_called()
+
+    def test_claimed_application_intention_audit_uses_latest_attempt(self):
+        created_at = datetime.now(UTC)
+        stored = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="training converged",
+            audit_attempt_index=3,
+            created_at=created_at,
+        )
+        stored.id = 7
+        self._job_manager.storage.claim_application_intention_audit_attempt.return_value = (stored, True)
+        self._job_manager.audit_buffer = MagicMock()
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+
+        self._job_manager.audit_application_intention_for_attempt(record)
+
+        self._job_manager.storage.claim_application_intention_audit_attempt.assert_called_once_with("job-42", 3)
+        self._job_manager.audit_buffer.add.assert_called_once()
+        audit_event = self._job_manager.audit_buffer.add.call_args.args[0]
+        self.assertIsInstance(audit_event, ApplicationTerminationRequestedEvent)
+        self.assertEqual(audit_event.payload.application_intention_id, 7)
+        self.assertEqual(audit_event.payload.job_id, "job-42")
+        self.assertEqual(audit_event.payload.attempt_index, 3)
+        self.assertEqual(audit_event.payload.desired_state, "CANCELLED")
+        self.assertEqual(audit_event.payload.reason, "training converged")
+        self.assertEqual(audit_event.payload.requested_at, created_at)
+
+    def test_already_claimed_application_intention_does_not_repeat_request_audit(self):
+        stored = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="training converged",
+            audit_attempt_index=2,
+            created_at=datetime.now(UTC),
+        )
+        stored.id = 7
+        self._job_manager.storage.claim_application_intention_audit_attempt.return_value = (stored, False)
+        self._job_manager.audit_buffer = MagicMock()
+
+        self._job_manager.audit_application_intention_for_attempt(
+            create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+        )
+
+        self._job_manager.audit_buffer.add.assert_not_called()
+
+    def test_request_audit_failure_does_not_reject_durable_application_intention(self):
+        stored = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason=None,
+            audit_attempt_index=3,
+            created_at=datetime.now(UTC),
+        )
+        stored.id = 7
+        self._job_manager.storage.claim_application_intention_audit_attempt.return_value = (stored, True)
+        self._job_manager.audit_buffer = MagicMock()
+        self._job_manager.audit_buffer.add.side_effect = RuntimeError("audit buffer unavailable")
+
+        with patch("job_manager.audit.application_intentions.logger.exception") as log_exception:
+            self._job_manager.audit_application_intention_for_attempt(
+                create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+            )
+
+        log_exception.assert_called_once()
+
+    def test_reconcile_latest_application_intention_runs_outside_acceptance_path(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+        self._job_manager.storage.read_job_record.return_value = record
+
+        with (
+            patch.object(self._job_manager, "audit_application_intention_for_attempt") as audit_request,
+            patch.object(self._job_manager, "reconcile_application_intention") as reconcile,
+        ):
+            self._job_manager.reconcile_latest_application_intention("job-42")
+
+        self._job_manager.storage.read_job_record.assert_called_once_with(job_id="job-42")
+        audit_request.assert_called_once_with(record)
+        reconcile.assert_called_once_with(record)
+
+    def test_reconcile_latest_application_intention_tolerates_background_failure(self):
+        self._job_manager.storage.read_job_record.side_effect = RecoveryStorageException("database unavailable")
+
+        with patch("job_manager.service.logger.exception") as log_exception:
+            self._job_manager.reconcile_latest_application_intention("job-42")
+
+        log_exception.assert_called_once()
+
+    def test_reconcile_application_intention_terminates_observed_attempt(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="training converged",
+            created_at=datetime.now(UTC),
+        )
+        self._job_manager.storage.read_advice_by_job.return_value = None
+
+        with patch("job_manager.service.create_terminal_advice_for_job") as persist_terminal:
+            persist_terminal.return_value = JobTerminalAdvice.APPLICATION_REQUESTED_CANCELLATION
+            result = self._job_manager.reconcile_application_intention(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.TERMINATED)
+        persist_terminal.assert_called_once()
+        call_kwargs = persist_terminal.call_args.kwargs
+        self.assertEqual(call_kwargs["job_id"], "job-42")
+        self.assertEqual(call_kwargs["job_attempt_index"], 3)
+        self.assertEqual(call_kwargs["terminal_advice"].value, "application_requested_cancellation")
+        self.assertEqual(call_kwargs["audit_reason"], "training converged")
+
+    def test_reconcile_application_intention_is_noop_without_request(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="RUNNING")
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.return_value = None
+
+        with patch("job_manager.service.create_terminal_advice_for_job") as persist_terminal:
+            result = self._job_manager.reconcile_application_intention(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.NOT_REQUESTED)
+        persist_terminal.assert_not_called()
+
+    def test_reconcile_application_intention_respects_advice_management_disabled(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="RUNNING")
+        self._config["service"]["advice_management_enabled"] = False
+
+        result = self._job_manager.reconcile_application_intention(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.NOT_REQUESTED)
+        self._job_manager.storage.read_application_intention.assert_not_called()
+
+    def test_reconcile_application_intention_does_not_rewrite_terminated_advice(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            created_at=datetime.now(UTC),
+        )
+        self._job_manager.storage.read_advice_by_job.return_value = create_example_advice_record(
+            job_id="job-42",
+            attempt_index=3,
+            advice_state=AdviceState.TERMINATED.value,
+        )
+
+        with patch("job_manager.service.create_terminal_advice_for_job") as persist_terminal:
+            result = self._job_manager.reconcile_application_intention(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.TERMINATED)
+        persist_terminal.assert_not_called()
+
+    def test_reconcile_application_intention_reports_failed_advice_write_for_retry(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=3, state="RUNNING")
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            created_at=datetime.now(UTC),
+        )
+        self._job_manager.storage.read_advice_by_job.return_value = None
+
+        with patch("job_manager.service.create_terminal_advice_for_job", return_value=None):
+            result = self._job_manager.reconcile_application_intention(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.RETRY_REQUIRED)
+        self.assertTrue(result.blocks_recovery)
+
+    def test_reconcile_application_intention_tolerates_missing_table(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="RUNNING")
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+            "application_intentions does not exist"
+        )
+
+        result = self._job_manager.reconcile_application_intention(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.NOT_REQUESTED)
+
+    def test_reconcile_application_intention_blocks_late_recovery_when_lookup_fails(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="FAILED")
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+            "temporary application intention lookup failure"
+        )
+
+        result = self._job_manager.reconcile_application_intention(
+            record,
+            fail_closed_on_lookup_error=True,
+        )
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.RETRY_REQUIRED)
+        self.assertTrue(result.blocks_recovery)
+
+    def test_reconcile_application_intention_ignores_unsupported_stored_state(self):
+        record = create_example_slurm_job_record(job_id="job-42", attempt_index=0, state="FAILED")
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id="job-42",
+            desired_state="UNSUPPORTED",
+            created_at=datetime.now(UTC),
+        )
+
+        result = self._job_manager.reconcile_application_intention(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.NOT_REQUESTED)
+        self.assertFalse(result.blocks_recovery)
 
     def test_legacy_relay_flag_preserves_direct_attribution_only(self):
         """Old overrides cannot restore the retired watcher-message route."""
@@ -735,6 +1011,7 @@ class TestJobManager(unittest.TestCase):
             uuid=str(uuid.uuid4()),
         )
         job_record.anomalies = [job_anomaly]
+        self._job_manager.storage.read_application_intention.return_value = None
 
         with (
             patch("job_manager.service.maybe_persist_requeue_terminal_advice") as terminal_advice_mock,
@@ -744,6 +1021,44 @@ class TestJobManager(unittest.TestCase):
                 job_anomaly,
             )
             terminal_advice_mock.assert_called_once()
+
+    def test_attribution_emission_reconciles_application_cancellation_first(self):
+        """A pending application cancellation prevents a restart sequence from starting."""
+        record = create_example_slurm_job_record(state="FAILED")
+        self._configure_pending_application_cancellation(record.job_id, record.job_attempt_index)
+        persisted_advice = create_example_advice_record(
+            job_id=record.job_id,
+            attempt_index=record.job_attempt_index,
+            advice_state=AdviceState.TERMINATED.value,
+        )
+
+        with (
+            patch("job_manager.service.create_terminal_advice_for_job", return_value=persisted_advice),
+            patch("job_manager.service.emit_attribution_request_if_needed") as emit_attribution,
+        ):
+            result = self._job_manager._maybe_emit_attribution_request(record)
+
+        self.assertEqual(result, ApplicationIntentionReconciliation.TERMINATED)
+        emit_attribution.assert_not_called()
+
+    def test_persist_anomaly_retries_when_application_intention_lookup_fails(self):
+        """Watcher redelivery remains available until the cancellation guard can be evaluated."""
+        record = create_example_slurm_job_record(state="FAILED")
+        anomaly = JobAnomaly(anomaly_type=EventType.CRASH, timestamp=datetime.now(UTC), uuid=str(uuid.uuid4()))
+        record.anomalies = [anomaly]
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+            "temporary application intention lookup failure"
+        )
+
+        with (
+            patch("job_manager.service.maybe_persist_requeue_terminal_advice") as terminal_advice,
+            self.assertRaisesRegex(RecoveryStorageException, "reconciliation requires retry"),
+        ):
+            self._job_manager.persist_job_anomaly(record, anomaly)
+
+        terminal_advice.assert_not_called()
+        self._job_manager.adi_attribution_request_publisher.publish_message.assert_not_called()
 
     def test_failed_anomaly_persistence_skips_advice_and_attribution(self):
         """No downstream recovery work starts before anomaly storage succeeds."""
@@ -1231,6 +1546,157 @@ class TestJobManager(unittest.TestCase):
                 ],
                 any_order=True,
             )
+
+    def test_application_intention_wins_over_late_restart_attribution(self):
+        attribution_result = create_example_anoamly_attribution_result()
+        attempt = create_example_slurm_job_record(
+            job_id=attribution_result.job_id,
+            attempt_index=attribution_result.job_attempt_index,
+            state="FAILED",
+        )
+        intention = ApplicationIntentionRecord(
+            job_id=attribution_result.job_id,
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            reason="application cannot continue",
+            created_at=datetime.now(UTC),
+        )
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_job_record.return_value = attempt
+        self._job_manager.storage.read_application_intention.return_value = intention
+        self._job_manager.storage.read_advice_by_job.return_value = None
+
+        with (
+            patch("job_manager.service.create_terminal_advice_for_job") as persist_terminal,
+            patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as persist_restart,
+        ):
+            persist_terminal.return_value = JobTerminalAdvice.APPLICATION_REQUESTED_CANCELLATION
+            callback = self._job_manager.get_anomaly_isolator_message_callback()
+            callback(
+                MagicMock(),
+                MagicMock(),
+                pika.spec.BasicProperties(),
+                attribution_result.to_json().encode(),
+            )
+
+        self._job_manager.storage.read_job_record.assert_called_with(
+            job_id=attribution_result.job_id,
+            job_attempt_index=attribution_result.job_attempt_index,
+        )
+        persist_terminal.assert_called_once()
+        persist_restart.assert_not_called()
+
+    def test_failed_application_termination_write_still_blocks_late_restart_attribution(self):
+        attribution_result = create_example_anoamly_attribution_result()
+        attempt = create_example_slurm_job_record(
+            job_id=attribution_result.job_id,
+            attempt_index=attribution_result.job_attempt_index,
+            state="FAILED",
+        )
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_job_record.return_value = attempt
+        self._job_manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+            job_id=attribution_result.job_id,
+            desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+            created_at=datetime.now(UTC),
+        )
+        self._job_manager.storage.read_advice_by_job.return_value = None
+        method = MagicMock(exchange="aie_eventbus_exchange")
+        properties = pika.spec.BasicProperties()
+
+        with (
+            patch("job_manager.service.create_terminal_advice_for_job", return_value=None),
+            patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as restart,
+            patch("job_manager.service.rabbitmq.publish_message") as redeliver,
+        ):
+            callback = self._job_manager.get_anomaly_isolator_message_callback()
+            callback(
+                MagicMock(),
+                method,
+                properties,
+                attribution_result.to_json().encode(),
+            )
+
+        restart.assert_not_called()
+        self._job_manager.attribution_storage.store_attribution.assert_not_called()
+        redeliver.assert_called_once()
+        self.assertEqual(redeliver.call_args.kwargs["routing_key"], "test_dead_letter")
+        self.assertEqual(redeliver.call_args.kwargs["properties"].headers["message_delivery_times"], 1)
+
+    def test_transient_application_intention_lookup_redelivers_then_persists_restart(self):
+        attribution_result = create_example_anoamly_attribution_result()
+        attempt = create_example_slurm_job_record(
+            job_id=attribution_result.job_id,
+            attempt_index=attribution_result.job_attempt_index,
+            state="FAILED",
+        )
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_job_record.return_value = attempt
+        self._job_manager.storage.read_application_intention.side_effect = [
+            RecoveryStorageException("temporary application intention lookup failure"),
+            None,
+        ]
+        method = MagicMock(exchange="aie_eventbus_exchange")
+        properties = pika.spec.BasicProperties()
+
+        with (
+            patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as restart,
+            patch("job_manager.service.rabbitmq.publish_message") as redeliver,
+        ):
+            callback = self._job_manager.get_anomaly_isolator_message_callback()
+            callback(
+                MagicMock(),
+                method,
+                properties,
+                attribution_result.to_json().encode(),
+            )
+            retry_properties = redeliver.call_args.kwargs["properties"]
+            callback(
+                MagicMock(),
+                method,
+                retry_properties,
+                attribution_result.to_json().encode(),
+            )
+
+        redeliver.assert_called_once()
+        self.assertEqual(redeliver.call_args.kwargs["exchange_name"], "aie_eventbus_exchange")
+        self.assertEqual(redeliver.call_args.kwargs["routing_key"], "test_dead_letter")
+        self.assertEqual(retry_properties.headers["message_delivery_times"], 1)
+        self._job_manager.attribution_storage.store_attribution.assert_called_once()
+        restart.assert_called_once()
+
+    def test_application_intention_retry_remains_pending_beyond_watcher_limit(self):
+        """An exact attribution result is retained until reconciliation can complete."""
+        attribution_result = create_example_anoamly_attribution_result()
+        attempt = create_example_slurm_job_record(
+            job_id=attribution_result.job_id,
+            attempt_index=attribution_result.job_attempt_index,
+            state="FAILED",
+        )
+        self._config["service"]["advice_management_enabled"] = True
+        self._job_manager.storage.read_job_record.return_value = attempt
+        self._job_manager.storage.read_application_intention.side_effect = RecoveryStorageException(
+            "persistent application intention lookup failure"
+        )
+
+        with (
+            patch("job_manager.service.rabbitmq.publish_message") as redeliver,
+            patch("job_manager.service.maybe_persist_job_released_terminal_advice_from_attribution") as restart,
+        ):
+            callback = self._job_manager.get_anomaly_isolator_message_callback()
+            callback(
+                MagicMock(),
+                MagicMock(exchange="aie_eventbus_exchange"),
+                pika.spec.BasicProperties(headers={"message_delivery_times": MESSAGE_MAX_DELIVERY_TIMES}),
+                attribution_result.to_json().encode(),
+            )
+
+        redeliver.assert_called_once()
+        self.assertEqual(
+            redeliver.call_args.kwargs["properties"].headers["message_delivery_times"],
+            MESSAGE_MAX_DELIVERY_TIMES + 1,
+        )
+        self._job_manager.attribution_storage.store_attribution.assert_not_called()
+        restart.assert_not_called()
 
     def test_find_stale_jobs_not_executed(self):
         self._job_manager.is_leader = False

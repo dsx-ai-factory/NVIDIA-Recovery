@@ -7,27 +7,60 @@ import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { auditEventLevelSchema } from './auditEventLevelSchema'
 import { auditEventPageSchema } from './auditEventPageSchema'
 
-export const auditEventsGetQueryEventLevelSchema = z.union([auditEventLevelSchema, z.null()]).optional().describe('Audit event level to match exactly.')
+/**
+ * Audit event level to match exactly.
+ */
+export const auditEventsGetQueryEventLevelSchema = z.union([auditEventLevelSchema, z.null().nullable()]).optional().describe('Audit event level to match exactly.')
 
-export const auditEventsGetQueryEventProducerSchema = z.union([z.string(), z.null()]).optional().describe('Producer service to match.')
+/**
+ * Producer service to match.
+ */
+export const auditEventsGetQueryEventProducerSchema = z.union([z.string(), z.null().nullable()]).optional().describe('Producer service to match.')
 
-export const auditEventsGetQueryEventTypeSchema = z.union([z.string(), z.null()]).optional().describe('Event type to match exactly.')
+/**
+ * Event type to match exactly.
+ */
+export const auditEventsGetQueryEventTypeSchema = z.union([z.string(), z.null().nullable()]).optional().describe('Event type to match exactly.')
 
-export const auditEventsGetQueryMinEventProducedAtSchema = z.union([z.int(), z.null()]).optional().describe('Minimum Unix-microsecond event timestamp, inclusive.')
+/**
+ * Minimum Unix-microsecond event timestamp, inclusive.
+ */
+export const auditEventsGetQueryMinEventProducedAtSchema = z.union([z.int(), z.null().nullable()]).optional().describe('Minimum Unix-microsecond event timestamp, inclusive.')
 
-export const auditEventsGetQueryMaxEventProducedAtSchema = z.union([z.int(), z.null()]).optional().describe('Maximum Unix-microsecond event timestamp, inclusive.')
+/**
+ * Maximum Unix-microsecond event timestamp, inclusive.
+ */
+export const auditEventsGetQueryMaxEventProducedAtSchema = z.union([z.int(), z.null().nullable()]).optional().describe('Maximum Unix-microsecond event timestamp, inclusive.')
 
+/**
+ * Maximum number of events to return.
+ */
 export const auditEventsGetQueryLimitSchema = z.int().min(1).max(100).optional().default(100).describe('Maximum number of events to return.')
 
+/**
+ * Producer time order: asc or desc.
+ */
 export const auditEventsGetQuerySortBySchema = z.string().optional().default('event_produced_at:desc').describe('Producer time order: asc or desc.')
 
-export const auditEventsGetQueryCursorSchema = z.union([z.string(), z.null()]).optional().describe('Opaque cursor returned for an adjacent page.')
+/**
+ * Opaque cursor returned for an adjacent page.
+ */
+export const auditEventsGetQueryCursorSchema = z.union([z.string(), z.null().nullable()]).optional().describe('Opaque cursor returned for an adjacent page.')
 
-export const auditEventsGetQueryHeimdallJobIdSchema = z.union([z.string(), z.null()]).optional().describe('NVIDIA Recovery job ID; exclusive with job_id.')
+/**
+ * NVIDIA Recovery job ID; exclusive with job_id.
+ */
+export const auditEventsGetQueryHeimdallJobIdSchema = z.union([z.string(), z.null().nullable()]).optional().describe('NVIDIA Recovery job ID; exclusive with job_id.')
 
-export const auditEventsGetQueryJobIdSchema = z.union([z.string().min(1).regex(/\S/), z.null()]).optional().describe('Scheduler job ID; omit attempt_index for all attempts.')
+/**
+ * Scheduler job ID; omit attempt_index for all attempts.
+ */
+export const auditEventsGetQueryJobIdSchema = z.union([z.string().min(1).regex(/\S/), z.null().nullable()]).optional().describe('Scheduler job ID; omit attempt_index for all attempts.')
 
-export const auditEventsGetQueryAttemptIndexSchema = z.union([z.int().min(0), z.null()]).optional().describe('Scheduler job attempt; requires job_id.')
+/**
+ * Scheduler job attempt; requires job_id.
+ */
+export const auditEventsGetQueryAttemptIndexSchema = z.union([z.int().min(0), z.null().nullable()]).optional().describe('Scheduler job attempt; requires job_id.')
 
 export const auditEventsGetStatus200Schema = auditEventPageSchema.describe('One page of audit events.')
 
@@ -36,3 +69,17 @@ export const auditEventsGetStatus422Schema = HTTPValidationErrorSchema
 export const auditEventsGetResponseSchema = auditEventsGetStatus200Schema
 
 export const auditEventsGetErrorSchema = auditEventsGetStatus422Schema
+
+export const auditEventsGetQuerySchema = z.object({
+  event_level: auditEventsGetQueryEventLevelSchema,
+  event_producer: auditEventsGetQueryEventProducerSchema,
+  event_type: auditEventsGetQueryEventTypeSchema,
+  min_event_produced_at: auditEventsGetQueryMinEventProducedAtSchema,
+  max_event_produced_at: auditEventsGetQueryMaxEventProducedAtSchema,
+  limit: auditEventsGetQueryLimitSchema,
+  sort_by: auditEventsGetQuerySortBySchema,
+  cursor: auditEventsGetQueryCursorSchema,
+  heimdall_job_id: auditEventsGetQueryHeimdallJobIdSchema,
+  job_id: auditEventsGetQueryJobIdSchema,
+  attempt_index: auditEventsGetQueryAttemptIndexSchema,
+})

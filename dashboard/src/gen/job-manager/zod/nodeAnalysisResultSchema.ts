@@ -4,7 +4,10 @@
 
 import * as z from 'zod'
 
+/**
+ * Result of node set analysis containing the computed node set.
+ */
 export const nodeAnalysisResultSchema = z.object({
   nodes: z.array(z.string()).describe('List of node names in the result set'),
   count: z.int().describe('Total number of nodes in the result set'),
-}).describe('Result of node set analysis containing the computed node set.').meta({ examples: [{}] })
+}).describe('Result of node set analysis containing the computed node set.').meta({ examples: [{"nodes":["nodes","nodes"],"count":0}] })

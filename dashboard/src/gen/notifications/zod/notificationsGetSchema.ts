@@ -6,19 +6,40 @@ import * as z from 'zod'
 import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { itemsNotificationPublicSchema } from './itemsNotificationPublicSchema'
 
-export const notificationsGetQueryIdSchema = z.union([z.string(), z.null()]).optional().describe('The id of the notification.')
+/**
+ * The id of the notification.
+ */
+export const notificationsGetQueryIdSchema = z.union([z.string(), z.null().nullable()]).optional().describe('The id of the notification.')
 
-export const notificationsGetQueryRecipientSchema = z.union([z.string(), z.null()]).optional().describe('The recipient the notifications were sent to.')
+/**
+ * The recipient the notifications were sent to.
+ */
+export const notificationsGetQueryRecipientSchema = z.union([z.string(), z.null().nullable()]).optional().describe('The recipient the notifications were sent to.')
 
-export const notificationsGetQueryJobIdSchema = z.union([z.string(), z.null()]).optional().describe('The job_id associated with the job.')
+/**
+ * The job_id associated with the job.
+ */
+export const notificationsGetQueryJobIdSchema = z.union([z.string(), z.null().nullable()]).optional().describe('The job_id associated with the job.')
 
+/**
+ * The maximum number of records to return.
+ */
 export const notificationsGetQueryLimitSchema = z.int().optional().default(50).describe('The maximum number of records to return.')
 
+/**
+ * The offset to start the records from.
+ */
 export const notificationsGetQueryOffsetSchema = z.int().optional().default(0).describe('The offset to start the records from.')
 
-export const notificationsGetQueryCreatedAfterSchema = z.union([z.iso.datetime(), z.null()]).optional().describe('Only show notifications created after this time.')
+/**
+ * Only show notifications created after this time.
+ */
+export const notificationsGetQueryCreatedAfterSchema = z.union([z.iso.datetime(), z.null().nullable()]).optional().describe('Only show notifications created after this time.')
 
-export const notificationsGetQueryCreatedBeforeSchema = z.union([z.iso.datetime(), z.null()]).optional().describe('Only show notifications created before this time.')
+/**
+ * Only show notifications created before this time.
+ */
+export const notificationsGetQueryCreatedBeforeSchema = z.union([z.iso.datetime(), z.null().nullable()]).optional().describe('Only show notifications created before this time.')
 
 export const notificationsGetStatus200Schema = itemsNotificationPublicSchema
 
@@ -27,3 +48,13 @@ export const notificationsGetStatus422Schema = HTTPValidationErrorSchema
 export const notificationsGetResponseSchema = notificationsGetStatus200Schema
 
 export const notificationsGetErrorSchema = notificationsGetStatus422Schema
+
+export const notificationsGetQuerySchema = z.object({
+  id: notificationsGetQueryIdSchema,
+  recipient: notificationsGetQueryRecipientSchema,
+  job_id: notificationsGetQueryJobIdSchema,
+  limit: notificationsGetQueryLimitSchema,
+  offset: notificationsGetQueryOffsetSchema,
+  created_after: notificationsGetQueryCreatedAfterSchema,
+  created_before: notificationsGetQueryCreatedBeforeSchema,
+})

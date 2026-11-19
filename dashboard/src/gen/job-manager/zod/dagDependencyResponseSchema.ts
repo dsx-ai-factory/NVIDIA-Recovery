@@ -5,6 +5,11 @@
 import * as z from 'zod'
 import { dagDependencyReasonCodeEnumSchema } from './dagDependencyReasonCodeEnumSchema'
 
+/**
+ * Public-facing data model for a DAG dependency record.
+ * Each record represents a dependency relationship between a dependent (child) job and a dependency (parent) job.
+ * When the parent job satisfies the trigger condition, the dependent job becomes eligible for the specified action.
+ */
 export const dagDependencyResponseSchema = z.object({
   dependent_job_id: z.string(),
   dependent_job_action: z.string(),
@@ -15,6 +20,6 @@ export const dagDependencyResponseSchema = z.object({
   action_time: z.iso.datetime().nullish(),
   reason_code: dagDependencyReasonCodeEnumSchema.optional().describe('Machine-readable explanation for the latest DAG dependency evaluation.'),
   reason_message: z.string().nullish(),
-  reason_details: z.object({}).catchall(z.unknown()).nullish(),
+  reason_details: z.record(z.string(), z.unknown()).nullish(),
   last_evaluated_at: z.iso.datetime().nullish(),
-}).describe('Public-facing data model for a DAG dependency record.\n\nEach record represents a dependency relationship between a dependent (child) job and a dependency (parent) job.\nWhen the parent job satisfies the trigger condition, the dependent job becomes eligible for the specified action.').meta({ examples: [{}] })
+}).describe('Public-facing data model for a DAG dependency record.\n\nEach record represents a dependency relationship between a dependent (child) job and a dependency (parent) job.\nWhen the parent job satisfies the trigger condition, the dependent job becomes eligible for the specified action.').meta({ examples: [{"reason_code":"WAITING_FOR_PARENT_REGISTRATION","action_time":"2000-01-23T04:56:07.000+00:00","dependent_job_action":"dependent_job_action","dependency_trigger_condition":"dependency_trigger_condition","reason_message":"reason_message","last_evaluated_at":"2000-01-23T04:56:07.000+00:00","dependent_job_id":"dependent_job_id","dependency_job_identifier_type":"dependency_job_identifier_type","dependency_job_identifier":"dependency_job_identifier","reason_details":{"key":""},"action_status":"action_status"}] })

@@ -11,4 +11,4 @@ export const recoveryContextSchema = z.object({
   tracestate: z.string().max(512).nullish(),
   triggeredAt: z.iso.datetime(),
   operation: recoveryOperationSchema,
-}).meta({ examples: [{}] })
+}).meta({ examples: [{"tracestate":"tracestate","traceparent":"traceparent","triggeredAt":"2000-01-23T04:56:07.000+00:00","sequenceId":"sequenceId","operation":"restart"}] })

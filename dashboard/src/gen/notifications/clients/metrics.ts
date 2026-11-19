@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { MetricsOptions, MetricsResponses } from '../types/Metrics'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /metrics`
  * @description Endpoint that serves Prometheus metrics.
  * @summary Metrics
- * {@link /metrics}
  */
 export function metrics<ThrowOnError extends boolean = true>(options: Options<MetricsOptions, ThrowOnError> = {}): Unwrappable<RequestResult<MetricsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/metrics', ...config }) as Promise<RequestResult<MetricsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<MetricsResponses, ThrowOnError>({ method: 'GET', url: '/metrics', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

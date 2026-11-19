@@ -6,6 +6,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   type GetJobErrorAttributionsStatus200,
   getJobErrorAttributions,
+  isResponseError,
 } from "~/gen/job-manager";
 import { logger } from "~/pino";
 import { getServerAuthSession } from "~/server/auth";
@@ -42,13 +43,15 @@ export async function GET(
 
     return NextResponse.json(JobErrorAttributionsData);
   } catch (_error) {
-    const error = _error as AxiosError;
-    const publicErrorDetails = {
-      code: error.code,
-      name: error.name,
-      message: error.message,
-      cause: error.cause,
-    };
+    const error = _error as Error;
+    const publicErrorDetails = isResponseError(error)
+      ? { name: error.name, message: error.message, status: error.status }
+      : {
+          code: (error as AxiosError).code,
+          name: error.name,
+          message: error.message,
+          cause: error.cause,
+        };
     logger.error(
       `GET /api/job-attributions?${req.nextUrl.searchParams.toString()} failed: ${JSON.stringify({ ...publicErrorDetails, stack: error.stack?.substring(0, 200) })}`,
     );

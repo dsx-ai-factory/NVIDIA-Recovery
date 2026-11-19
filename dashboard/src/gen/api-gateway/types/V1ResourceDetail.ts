@@ -5,21 +5,21 @@
 /**
  * @description ResourceDetail represents details about a specific resource.
  * @type object
-*/
+ */
 export interface V1ResourceDetail {
-    /**
-     * @description The type of resource (e.g., \"node\", \"gpu\").
-     * @type string | undefined
-    */
-    resourceType?: string;
-    /**
-     * @description The unique identifier of the resource.
-     * @type string | undefined
-    */
-    resourceId?: string;
-    /**
-     * @description Additional details about the resource.
-     * @type string | undefined
-    */
-    details?: string;
+  /**
+   * @description The type of resource (e.g., "node", "gpu").
+   * @type string | undefined
+   */
+  resourceType?: string;
+  /**
+   * @description The unique identifier of the resource.
+   * @type string | undefined
+   */
+  resourceId?: string;
+  /**
+   * @description Additional details about the resource.
+   * @type string | undefined
+   */
+  details?: string;
 }

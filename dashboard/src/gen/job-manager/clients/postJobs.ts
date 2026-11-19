@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { PostJobsOptions, PostJobsResponses } from '../types/PostJobs'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `POST /jobs`
  * @description Create or update a job execution record.
  * This endpoint accepts a job execution status and either creates a new record
  * if one doesn't exist, or updates the existing record if it does. The job is
@@ -20,10 +21,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * Raises:
  * HTTPException: If validation fails or a database error occurs.
  * @summary Post Jobs
- * {@link /jobs}
  */
 export function postJobs<ThrowOnError extends boolean = true>(options: Options<PostJobsOptions, ThrowOnError>): Unwrappable<RequestResult<PostJobsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'POST', url: '/jobs', ...config }) as Promise<RequestResult<PostJobsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<PostJobsResponses, ThrowOnError>({ method: 'POST', url: '/jobs', contentType: { request: 'application/json' }, ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

@@ -4,8 +4,11 @@
 
 import * as z from 'zod'
 
+/**
+ * AuditEventHumanSummary describes a persisted event for human readers.
+ */
 export const v1AuditEventHumanSummarySchema = z.object({
   title: z.string().optional().describe('Event title.'),
   description: z.string().optional().describe('Concise event description.'),
-  granularity: z.int().optional().describe('Granularity used to group events in human-facing views.'),
+  granularity: z.int32().optional().describe('Granularity used to group events in human-facing views.'),
 }).describe('AuditEventHumanSummary describes a persisted event for human readers.')

@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { HeimdallServiceGetWorkflow2Options, HeimdallServiceGetWorkflow2Responses } from '../types/HeimdallServiceGetWorkflow2'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /v1/workflows/{workflowId}`
  * @description Returns the workflow with the given ID.
  * @summary Returns the workflow with the given ID.
- * {@link /v1/workflows/:workflowId}
  */
 export function heimdallServiceGetWorkflow2<ThrowOnError extends boolean = true>(options: Options<HeimdallServiceGetWorkflow2Options, ThrowOnError>): Unwrappable<RequestResult<HeimdallServiceGetWorkflow2Responses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/v1/workflows/{workflowId}', ...config }) as Promise<RequestResult<HeimdallServiceGetWorkflow2Responses, ThrowOnError>>)
+  return withUnwrap(apiClient<HeimdallServiceGetWorkflow2Responses, ThrowOnError>({ method: 'GET', url: '/v1/workflows/{workflowId}', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

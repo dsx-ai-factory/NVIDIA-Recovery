@@ -6,6 +6,9 @@ import * as z from 'zod'
 import { v1AdviceStateSchema } from './v1AdviceStateSchema'
 import { v1NodeConstraintsSchema } from './v1NodeConstraintsSchema'
 
+/**
+ * AdviceRecommendation represents the recommended state and node constraints.
+ */
 export const v1AdviceRecommendationSchema = z.object({
   state: v1AdviceStateSchema.optional().default('ADVICE_STATE_UNSPECIFIED').describe('Desired state action for the job.'),
   nodeConstraints: v1NodeConstraintsSchema.optional().describe('Node constraints for the job.'),

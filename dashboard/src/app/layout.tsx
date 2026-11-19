@@ -51,11 +51,11 @@ export default async function RootLayout({
       <head>
         <link
           rel="stylesheet"
-          href="https://webassets.nvidia.com/kaizen-ui-foundations/1.13.0/base-external.css"
+          href="https://webassets.nvidia.com/kaizen-ui-foundations/1.21.0/base-external.css"
         />
         <link
           rel="stylesheet"
-          href="https://webassets.nvidia.com/kaizen-ui-foundations/1.13.0/components.css"
+          href="https://webassets.nvidia.com/kaizen-ui-foundations/1.21.0/components.css"
         />
       </head>
       <ApsSessionProvider authAvailable={authAvailable}>

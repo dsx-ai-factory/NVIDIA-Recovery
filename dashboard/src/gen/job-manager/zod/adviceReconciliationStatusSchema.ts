@@ -6,6 +6,9 @@ import * as z from 'zod'
 import { adviceReconciliationDispositionSchema } from './adviceReconciliationDispositionSchema'
 import { adviceReconciliationReasonSchema } from './adviceReconciliationReasonSchema'
 
+/**
+ * The reconciliation observation for an Advice generation.
+ */
 export const adviceReconciliationStatusSchema = z.object({
   observedGeneration: z.int().min(1),
   disposition: adviceReconciliationDispositionSchema.describe('Lifecycle disposition reported by an Advice reconciler.'),
@@ -13,4 +16,4 @@ export const adviceReconciliationStatusSchema = z.object({
   observedAt: z.iso.datetime(),
   transitionedAt: z.iso.datetime(),
   diagnosticMessage: z.string().max(1024).nullish(),
-}).describe('The reconciliation observation for an Advice generation.').meta({ examples: [{}] })
+}).describe('The reconciliation observation for an Advice generation.').meta({ examples: [{"reason":"DESIRED_STATE_OBSERVED","disposition":"PENDING","observedAt":"2000-01-23T04:56:07.000+00:00","transitionedAt":"2000-01-23T04:56:07.000+00:00","observedGeneration":1,"diagnosticMessage":"diagnosticMessage"}] })

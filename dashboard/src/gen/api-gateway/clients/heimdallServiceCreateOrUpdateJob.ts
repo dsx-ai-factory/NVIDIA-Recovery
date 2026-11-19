@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { HeimdallServiceCreateOrUpdateJobOptions, HeimdallServiceCreateOrUpdateJobResponses } from '../types/HeimdallServiceCreateOrUpdateJob'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `POST /v1/jobs`
  * @description Create a new job or update an existing one. If a job with the same heimdall_job_id exists, it will be updated; otherwise, a new job will be created.
  * @summary Create or update job
- * {@link /v1/jobs}
  */
 export function heimdallServiceCreateOrUpdateJob<ThrowOnError extends boolean = true>(options: Options<HeimdallServiceCreateOrUpdateJobOptions, ThrowOnError>): Unwrappable<RequestResult<HeimdallServiceCreateOrUpdateJobResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'POST', url: '/v1/jobs', ...config }) as Promise<RequestResult<HeimdallServiceCreateOrUpdateJobResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<HeimdallServiceCreateOrUpdateJobResponses, ThrowOnError>({ method: 'POST', url: '/v1/jobs', contentType: { request: 'application/json' }, ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

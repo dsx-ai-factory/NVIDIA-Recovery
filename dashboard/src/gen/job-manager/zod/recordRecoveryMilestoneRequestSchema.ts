@@ -15,4 +15,4 @@ export const recordRecoveryMilestoneRequestSchema = z.object({
   outcome: recoverySchedulerActionOutcomeSchema,
   completesSequence: z.boolean(),
   completedAt: z.iso.datetime(),
-}).meta({ examples: [{}] })
+}).meta({ examples: [{"completedAt":"2000-01-23T04:56:07.000+00:00","idempotencyKey":"idempotencyKey","action":"slurm.requeue_hold","sequenceId":"sequenceId","operation":"restart","outcome":"planned","completesSequence":true}] })

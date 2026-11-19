@@ -5,8 +5,11 @@
 import * as z from 'zod'
 import { v1AdviceSchema } from './v1AdviceSchema'
 
+/**
+ * ListAdviceResponse is the response for listing advice.
+ */
 export const v1ListAdviceResponseSchema = z.object({
   advice: z.array(v1AdviceSchema).optional().describe('The list of advice records.'),
-  count: z.int().optional().describe('The total count of advice records returned.'),
+  count: z.int32().optional().describe('The total count of advice records returned.'),
   nextPageToken: z.string().optional().describe('The opaque token to use for the next page of results.'),
 }).describe('ListAdviceResponse is the response for listing advice.')

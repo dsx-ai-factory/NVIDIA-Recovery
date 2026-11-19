@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * NodeConstraints defines node scheduling constraints for jobs.
+ */
 export const v1NodeConstraintsSchema = z.object({
   exclusions: z.array(z.string()).optional().describe('List of nodes to exclude from job scheduling.'),
   inclusions: z.array(z.string()).optional().describe('List of nodes to explicitly include for job scheduling.'),

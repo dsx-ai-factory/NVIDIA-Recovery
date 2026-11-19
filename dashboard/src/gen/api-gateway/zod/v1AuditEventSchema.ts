@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { v1AuditEventHumanSummarySchema } from './v1AuditEventHumanSummarySchema'
 
+/**
+ * AuditEvent is the public projection of a persisted event.
+ */
 export const v1AuditEventSchema = z.object({
   heimdallJobId: z.string().optional().describe('Internal job identifier; distinct from the private storage row identifier.'),
   eventProducer: z.string().optional().describe('Component that produced the event.'),

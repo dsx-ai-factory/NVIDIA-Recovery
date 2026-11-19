@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-ARG NODE_BASEIMAGE="nvcr.io/nvidia/distroless/node:22-v4.0.0@sha256:2639322834b8c309a4cf7005337ea2a73942f423f718f0de806076474f8e1264"
+ARG NODE_BASEIMAGE="nvcr.io/nvidia/distroless/node:22-v4.0.1@sha256:b1e746248ef2f16b073144ed3fdd6b7d13b0de44aebca5ba5aa56be3a59446b1"
 
 FROM node:23.9.0-alpine3.21@sha256:dc4d20572e425f9d4c68a6f9c382fbcfec3fa2f8ef0b12cb1d96feabdb479a48 AS base
 

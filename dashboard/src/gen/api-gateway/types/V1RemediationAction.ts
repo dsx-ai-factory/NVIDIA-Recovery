@@ -7,28 +7,28 @@ import type { V1ResourceDetail } from './V1ResourceDetail'
 /**
  * @description RemediationAction represents an action taken to remediate an issue.
  * @type object
-*/
+ */
 export interface V1RemediationAction {
-    /**
-     * @description The type of action (e.g., \"exclude_node\", \"restart_job\").
-     * @type string | undefined
-    */
-    actionType?: string;
-    /**
-     * @description When the action was taken.
-     *
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    timestamp?: string;
-    /**
-     * @description The reason for taking this action.
-     * @type string | undefined
-    */
-    reason?: string;
-    /**
-     * @description Resources affected by this action.
-     * @type array | undefined
-    */
-    resourceDetails?: V1ResourceDetail[];
+  /**
+   * @description The type of action (e.g., "exclude_node", "restart_job").
+   * @type string | undefined
+   */
+  actionType?: string;
+  /**
+   * @description When the action was taken.
+   *
+   * Format: `date-time`
+   * @type string | undefined
+   */
+  timestamp?: string;
+  /**
+   * @description The reason for taking this action.
+   * @type string | undefined
+   */
+  reason?: string;
+  /**
+   * @description Resources affected by this action.
+   * @type array | undefined
+   */
+  resourceDetails?: V1ResourceDetail[];
 }

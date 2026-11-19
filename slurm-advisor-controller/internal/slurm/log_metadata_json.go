@@ -93,8 +93,8 @@ func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPa
 func sacctJobsByIdentity(jobs []SacctJob) map[string][]SacctJob {
 	grouped := make(map[string][]SacctJob)
 	for _, job := range jobs {
-		jobID, _, _, include := jobIdentityFromSacct(job)
-		if include {
+		jobID, _, _, include, err := jobIdentityFromSacct(job)
+		if err == nil && include {
 			grouped[jobID] = append(grouped[jobID], job)
 		}
 	}

@@ -4,4 +4,10 @@
 
 import * as z from 'zod'
 
+/**
+ * `NullValue` is a singleton enumeration to represent the null value for the
+ * `Value` type union.
+ * The JSON representation for `NullValue` is JSON `null`.
+ *  - NULL_VALUE: Null value.
+ */
 export const protobufNullValueSchema = z.enum(['NULL_VALUE']).default('NULL_VALUE').describe('`NullValue` is a singleton enumeration to represent the null value for the\n`Value` type union.\n\nThe JSON representation for `NullValue` is JSON `null`.\n\n - NULL_VALUE: Null value.')

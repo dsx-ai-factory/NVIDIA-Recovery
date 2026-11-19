@@ -8,14 +8,18 @@ import { v1JobRecoveryConfigSchema } from './v1JobRecoveryConfigSchema'
 import { v1JobStatusSchema } from './v1JobStatusSchema'
 import { v1NodeConstraintsSchema } from './v1NodeConstraintsSchema'
 
+/**
+ * Job represents a job tracked by the Advisor, including both
+ * actual (observed) and desired (advisor-set) states.
+ */
 export const v1JobSchema = z.object({
   heimdallJobId: z.string().optional().describe('The UUID assigned by NVIDIA Recovery.'),
   jobRunId: z.string().optional().describe('Legacy id for job for slurm systems.'),
   jobId: z.string().optional().describe('Scheduler-specific job identifier.'),
   workflowId: z.string().min(1).refine((value) => { const characters = Array.from(value); return characters.length <= 256 && characters.every((character) => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff); }, { message: "Must contain at most 256 Unicode scalar values" }).describe('The workflow ID this job belongs to.'),
-  attemptIndex: z.int().optional().describe('The attempt index for this job.'),
+  attemptIndex: z.int32().optional().describe('The attempt index for this job.'),
   nodes: z.array(z.string()).optional().describe('List of nodes associated with the job.'),
-  gpuCountPerNode: z.int().optional(),
+  gpuCountPerNode: z.int32().optional(),
   nodeConstraints: v1NodeConstraintsSchema.optional().describe('Node constraints observed on the job.'),
   additionalProperties: v1JobAdditionalPropertiesSchema.optional().describe('Additional properties for the job.'),
   state: v1JobStatusSchema.optional().default('JOB_STATUS_UNSPECIFIED').describe('The actual state of the job.'),

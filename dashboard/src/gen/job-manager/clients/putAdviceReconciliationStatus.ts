@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { PutAdviceReconciliationStatusOptions, PutAdviceReconciliationStatusResponses } from '../types/PutAdviceReconciliationStatus'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `PUT /advice/{heimdall_id}/reconciliation-status`
  * @description Record one generation-scoped reconciliation observation for Advice.
  * @summary Put Advice Reconciliation Status
- * {@link /advice/:heimdall_id/reconciliation-status}
  */
 export function putAdviceReconciliationStatus<ThrowOnError extends boolean = true>(options: Options<PutAdviceReconciliationStatusOptions, ThrowOnError>): Unwrappable<RequestResult<PutAdviceReconciliationStatusResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'PUT', url: '/advice/{heimdall_id}/reconciliation-status', styles: { path: { heimdallId: { style: 'simple', explode: false } } }, ...config }) as Promise<RequestResult<PutAdviceReconciliationStatusResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<PutAdviceReconciliationStatusResponses, ThrowOnError>({ method: 'PUT', url: '/advice/{heimdall_id}/reconciliation-status', contentType: { request: 'application/json' }, ...config, styles: { ...config.styles, path: { heimdall_id: { style: 'simple', explode: false }, ...config.styles?.path } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

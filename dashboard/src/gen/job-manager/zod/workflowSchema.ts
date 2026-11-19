@@ -4,8 +4,12 @@
 
 import * as z from 'zod'
 
+/**
+ * A workflow is a collection of jobs for a particular workload or logical job.
+ * For example, a job maybe requeued multiple times, resulting in a workflow.
+ */
 export const workflowSchema = z.object({
   id: z.string().min(1).refine((value) => { const characters = Array.from(value); return characters.length <= 256 && characters.every((character) => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff); }, { message: "Must contain at most 256 Unicode scalar values" }),
   start_time: z.iso.datetime().nullish(),
   end_time: z.iso.datetime().nullish(),
-}).describe('A workflow is a collection of jobs for a particular workload or logical job.\n\nFor example, a job maybe requeued multiple times, resulting in a workflow.').meta({ examples: [{}] })
+}).describe('A workflow is a collection of jobs for a particular workload or logical job.\n\nFor example, a job maybe requeued multiple times, resulting in a workflow.').meta({ examples: [{"start_time":"2000-01-23T04:56:07.000+00:00","end_time":"2000-01-23T04:56:07.000+00:00","id":"id"}] })

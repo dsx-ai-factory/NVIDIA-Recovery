@@ -5,30 +5,30 @@
 /**
  * @description JobAnomalyDetectionConfig contains per-job log detection controls.
  * @type object
-*/
+ */
 export interface V1JobAnomalyDetectionConfig {
-    /**
-     * @description Whether Watcher log-based crash detection is enabled.
-     * @type boolean | undefined
-    */
-    logBasedCrashEnabled?: boolean;
-    /**
-     * @description Whether Watcher no-output detection is enabled.
-     * @type boolean | undefined
-    */
-    logBasedTimeoutEnabled?: boolean;
-    /**
-     * @description No-output threshold during pre-training, in seconds. Must be positive when present.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    logBasedTimeoutThresholdPretraining?: number;
-    /**
-     * @description No-output threshold during the training loop, in seconds. Must be positive when present.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    logBasedTimeoutThresholdTrainingloop?: number;
+  /**
+   * @description Whether Watcher log-based crash detection is enabled.
+   * @type boolean | undefined
+   */
+  logBasedCrashEnabled?: boolean;
+  /**
+   * @description Whether Watcher no-output detection is enabled.
+   * @type boolean | undefined
+   */
+  logBasedTimeoutEnabled?: boolean;
+  /**
+   * @description No-output threshold during pre-training, in seconds. Must be positive when present.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  logBasedTimeoutThresholdPretraining?: number;
+  /**
+   * @description No-output threshold during the training loop, in seconds. Must be positive when present.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  logBasedTimeoutThresholdTrainingloop?: number;
 }

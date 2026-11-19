@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetRecoverySequenceOptions, GetRecoverySequenceResponses } from '../types/GetRecoverySequence'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /recovery/sequences`
  * @description Read canonical context for an exact scoped operation without creating it.
  * @summary Get Recovery Sequence
- * {@link /recovery/sequences}
  */
 export function getRecoverySequence<ThrowOnError extends boolean = true>(options: Options<GetRecoverySequenceOptions, ThrowOnError>): Unwrappable<RequestResult<GetRecoverySequenceResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/recovery/sequences', styles: { query: { scheduler_system: { style: 'form', explode: true }, scheduler_scope: { style: 'form', explode: true }, job_id: { style: 'form', explode: true }, source_attempt_index: { style: 'form', explode: true }, operation: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetRecoverySequenceResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetRecoverySequenceResponses, ThrowOnError>({ method: 'GET', url: '/recovery/sequences', ...config, styles: { ...config.styles, query: { scheduler_system: { style: 'form', explode: true }, scheduler_scope: { style: 'form', explode: true }, job_id: { style: 'form', explode: true }, source_attempt_index: { style: 'form', explode: true }, operation: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

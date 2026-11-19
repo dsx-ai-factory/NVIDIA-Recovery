@@ -4,6 +4,24 @@
 
 import * as z from 'zod'
 
+/**
+ * Notify user that the job config is not compatible with NVIDIA Recovery's requirements.
+ * Examples:
+ *     >>> message = InvalidJobConfig(
+ *     ...     job_id="456",
+ *     ...     job_attempt_index=0,
+ *     ...     job_name="some-job",
+ *     ...     reason="Invalid job log file name",
+ *     ...     user="some-person",
+ *     ... )
+ *     >>> expected_message = '''\
+ *     ... Job 456(0) (job name: some-job) has invalid configuration that's not compatible with NVIDIA Recovery's requirements.
+ *     ... Reason: Invalid job log file name.
+ *     ... '''
+ *     >>> assert_equal(message.render_message(), expected_message)
+ *     >>> expected_title = "Invalid configuration for job 456"
+ *     >>> assert_equal(message.render_title(), expected_title)
+ */
 export const invalidJobConfigSchema = z.object({
   template_id: z.enum(['/templates/InvalidJobConfig']).optional().default('/templates/InvalidJobConfig'),
   job_id: z.string(),

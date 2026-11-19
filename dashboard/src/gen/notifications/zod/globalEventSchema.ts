@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * A representation of a global attribution event (job-level, not tied to specific nodes).
+ */
 export const globalEventSchema = z.object({
   template_id: z.enum(['/partials/GlobalEvent']).optional().default('/partials/GlobalEvent'),
   error_attribution: z.string(),

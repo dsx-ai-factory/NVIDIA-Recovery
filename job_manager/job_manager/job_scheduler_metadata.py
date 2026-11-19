@@ -5,6 +5,8 @@ import math
 from collections.abc import Mapping
 from typing import NamedTuple
 
+from recovery_libs.schema.job_manager.slurm_identity import project_slurm_job_group
+
 SLURM_SCHEDULER = "slurm"
 SCHEDULER_KEY = "scheduler"
 
@@ -38,6 +40,7 @@ class JobSchedulerFields(NamedTuple):
     total_gpu_count: int | None
     total_cpu_count: int | None
     total_memory_mb: int | None
+    job_group_id: str | None
 
 
 def _project_string(metadata: Mapping[str, object], key: str, current: str | None) -> str | None:
@@ -75,6 +78,8 @@ def project_job_scheduler_fields(
     total_gpu_count: int | None,
     total_cpu_count: int | None,
     total_memory_mb: int | None,
+    job_id: str = "",
+    job_group_id: str | None = None,
 ) -> JobSchedulerFields:
     """Project validated Slurm metadata into Job Manager's typed persistence fields."""
     current = JobSchedulerFields(
@@ -87,9 +92,15 @@ def project_job_scheduler_fields(
         total_gpu_count,
         total_cpu_count,
         total_memory_mb,
+        job_group_id,
     )
     if scheduler_metadata.get(SCHEDULER_KEY) != SLURM_SCHEDULER:
         return current
+
+    try:
+        job_group_id = project_slurm_job_group(job_id, scheduler_metadata, job_group_id)
+    except ValueError as error:
+        raise SlurmJobMetadataValidationError(str(error)) from error
 
     return JobSchedulerFields(
         cluster=_project_string(scheduler_metadata, SLURM_CLUSTER_KEY, cluster),
@@ -101,4 +112,5 @@ def project_job_scheduler_fields(
         total_gpu_count=_project_count(scheduler_metadata, SLURM_GPU_COUNT_KEY, total_gpu_count),
         total_cpu_count=_project_count(scheduler_metadata, SLURM_CPU_COUNT_KEY, total_cpu_count),
         total_memory_mb=_project_count(scheduler_metadata, SLURM_MEMORY_MB_KEY, total_memory_mb),
+        job_group_id=job_group_id,
     )

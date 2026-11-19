@@ -4,4 +4,7 @@
 
 import * as z from 'zod'
 
+/**
+ * Supported audit event levels.
+ */
 export const auditEventLevelSchema = z.enum(['recovery', 'operational']).describe('Supported audit event levels.')

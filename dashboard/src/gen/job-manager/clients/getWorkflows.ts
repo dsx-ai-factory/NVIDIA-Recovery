@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetWorkflowsOptions, GetWorkflowsResponses } from '../types/GetWorkflows'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /workflows`
  * @description Retrieve workflows grouped by their canonical persisted workflow ID.
  * @summary Get Workflows
- * {@link /workflows}
  */
 export function getWorkflows<ThrowOnError extends boolean = true>(options: Options<GetWorkflowsOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetWorkflowsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/workflows', styles: { query: { limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, "workflow-id": { style: 'form', explode: true }, workflow_id_match: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetWorkflowsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetWorkflowsResponses, ThrowOnError>({ method: 'GET', url: '/workflows', ...config, styles: { ...config.styles, query: { limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, "workflow-id": { style: 'form', explode: true }, workflow_id_match: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

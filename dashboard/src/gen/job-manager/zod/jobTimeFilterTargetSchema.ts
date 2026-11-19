@@ -4,4 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * The target job time to use in a time filter query. Jobs have different times, such
+ * as the submit, start, end times and the last updated time. This enum
+ * allows selecting one of these for time filter queries when retrieving jobs by time.
+ */
 export const jobTimeFilterTargetSchema = z.enum(['SUBMIT_TIME', 'START_TIME', 'END_TIME', 'LAST_UPDATE_AT']).describe('The target job time to use in a time filter query. Jobs have different times, such\nas the submit, start, end times and the last updated time. This enum\nallows selecting one of these for time filter queries when retrieving jobs by time.')

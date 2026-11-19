@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * Workflow is the workflow.
+ */
 export const v1WorkflowSchema = z.object({
   workflowId: z.string().min(1).refine((value) => { const characters = Array.from(value); return characters.length <= 256 && characters.every((character) => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff); }, { message: "Must contain at most 256 Unicode scalar values" }),
   schedulerWorkflowId: z.string().optional().describe('The ID of the workflow.'),

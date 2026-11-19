@@ -4,14 +4,14 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { AuditEventsCreateOptions, AuditEventsCreateResponses } from '../types/AuditEventsCreate'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `POST /v1/audit/events`
  * @summary Ingest a batch of audit events
- * {@link /v1/audit/events}
  */
 export function auditEventsCreate<ThrowOnError extends boolean = true>(options: Options<AuditEventsCreateOptions, ThrowOnError>): Unwrappable<RequestResult<AuditEventsCreateResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'POST', url: '/v1/audit/events', ...config }) as Promise<RequestResult<AuditEventsCreateResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<AuditEventsCreateResponses, ThrowOnError>({ method: 'POST', url: '/v1/audit/events', contentType: { request: 'application/json' }, ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

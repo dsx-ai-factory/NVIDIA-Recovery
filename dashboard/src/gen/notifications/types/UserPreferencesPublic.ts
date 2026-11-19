@@ -5,9 +5,9 @@
 import type { NotificationTypePreferences } from './NotificationTypePreferences'
 
 /**
- * @description A user\'s notification preferences.
+ * @description A user's notification preferences.
  * @type object
-*/
+ */
 export interface UserPreferencesPublic {
-    notification_types: NotificationTypePreferences;
+  notification_types: NotificationTypePreferences;
 }

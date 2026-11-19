@@ -5,12 +5,12 @@
 /**
  * @description Identify a target job by its Slurm job ID.
  * @type object
-*/
+ */
 export interface JobReferenceById {
-    /**
-     * @default 'id'
-     * @type string | undefined
-    */
-    type?: "id";
-    id: string;
+  /**
+   * @default 'id'
+   * @type string | undefined
+   */
+  type?: 'id';
+  id: string;
 }

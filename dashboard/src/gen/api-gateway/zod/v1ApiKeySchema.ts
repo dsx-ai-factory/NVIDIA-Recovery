@@ -6,6 +6,9 @@ import * as z from 'zod'
 import { v1ApiKeyAuthorizationsSchema } from './v1ApiKeyAuthorizationsSchema'
 import { v1ApiKeyStatusSchema } from './v1ApiKeyStatusSchema'
 
+/**
+ * API-key metadata retained for disabled compatibility endpoints.
+ */
 export const v1ApiKeySchema = z.object({
   id: z.string().optional().describe('Legacy key ID field retained for response shape compatibility.'),
   value: z.string().optional().describe('Legacy key value field. Disabled endpoints never return key material.'),

@@ -4,9 +4,12 @@
 
 import * as z from 'zod'
 
+/**
+ * JobAnomalyDetectionConfig contains per-job log detection controls.
+ */
 export const v1JobAnomalyDetectionConfigSchema = z.object({
   logBasedCrashEnabled: z.boolean().optional().describe('Whether Watcher log-based crash detection is enabled.'),
   logBasedTimeoutEnabled: z.boolean().optional().describe('Whether Watcher no-output detection is enabled.'),
-  logBasedTimeoutThresholdPretraining: z.int().optional().describe('No-output threshold during pre-training, in seconds. Must be positive when present.'),
-  logBasedTimeoutThresholdTrainingloop: z.int().optional().describe('No-output threshold during the training loop, in seconds. Must be positive when present.'),
+  logBasedTimeoutThresholdPretraining: z.int32().optional().describe('No-output threshold during pre-training, in seconds. Must be positive when present.'),
+  logBasedTimeoutThresholdTrainingloop: z.int32().optional().describe('No-output threshold during the training loop, in seconds. Must be positive when present.'),
 }).describe('JobAnomalyDetectionConfig contains per-job log detection controls.')

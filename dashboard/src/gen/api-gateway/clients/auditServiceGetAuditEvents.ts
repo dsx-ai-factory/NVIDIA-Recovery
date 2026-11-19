@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { AuditServiceGetAuditEventsOptions, AuditServiceGetAuditEventsResponses } from '../types/AuditServiceGetAuditEvents'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /v1/audit/events`
  * @description Read persisted audit events by internal job ID or scheduler job ID with an optional attempt. A job without an attempt includes all attempts. Event filters and inclusive producer-time bounds narrow results; page size defaults to and cannot exceed 100. Cursors are opaque and must be reused with the same query.
  * @summary Query audit events
- * {@link /v1/audit/events}
  */
 export function auditServiceGetAuditEvents<ThrowOnError extends boolean = true>(options: Options<AuditServiceGetAuditEventsOptions, ThrowOnError> = {}): Unwrappable<RequestResult<AuditServiceGetAuditEventsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/v1/audit/events', ...config }) as Promise<RequestResult<AuditServiceGetAuditEventsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<AuditServiceGetAuditEventsResponses, ThrowOnError>({ method: 'GET', url: '/v1/audit/events', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

@@ -7,9 +7,12 @@ import { globalEventSchema } from './globalEventSchema'
 import { jobExecutionErrorSchema } from './jobExecutionErrorSchema'
 import { nodeEventSchema } from './nodeEventSchema'
 
+/**
+ * A representation of an error attribution that's made of a JobExecutionError and a list of NodeEvent and GlobalEvent.
+ */
 export const errorAttributionSchema = z.object({
   template_id: z.enum(['/partials/ErrorAttribution']).optional().default('/partials/ErrorAttribution'),
   job_execution_error: jobExecutionErrorSchema.describe('A representation of a job execution error.'),
   node_events: z.array(nodeEventSchema),
-  global_events: z.union([z.array(globalEventSchema), z.null()]).optional().default([]),
+  global_events: z.union([z.array(globalEventSchema), z.null().nullable()]).optional().default([]),
 }).describe('A representation of an error attribution that\'s made of a JobExecutionError and a list of NodeEvent and GlobalEvent.')

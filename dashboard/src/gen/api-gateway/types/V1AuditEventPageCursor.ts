@@ -5,16 +5,16 @@
 /**
  * @description AuditEventPageCursor identifies adjacent pages without exposing storage keys.
  * @type object
-*/
+ */
 export interface V1AuditEventPageCursor {
-    /**
-     * @description Previous page cursor; empty when no previous page exists.
-     * @type string | undefined
-    */
-    prevCursor?: string;
-    /**
-     * @description Next page cursor; empty when no next page exists.
-     * @type string | undefined
-    */
-    nextCursor?: string;
+  /**
+   * @description Previous page cursor; empty when no previous page exists.
+   * @type string | undefined
+   */
+  prevCursor?: string;
+  /**
+   * @description Next page cursor; empty when no next page exists.
+   * @type string | undefined
+   */
+  nextCursor?: string;
 }

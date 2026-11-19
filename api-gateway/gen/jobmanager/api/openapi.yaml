@@ -293,6 +293,36 @@ paths:
                 $ref: "#/components/schemas/HTTPValidationError"
           description: Validation Error
       summary: Get Job Groups
+  /application-intentions:
+    post:
+      description: |-
+        Record a job-level cancellation request from an application.
+
+        A successful response means that Job Manager durably accepted the
+        idempotent request. It does not wait for Advice creation or scheduler
+        cancellation. Job Manager starts best-effort reconciliation after sending
+        the response and retries from normal job and attribution updates.
+      operationId: post_application_intention
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationIntentionInput"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationIntention"
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+          description: Validation Error
+      summary: Post Application Intention
   /jobs:
     get:
       description: |-
@@ -1854,6 +1884,66 @@ components:
           title: Log Based Timeout Threshold Trainingloop
           type: integer
       title: AnomalyDetectionConfig
+    ApplicationIntention:
+      description: Durably accepted application intention for a scheduler job.
+      example:
+        reason: reason
+        job_id: job_id
+        created_at: 2000-01-23T04:56:07.000+00:00
+        desired_state: CANCELLED
+        id: 0
+      properties:
+        id:
+          format: int64
+          title: Id
+          type: integer
+        job_id:
+          title: Job Id
+          type: string
+        desired_state:
+          $ref: "#/components/schemas/ApplicationIntentionDesiredState"
+        reason:
+          nullable: true
+          type: string
+        created_at:
+          format: date-time
+          title: Created At
+          type: string
+      required:
+      - created_at
+      - desired_state
+      - id
+      - job_id
+      title: ApplicationIntention
+    ApplicationIntentionDesiredState:
+      description: Desired states that an application may request for its scheduler
+        job.
+      enum:
+      - CANCELLED
+      title: ApplicationIntentionDesiredState
+      type: string
+    ApplicationIntentionInput:
+      description: Application request to stop a scheduler job and prevent later retries.
+      example:
+        reason: reason
+        job_id: job_id
+        desired_state: CANCELLED
+      properties:
+        job_id:
+          maxLength: 64
+          minLength: 1
+          title: Job Id
+          type: string
+        desired_state:
+          $ref: "#/components/schemas/ApplicationIntentionDesiredState"
+        reason:
+          maxLength: 1024
+          nullable: true
+          type: string
+      required:
+      - desired_state
+      - job_id
+      title: ApplicationIntentionInput
     ApsSlurmJobSpec-Input:
       description: |-
         APS Slurm Job Spec, today this spec should be passed to APS as a JSON string included in the "comment" of a Slurm

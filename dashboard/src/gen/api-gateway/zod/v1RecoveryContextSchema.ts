@@ -5,6 +5,10 @@
 import * as z from 'zod'
 import { v1RecoveryOperationSchema } from './v1RecoveryOperationSchema'
 
+/**
+ * RecoveryContext carries one durable recovery sequence's W3C trace context.
+ * It is correlation data and does not authorize or otherwise change scheduler actions.
+ */
 export const v1RecoveryContextSchema = z.object({
   sequenceId: z.string().describe('The durable recovery sequence UUID assigned by Job Manager.'),
   traceparent: z.string().describe('The canonical W3C traceparent for later recovery work.'),

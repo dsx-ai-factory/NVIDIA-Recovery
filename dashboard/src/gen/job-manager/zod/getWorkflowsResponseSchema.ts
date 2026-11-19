@@ -5,7 +5,12 @@
 import * as z from 'zod'
 import { workflowSchema } from './workflowSchema'
 
+/**
+ * The public facing data model of the jobs by name response that gets
+ * returned from job manager's REST APIs. It contains a list of JobsByName
+ * objects.
+ */
 export const getWorkflowsResponseSchema = z.object({
   item_count: z.int(),
   workflows: z.array(workflowSchema),
-}).describe('The public facing data model of the jobs by name response that gets\nreturned from job manager\'s REST APIs. It contains a list of JobsByName\nobjects.').meta({ examples: [{}] })
+}).describe('The public facing data model of the jobs by name response that gets\nreturned from job manager\'s REST APIs. It contains a list of JobsByName\nobjects.').meta({ examples: [{"item_count":0,"workflows":[{"start_time":"2000-01-23T04:56:07.000+00:00","end_time":"2000-01-23T04:56:07.000+00:00","id":"id"},{"start_time":"2000-01-23T04:56:07.000+00:00","end_time":"2000-01-23T04:56:07.000+00:00","id":"id"}]}] })

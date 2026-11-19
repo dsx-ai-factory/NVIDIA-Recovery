@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { HeimdallServiceGetJobsBySchedulerIdOptions, HeimdallServiceGetJobsBySchedulerIdResponses } from '../types/HeimdallServiceGetJobsBySchedulerId'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /v1/jobs/by-scheduler-id/{schedulerJobId}`
  * @description Retrieve jobs by their scheduler ID. Multiple jobs may share the same scheduler_job_id, so this endpoint returns a paginated list of matching jobs.
  * @summary Get jobs by scheduler ID
- * {@link /v1/jobs/by-scheduler-id/:schedulerJobId}
  */
 export function heimdallServiceGetJobsBySchedulerId<ThrowOnError extends boolean = true>(options: Options<HeimdallServiceGetJobsBySchedulerIdOptions, ThrowOnError>): Unwrappable<RequestResult<HeimdallServiceGetJobsBySchedulerIdResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/v1/jobs/by-scheduler-id/{schedulerJobId}', ...config }) as Promise<RequestResult<HeimdallServiceGetJobsBySchedulerIdResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<HeimdallServiceGetJobsBySchedulerIdResponses, ThrowOnError>({ method: 'GET', url: '/v1/jobs/by-scheduler-id/{schedulerJobId}', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

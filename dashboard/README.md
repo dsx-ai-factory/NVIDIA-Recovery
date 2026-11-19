@@ -4,20 +4,22 @@ The web dashboard for monitoring workloads and recovery in NVIDIA Recovery.
 
 ## Setting up
 
-* Install [NodeJS](https://nodejs.org/en), v20.17.0
-* Install pnpm by following [this](https://pnpm.io/installation).
-* Install dependency packages with `pnpm install`.
+- Install [NodeJS](https://nodejs.org/en), v22.22.0
+- Install pnpm by following [this](https://pnpm.io/installation).
+- Install dependency packages with `pnpm install`.
 
 ## Running in local dev mode
 
 If you don't use the authentication then you can ignore this part
-* start docker, if you don't use the authentication
-* run `./start-database.sh`, which will run a postgres database in your local docker environment.
-* run `pnpm run db:generate` or `pnpm run db:migrate` to build tables in your database. This is only needed for the first time you run this project or there is any database schema updates.
+
+- start docker, if you don't use the authentication
+- run `./start-database.sh`, which will run a postgres database in your local docker environment.
+- run `pnpm run db:generate` or `pnpm run db:migrate` to build tables in your database. This is only needed for the first time you run this project or there is any database schema updates.
 
 Start your dev server
-* Run `pnpm run dev` to start your local server on port `3000`, once up visit `http://localhost:3000`, by default the
-workflow overview page is hosted at http://localhost:3000/dashboard/workflow
+
+- Run `pnpm run dev` to start your local server on port `3000`, once up visit `http://localhost:3000`, by default the
+  workflow overview page is hosted at http://localhost:3000/dashboard/workflow
 
 ## Optional base path
 
@@ -39,7 +41,8 @@ URLs from that value; it cannot change the base path already compiled into an
 image. If authentication is configured outside the chart, set `NEXTAUTH_URL` to
 the site origin for a root build or to the full
 `https://host.example/<base-path>/api/auth` endpoint for a prefixed build.
-* Changes to the default configurations like the job manager URL should be made to the `.env` file.
+
+- Changes to the default configurations like the job manager URL should be made to the `.env` file.
 
 ## Optional Grafana trace links
 

@@ -40,17 +40,18 @@ describe("log file paths", () => {
     expect(container.querySelector("button")).toBeNull();
   });
 
-  it.each([
-    1, 2, 5,
-  ])("shows all %i paths without an expansion control", (count) => {
-    const paths = Array.from(
-      { length: count },
-      (_, index) => `/logs/job-${index}.out`,
-    );
-    render(paths);
-    expect(visiblePaths()).toEqual(paths);
-    expect(container.querySelector("button")).toBeNull();
-  });
+  it.each([1, 2, 5])(
+    "shows all %i paths without an expansion control",
+    (count) => {
+      const paths = Array.from(
+        { length: count },
+        (_, index) => `/logs/job-${index}.out`,
+      );
+      render(paths);
+      expect(visiblePaths()).toEqual(paths);
+      expect(container.querySelector("button")).toBeNull();
+    },
+  );
 
   it("limits long lists to five paths and lets users expand and collapse them", () => {
     const firstFive = [

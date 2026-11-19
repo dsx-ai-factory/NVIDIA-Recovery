@@ -20,6 +20,7 @@ from recovery_libs.storage.base import RecoveryStorageException, RecoveryStorage
 from recovery_libs.storage.dataclass import (
     AdviceReconciliationStatusRecord,
     AdviceRecord,
+    ApplicationIntentionRecord,
     JobEvent,
     SlurmJobExecutionRecord,
     SlurmJobFinalStates,
@@ -87,6 +88,92 @@ def test_bootstrap_without_schema_upgrade(connection, mysql_storage):
     assert result is True
     connection.bootstrap.assert_called_with(schema_upgrade=False)
     connection.ready.assert_called_once()
+
+
+def test_create_application_intention_persists_first_request(mysql_storage, session):
+    session.scalars.return_value.first.return_value = None
+    intention = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="training converged",
+        created_at=datetime.now(UTC),
+    )
+    intention.id = 1
+
+    stored, created = mysql_storage.create_or_get_application_intention(intention)
+
+    assert stored is intention
+    assert created is True
+    session.add.assert_called_once_with(intention)
+    session.commit.assert_called_once()
+    session.refresh.assert_called_once_with(intention)
+    session.expunge.assert_called_once_with(intention)
+
+
+def test_create_application_intention_returns_existing_absorbing_request(mysql_storage, session):
+    existing = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="first reason",
+        created_at=datetime.now(UTC),
+    )
+    existing.id = 1
+    session.scalars.return_value.first.return_value = existing
+    duplicate = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="later reason",
+        created_at=datetime.now(UTC),
+    )
+
+    stored, created = mysql_storage.create_or_get_application_intention(duplicate)
+
+    assert stored is existing
+    assert created is False
+    assert stored.reason == "first reason"
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
+def test_claim_application_intention_audit_attempt_uses_latest_known_attempt(mysql_storage, session):
+    existing = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="training converged",
+        created_at=datetime.now(UTC),
+    )
+    existing.id = 1
+    session.scalars.return_value.first.return_value = existing
+
+    stored, claimed = mysql_storage.claim_application_intention_audit_attempt("job-42", 3)
+
+    assert stored is existing
+    assert claimed is True
+    assert stored.audit_attempt_index == 3
+    session.commit.assert_called_once()
+    session.refresh.assert_called_once_with(existing)
+    session.expunge.assert_called_once_with(existing)
+
+
+def test_claim_application_intention_audit_attempt_is_idempotent(mysql_storage, session):
+    existing = ApplicationIntentionRecord(
+        job_id="job-42",
+        desired_state="CANCELLED",
+        reason="training converged",
+        audit_attempt_index=2,
+        created_at=datetime.now(UTC),
+    )
+    existing.id = 1
+    session.scalars.return_value.first.return_value = existing
+
+    stored, claimed = mysql_storage.claim_application_intention_audit_attempt("job-42", 3)
+
+    assert stored is existing
+    assert claimed is False
+    assert stored.audit_attempt_index == 2
+    session.commit.assert_not_called()
+    session.refresh.assert_not_called()
+    session.expunge.assert_called_once_with(existing)
 
 
 def test_bootstrap_returns_false_when_schema_is_not_at_head(connection, mysql_storage):
@@ -1425,6 +1512,13 @@ def test_upsert_job_record_preserves_existing_fields_when_update_has_none(mysql_
     assert existing_job.user == "test_user"
     assert existing_job.node_count == 5
     assert existing_job.partition == "recovery"
+    existing_job.scheduler_metadata = {
+        "scheduler": "slurm",
+        "slurm_job_id": "20000",
+        "managed_by": "slurm-advisor-controller",
+        "environment": "test",
+        "slurm_state": "RUNNING",
+    }
 
     incoming_update = SlurmJobExecutionRecord(
         job_id="20000",
@@ -1451,6 +1545,13 @@ def test_upsert_job_record_preserves_existing_fields_when_update_has_none(mysql_
     assert updated_record.command == "sbatch test.sh"
     assert updated_record.reservation == "recovery_prod"
     assert updated_record.heimdall_job_id == generate_heimdall_job_id("20000", 0)
+    assert updated_record.scheduler_metadata == {
+        "scheduler": "slurm",
+        "slurm_job_id": "20000",
+        "managed_by": "slurm-advisor-controller",
+        "environment": "test",
+        "slurm_state": "RUNNING",
+    }
     session.commit.assert_called_once()
     session.refresh.assert_called_once_with(existing_job)
 
@@ -1789,6 +1890,45 @@ def test_upsert_job_record_duplicate_key_retry_does_not_clobber_winners_log_path
     assert updated_record.log_file_paths == winner_log_paths
     session.rollback.assert_called_once_with()
     assert _transaction_method_names(session) == ["scalars", "commit", "rollback", "scalars", "commit"]
+
+
+@pytest.mark.parametrize("incoming_metadata", [None, {"slurm_state": "CANCELLED"}])
+def test_upsert_job_record_deadlock_retry_uses_fresh_scheduler_metadata(mysql_storage, session, incoming_metadata):
+    """Retry a partial update without overwriting metadata committed by another writer."""
+    now = datetime.now(UTC)
+    identity = {
+        "scheduler": "slurm",
+        "slurm_job_id": "4200_0",
+        "slurm_array_job_id": "4200",
+        "slurm_array_task_id": "0",
+    }
+    first = create_example_slurm_job_record(job_id="4200_0", attempt_index=0, submit_time=now, last_updated_at=now)
+    first.scheduler_metadata = {**identity, "slurm_state": "RUNNING"}
+    first.job_group_id = "4200"
+    winner = create_example_slurm_job_record(job_id="4200_0", attempt_index=0, submit_time=now, last_updated_at=now)
+    winner.scheduler_metadata = {**identity, "slurm_state": "COMPLETED", "slurm_reason": "None"}
+    winner.job_group_id = "4200"
+    incoming = SlurmJobExecutionRecord(
+        job_id="4200_0",
+        job_attempt_index=0,
+        workflow_id="array",
+        last_updated_at=now,
+        scheduler_metadata=incoming_metadata,
+    )
+    session.scalars.return_value.first.side_effect = [first, winner]
+    session.commit.side_effect = [OperationalError("UPDATE ...", {}, Exception(1213, "Deadlock")), None]
+
+    with patch("recovery_libs.storage.mysql_storage.time.sleep"):
+        result = mysql_storage.upsert_job_record(incoming)
+
+    expected_metadata = {**identity, "slurm_state": "COMPLETED", "slurm_reason": "None"}
+    if incoming_metadata is not None:
+        expected_metadata = {**identity, **incoming_metadata}
+    assert result.inserted_record.scheduler_metadata == expected_metadata
+    assert result.old_record.scheduler_metadata == {**identity, "slurm_state": "COMPLETED", "slurm_reason": "None"}
+    assert result.inserted_record.job_group_id == "4200"
+    session.rollback.assert_called_once_with()
+    assert session.commit.call_count == 2
 
 
 def test_upsert_advice_rejects_replacing_absorbing_terminated_state(mysql_storage, session):
