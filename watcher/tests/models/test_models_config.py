@@ -867,3 +867,16 @@ def test_find_workflow_by_name_type():
     # Not found
     found = watcher.find_workflow_by_name_type("notfound", WorkflowStepType.log_query)
     assert found is None
+
+
+@pytest.mark.parametrize("grace", [0, -1, 1.5, True, "30"])
+def test_nooutput_discovery_grace_rejects_invalid_values(grace):
+    """Reject delays that would bypass the grace period or break timer arithmetic."""
+    with pytest.raises(ValueError):
+        config.RuleAttributesConfig.from_json({"job_discovery_grace_period_secs": grace})
+
+
+def test_nooutput_discovery_grace_round_trip():
+    """Keep the operator's retry delay when loading and serializing rule attributes."""
+    attrs = config.RuleAttributesConfig.from_json({"job_discovery_grace_period_secs": 60})
+    assert attrs.to_json()["job_discovery_grace_period_secs"] == 60
