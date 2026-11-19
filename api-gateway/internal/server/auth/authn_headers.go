@@ -7,7 +7,6 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"unicode"
 
 	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc"
@@ -47,8 +46,10 @@ func headerIdentity(get func(string) []string) (*Identity, error) {
 		value := values[0]
 		return value != "" &&
 			!strings.Contains(value, ",") &&
-			// Prevent whitespaces and control characters.
-			strings.IndexFunc(value, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) < 0
+			// grpc-gateway drops non-ASCII textual metadata. Reject it here
+			// so identity cannot disappear and fall back to a different credential.
+			// Spaces remain disallowed by the assertion contract.
+			strings.IndexFunc(value, func(r rune) bool { return r < 0x21 || r > 0x7e }) < 0
 	}
 	if !valid(mechanism) || !valid(client) {
 		return nil, errors.New("authentication failed")

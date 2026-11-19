@@ -5,13 +5,19 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/api-gateway/internal/server/auth"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -71,8 +77,35 @@ func (headerIdentityService) GetJobs(ctx context.Context, _ *pb.GetJobsRequest) 
 
 // TestHeaderIdentityTransports proves identity crosses the generated adapter, not just HTTP middleware.
 func TestHeaderIdentityTransports(t *testing.T) {
+	// A real signed token proves the rejected assertions cannot silently switch
+	// the request to bearer authentication during HTTP-to-gRPC conversion.
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwks := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "fallback", Algorithm: "RS256", Use: "sig"}}}); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer jwks.Close()
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, (&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", "fallback"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := jwt.Signed(signer).Claims(jwt.Claims{Issuer: "https://issuer.example.com", Subject: "human-1", Audience: jwt.Audience{"gateway"}, Expiry: jwt.NewNumericDate(time.Now().Add(time.Hour))}).Claims(map[string]any{"client_id": "client-1"}).Serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fallback, err := auth.NewJwtAuth(t.Context(), auth.JwtAuthConfig{Issuer: "https://issuer.example.com", Audiences: []string{"gateway"}, JWKSURL: jwks.URL, ClientIDClaim: "client_id"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	chain := auth.NewAuth()
 	chain.AddAuthenticator(auth.HeaderBasedIdentityAuth{})
+	chain.AddAuthenticator(fallback)
 	listener := bufconn.Listen(1 << 20)
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(auth.HeaderIdentityUnaryInterceptor(true), chain.GrpcAuthInterceptorfunc))
 	pb.RegisterHeimdallServiceServer(server, headerIdentityService{})
@@ -94,6 +127,9 @@ func TestHeaderIdentityTransports(t *testing.T) {
 		want    int
 	}{
 		{"valid", http.Header{"X-Nvr-Auth-Mechanism": {"service"}, "X-Nvr-Client-Id": {"client-1"}}, 200},
+		{"valid fallback alone", http.Header{"Authorization": {"Bearer " + token}}, 200},
+		{"non-ASCII assertions with valid fallback", http.Header{"X-Nvr-Auth-Mechanism": {"sérvice"}, "X-Nvr-Client-Id": {"clïent"}, "Authorization": {"Bearer " + token}}, 401},
+		{"non-ASCII assertions without fallback", http.Header{"X-Nvr-Auth-Mechanism": {"sérvice"}, "X-Nvr-Client-Id": {"clïent"}}, 401},
 		{"missing", http.Header{}, 401},
 		{"partial", http.Header{"X-Nvr-Client-Id": {"client-1"}}, 401},
 		{"alias only", http.Header{"Grpc-Metadata-X-Nvr-Auth-Mechanism": {"service"}, "Grpc-Metadata-X-Nvr-Client-Id": {"client-1"}}, 401},

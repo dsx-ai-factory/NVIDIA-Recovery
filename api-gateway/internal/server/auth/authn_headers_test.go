@@ -25,6 +25,9 @@ func TestHeaderIdentity(t *testing.T) {
 		accepted, rejected bool
 	}{
 		{name: "absent"},
+		{"non-ASCII mechanism", []string{"sérvice"}, []string{"subject-1"}, false, true},
+		{"non-ASCII client", []string{"service"}, []string{"clïent"}, false, true},
+		{"DEL", []string{"service"}, []string{"client\x7f"}, false, true},
 		{"valid", []string{"service"}, []string{"subject-1"}, true, false},
 		{"missing client", []string{"service"}, nil, false, true},
 		{"missing mechanism", nil, []string{"subject-1"}, false, true},
