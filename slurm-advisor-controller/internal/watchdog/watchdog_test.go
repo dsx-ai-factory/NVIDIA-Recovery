@@ -46,6 +46,45 @@ func TestWatchdogReleasesFirstObservedDAGRetryAtTimeout(t *testing.T) {
 	}
 }
 
+func TestWatchdogSiblingAttemptChangeResetsOnlyItsTimer(t *testing.T) {
+	start := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	engine, slurm, clock := newTestWatchdog(t, ModeAct, time.Minute, 10*time.Minute)
+	first := heldJob("4200_0", 1)
+	first.RawJobID, first.ArrayJobID, first.ArrayTaskID = "4200", "4200", "0"
+	second := heldJob("4200_1", 1)
+	second.RawJobID, second.ArrayJobID, second.ArrayTaskID = "4201", "4200", "1"
+	syncJobs(t, engine, slurm, clock, start, first, second)
+	first.AttemptIndex = 2
+	syncJobs(t, engine, slurm, clock, start.Add(30*time.Second), second, first)
+	result := syncJobs(t, engine, slurm, clock, start.Add(time.Minute), first, second)
+	assertRelease(t, result.Releases, second.JobID, 1, ReleaseApplied)
+	second.State, second.Held = cluster.JobStateRunning, false
+	result = syncJobs(t, engine, slurm, clock, start.Add(90*time.Second), second, first)
+	assertRelease(t, result.Releases, first.JobID, 2, ReleaseApplied)
+	if !slices.Equal(slurm.releaseCalls, []string{"4200_1", "4200_0"}) {
+		t.Fatalf("release selectors = %v", slurm.releaseCalls)
+	}
+}
+
+func TestWatchdogSiblingTimersRestartWithoutOpeningInitialDAGGate(t *testing.T) {
+	start := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	first := withDAGChild(heldJob("4200_0", 0))
+	second := withDAGChild(heldJob("4200_1", 2))
+	engine, slurm, clock := newTestWatchdog(t, ModeAct, time.Minute, 10*time.Minute)
+	syncJobs(t, engine, slurm, clock, start, first, second)
+	engine, slurm, clock = newTestWatchdog(t, ModeAct, time.Minute, 10*time.Minute)
+	syncJobs(t, engine, slurm, clock, start.Add(30*time.Second), second, first)
+	result := syncJobs(t, engine, slurm, clock, start.Add(time.Minute), first, second)
+	if len(result.Releases) != 0 || len(slurm.releaseCalls) != 0 {
+		t.Fatalf("restart reused an old timer: %+v", result.Releases)
+	}
+	result = syncJobs(t, engine, slurm, clock, start.Add(90*time.Second), second, first)
+	assertRelease(t, result.Releases, second.JobID, 2, ReleaseApplied)
+	if !slices.Equal(slurm.releaseCalls, []string{second.JobID}) {
+		t.Fatalf("release selectors = %v", slurm.releaseCalls)
+	}
+}
+
 func TestWatchdogAlwaysProtectsManagedNonDAGJob(t *testing.T) {
 	start := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
 	watchdog, slurm, clock := newTestWatchdog(t, ModeAct, time.Minute, 10*time.Minute)

@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from datetime import UTC, datetime
+from unittest.mock import Mock, call
 
+import pytest
 from recovery_libs.advice.requeue import check_max_requeue_reached
 from recovery_libs.schema.aps_spec.spec import ApsSlurmJobSpec
 from recovery_libs.schema.job_manager.constants import INFINITE_SYSTEM_REQUEUE_LIMIT
@@ -111,3 +113,62 @@ def test_check_max_requeue_reached_checkpoint_found_breaks_sequence():
     )
 
     assert reached is False
+
+
+@pytest.mark.parametrize(
+    ("job_limit", "system_limit"),
+    [(2, 10), (10, 2)],
+    ids=["job-limit", "system-cap"],
+)
+def test_array_tasks_retain_independent_requeue_budgets(job_limit: int, system_limit: int):
+    """An exhausted sibling cannot consume another task's job or system allowance."""
+    system_config = SystemRequeueConfig(max_requeue_times=system_limit)
+    for job_id, attempt_index, expected_reached in [
+        ("4200_0", 2, True),
+        ("4200_1", 0, False),
+        ("4200_1", 1, False),
+        ("4200_1", 2, True),
+    ]:
+        status = random_job_execution_status(job_id=job_id, job_attempt_index=attempt_index, state="FAILED")
+        status.job_group_id = "4200"
+        status.aps_spec = ApsSlurmJobSpec(max_requeue_times=job_limit)
+
+        reached, _ = check_max_requeue_reached(
+            status,
+            system_requeue_config=system_config,
+            get_jobs=lambda **kwargs: [],
+        )
+
+        assert reached is expected_reached, (job_id, attempt_index)
+
+
+def test_array_checkpoint_history_uses_task_id_not_shared_job_group():
+    """A sibling's saved checkpoint cannot prevent a task's checkpoint early stop."""
+    task_a_history = [
+        random_job_execution_status(job_id="4200_0", job_attempt_index=attempt_index, state="FAILED")
+        for attempt_index in (2, 1)
+    ]
+    task_b_history = [
+        random_job_execution_status(job_id="4200_1", job_attempt_index=attempt_index, state="FAILED")
+        for attempt_index in (1, 0)
+    ]
+    for status in task_a_history + task_b_history:
+        status.job_group_id = "4200"
+        status.aps_spec = ApsSlurmJobSpec(max_requeue_times=10)
+    task_b_history[1].checkpoints = [JobCheckpointInfo(timestamp=datetime.now(UTC), uuid="task-b-checkpoint")]
+    get_jobs = Mock(side_effect=[task_a_history, task_b_history])
+    system_config = SystemRequeueConfig(max_requeue_times=10, checkpoint_based_requeue_stop_threshold=2)
+
+    task_a_reached, _ = check_max_requeue_reached(
+        task_a_history[0], system_requeue_config=system_config, get_jobs=get_jobs
+    )
+    task_b_reached, _ = check_max_requeue_reached(
+        task_b_history[0], system_requeue_config=system_config, get_jobs=get_jobs
+    )
+
+    assert task_a_reached is True
+    assert task_b_reached is False
+    assert get_jobs.call_args_list == [
+        call(job_id="4200_0", sort_by="job_attempt_index:desc", limit=2, offset=0),
+        call(job_id="4200_1", sort_by="job_attempt_index:desc", limit=2, offset=0),
+    ]
