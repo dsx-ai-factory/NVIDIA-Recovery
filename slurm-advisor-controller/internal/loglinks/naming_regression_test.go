@@ -125,7 +125,7 @@ func TestScanDoesNotRelinkTheSourceOfAnOwnedGeneratedLink(t *testing.T) {
 	finished := filepath.Join(source, "stdout-42.log")
 	active := filepath.Join(source, "output43")
 	adjacent := filepath.Join(source, "extra.log")
-	for _, path := range []string{finished, active, adjacent} {
+	for _, path := range []string{finished, active} {
 		writeFile(t, path)
 	}
 	cfg := testConfig(source, destination)
@@ -135,6 +135,21 @@ func TestScanDoesNotRelinkTheSourceOfAnOwnedGeneratedLink(t *testing.T) {
 	m := mustNew(t, cfg)
 	now := time.Now().UTC()
 	m.Sync(context.Background(), now, []Target{{JobID: "42", SubmitTime: now, Paths: []string{finished}}})
+	// The duplicate this test guards against exists only if job 42's source is
+	// already exposed under a generated name.
+	generated := ""
+	for _, record := range readManifest(t, destination) {
+		if record.Target == finished && !record.SubmitTime.IsZero() {
+			generated = record.Name
+		}
+	}
+	if generated == "" {
+		t.Fatalf("no generated link recorded for %s", finished)
+	}
+	assertSymlink(t, filepath.Join(destination, generated), finished)
+	// Created only now, so its link proves the second sync really scanned the
+	// directory instead of skipping it.
+	writeFile(t, adjacent)
 	// Job 42 has ended; its generated link is still within retention.
 	m.Sync(context.Background(), now.Add(time.Minute), []Target{{JobID: "43", SubmitTime: now, Paths: []string{active}}})
 

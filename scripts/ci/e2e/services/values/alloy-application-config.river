@@ -36,9 +36,10 @@ loki.process "slurm_logs" {
 	}
 
 	stage.regex {
-		// Recognized timestamp names override the ordinary suffix's seconds.
+		// Recognized timestamp names override the ordinary suffix's seconds,
+		// or a numeric qualifier after the timestamp such as "_cycle-7".
 		// The generated prefix keeps a parent_task identity intact.
-		expression = "(?:(?:.*/)?[A-Za-z0-9-]{1,64}-[0-9a-f]{16}-a\\d+_|.*[_-])(?P<job_id>\\d+(?:_\\d+)?)_date_\\d{2}-\\d{2}-\\d{2}_time_\\d{2}-\\d{2}-\\d{2}\\.(?:out|log)$"
+		expression = "(?:(?:.*/)?[A-Za-z0-9-]{1,64}-[0-9a-f]{16}-a\\d+_|.*[_-])(?P<job_id>\\d+(?:_\\d+)?)_date_\\d{2}-\\d{2}-\\d{2}_time_\\d{2}-\\d{2}-\\d{2}[^/]*\\.(?:out|log)$"
 		source     = "filename"
 	}
 

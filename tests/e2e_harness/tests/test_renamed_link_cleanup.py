@@ -27,7 +27,8 @@ class Stack:
             }
         ]
         self.running = deepcopy(self.containers)
-        self.exists = False
+        # Directories by path, so cleanup that removes the wrong one fails.
+        self.directories: set[str] = set()
         self.fail_restart = False
 
     def get(self, *_: str) -> dict[str, Any]:
@@ -44,13 +45,13 @@ class Stack:
 
     def exec(self, selector: str, *command: str) -> str:
         if command[0] == "mkdir":
-            self.exists = True
+            self.directories.add(command[-1])
         elif command[0] == "rm":
             active = {item["name"]: item.get("value") for item in self.running[0]["env"]}
             assert active["SLURM_ADVISOR_LOG_LINKS_DESTINATION"] != command[-1], "deleted storage under a live writer"
-            self.exists = False
+            self.directories.discard(command[-1])
         elif command[0] == "test":
-            assert not self.exists
+            assert command[-1] not in self.directories
         return ""
 
 
@@ -82,7 +83,7 @@ def test_link_storage_is_removed_only_after_the_writer_has_stopped(restoration_f
     stack, run = Stack(), Run()
     original = deepcopy(stack.containers)
     enable(stack, isolated)(run)
-    assert stack.exists
+    assert stack.directories == {isolated}
     # The protection below only matters if the live writer really moved to the
     # disposable directory. Without this, both cases would pass trivially when
     # setup creates the directory but leaves the writer on shared storage.
@@ -92,12 +93,12 @@ def test_link_storage_is_removed_only_after_the_writer_has_stopped(restoration_f
     if restoration_fails:
         with pytest.raises(TimeoutError):
             cleanup()
-        assert stack.exists
+        assert stack.directories == {isolated}
         # Desired state is back to normal, but the old writer is still running on
         # the disposable directory, which is why that directory must be kept.
         assert destination_of(stack.containers) == destination_of(original)
         assert destination_of(stack.running) == isolated
     else:
         cleanup()
-        assert not stack.exists
+        assert not stack.directories
         assert stack.running == original
