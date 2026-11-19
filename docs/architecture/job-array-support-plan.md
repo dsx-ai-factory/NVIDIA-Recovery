@@ -14,9 +14,15 @@ identity across partial upserts and checks conflicts under the existing row lock
 HTTP/MySQL tests cover sibling grouping, distinct attempts, metadata round trips,
 and rejected updates. No schema migration is required.
 
-Task recovery, checkpoint association, and end-to-end qualification remain the
-subsequent phases. In particular, accounting attempt reconciliation and scheduler
-action qualification are still required before enabling array recovery.
+Task recovery reuse is covered by the tests and documentation in
+[PR #64](https://github.com/dsx-ai-factory/NVIDIA-Recovery/pull/64), following
+the task identity implementation in
+[PR #62](https://github.com/dsx-ai-factory/NVIDIA-Recovery/pull/62).
+No additional recovery business logic is needed for canonical task IDs.
+Generic recovery hardening is a separate follow-up in
+[PR #70](https://github.com/dsx-ai-factory/NVIDIA-Recovery/pull/70).
+Checkpoint association and end-to-end qualification remain subsequent phases;
+merging recovery-reuse coverage does not enable production array recovery.
 
 Focused verification:
 
@@ -66,11 +72,14 @@ reference's in-job cycles or orchestrator lifecycle.
 Add sanitized local fixtures; implementation and tests must not require a
 checkout of that reference repository.
 
-## Proposed PR Stack
+## Delivery Order
 
-Each PR builds on its predecessor and remains independently reviewable. Push
-and PR creation follow explicit maintainer instruction; this draft creates no
-remote branches or PRs.
+The delivery order is decision, task identity (#62), recovery-reuse coverage
+(#64), generic hardening (#70), checkpoint association, then end-to-end
+qualification. Each change remains independently reviewable. This is the order
+of implementation and review, not permission to enable each partial feature in
+production: checkpoint-based stop decisions require phase 4 association evidence,
+and production array recovery requires phase 5 qualification.
 
 | PR | Scope | Evidence required |
 | --- | --- | --- |
@@ -93,6 +102,13 @@ scheduler commands, and watchdog using distinct canonical task IDs. Group identi
 does not select recovery work or share retry allowance. The bootstrap test proves
 that command failures retry the same attempt while a sibling's observed successor
 converges independently.
+
+Checkpoint-policy tests supply histories already associated with canonical task
+IDs. They prove task-scoped lookup and policy reuse, not that ingested checkpoint
+events reach those histories. Until phase 4 resolves event identity before lookup
+and persistence, a task can appear to have no saved checkpoint despite saving one,
+causing a configured checkpoint-based stop threshold to end recovery early.
+Phase 3a adds no runtime gate or array-specific checkpoint-policy exception.
 
 Accounting reconstruction and log ownership hardening belong to phase 3b, not to
 the independent-task recovery state machine. Phase 3a does not establish safety
@@ -157,9 +173,15 @@ metadata text. Scheduler-action changes require human review.
 
 Deploy event/metadata readers and checkpoint audit payload support before
 enabling their producers. Qualify every deployed Slurm JSON version using
-captured, sanitized output. Roll out arrays with eager requeue disabled so
-backend retry and checkpoint stop policy precedes creation of a successor.
-Retained eager compatibility behavior is not evidence for that guarantee.
+captured, sanitized output. Recovery is Advice-only (ADR 0045); the eager
+compatibility path has been removed. Backend retry and checkpoint stop policy
+precede creation of a successor.
+
+Do not enable checkpoint-based stop decisions for array workloads until phase 4
+demonstrates checkpoint association through the production ingestion path. This
+is a rollout prerequisite, not an automatic runtime exemption implemented by
+phase 3a. Keep production array recovery disabled until the remaining accounting,
+checkpoint-association, and phase 5 qualification requirements are satisfied.
 
 Reuse the existing `job_group_id` column and group queries; no new array-specific
 database columns or tables are planned. Before enabling array recovery, inspect
