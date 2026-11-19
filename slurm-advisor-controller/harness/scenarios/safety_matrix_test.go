@@ -248,6 +248,31 @@ func TestSafetyMatrix(t *testing.T) {
 		h.waitForReleasedFromHold(jobID)
 	})
 
+	h.runScenario("array siblings recover independently across controller restart", func(h harness) {
+		arrayID := h.submitJob("advisor-array-recovery", "--array=0-1",
+			"--comment="+controllerComment(controllerModeAct), "--wrap=sleep 300")
+		first, second := arrayID+"_0", arrayID+"_1"
+		h.waitForSqueueState(first, slurmStateRunning)
+		h.waitForSqueueState(second, slurmStateRunning)
+		h.putAdvice(restartAdvice(first))
+		h.startController(controllerModeAct)
+		h.waitForRequeuedReleasedJob(first, 0)
+		if job := h.requireSqueueJob(second); job.RestartCount != 0 || job.State != slurmStateRunning {
+			h.t.Fatalf("sibling changed during first task recovery: %+v", job)
+		}
+
+		h.stopController()
+		h.putAdvice(restartAdvice(first), restartAdvice(second))
+		h.startController(controllerModeAct)
+		h.waitForRequeuedReleasedJob(second, 0)
+		time.Sleep(3 * pollInterval)
+		for _, taskID := range []string{first, second} {
+			if job := h.requireSqueueJob(taskID); job.RestartCount != 1 || job.Held {
+				h.t.Fatalf("task %s did not converge independently: %+v", taskID, job)
+			}
+		}
+	})
+
 	h.runScenario("fresh restart advice requeues a completed job missing from squeue", func(h harness) {
 		jobID := h.submitJob(
 			"advisor-restart-completed",
