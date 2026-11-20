@@ -1,4 +1,4 @@
-# ADR 0058: Plan Collector-Visible Slurm Log Paths
+# ADR 0060: Plan Collector-Visible Slurm Log Paths
 
 Status: proposed
 
@@ -43,11 +43,14 @@ or Advice. Generated names are verified during manifest recovery, including
 after disabling the naming option. Adjacent application logs retain existing
 basename behavior; a primary is not linked again by the adjacent scanner.
 
-This first slice does not remove superseded attempt links or change retention.
-Repeated attempts reusing a source can therefore expose more than one collector
-path to the same file. Production qualification for such workloads requires the
-follow-up replacement policy and collector-position/replay tests; this option
-must remain disabled for them until that work is reviewed.
+This first slice does not remove superseded attempt links, compare source
+identity across attempts, or change retention. A requeued attempt can therefore
+receive a new collector path to a file an earlier attempt also used, including a
+previous attempt's path that Slurm briefly reports after a requeue, so log lines
+can be attributed to the wrong attempt. This applies whether attempts reuse one
+file or write distinct files. Production qualification for workloads that may be
+requeued requires the follow-up replacement policy and collector-position/replay
+tests; this option must remain disabled for them until that work is reviewed.
 
 ## Consequences
 

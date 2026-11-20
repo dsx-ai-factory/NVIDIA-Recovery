@@ -448,12 +448,15 @@ outside the source roots keeps its original published path and gets no generated
 link. Published names are plans: filesystem creation may lag or fail while job
 publication continues. Final accounting preserves the same naming plan.
 
-Earlier-attempt generated links are not removed immediately in this first
-implementation. Keep this option disabled for requeued workloads that reuse
-source files until the follow-up replacement policy and collector replay
-behavior are qualified. Enabling or disabling naming can expose old and new
+Earlier-attempt generated links are not removed immediately, and source
+identity is not compared across attempts, in this first implementation. A
+requeued attempt can receive a new link to a file an earlier attempt also used,
+including a previous attempt's path that Slurm briefly reports after a requeue,
+so log lines can be attributed to the wrong attempt. Keep this option disabled
+for workloads that may be requeued until the follow-up replacement policy and
+collector replay behavior are qualified. Enabling or disabling naming can expose old and new
 links to the same source; plan the collector transition before rollout. See
-[the proposed naming contract](../../../docs/decisions/0058-plan-collector-visible-slurm-log-paths.md).
+[the proposed naming contract](../../../docs/decisions/0060-plan-collector-visible-slurm-log-paths.md).
 
 The chart renders source-root and application-pattern values as JSON arrays so
 commas in paths or regular expressions are preserved. The controller container
