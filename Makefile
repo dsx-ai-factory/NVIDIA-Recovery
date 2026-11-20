@@ -26,7 +26,7 @@ export IMAGE_PREFIX
 export IMAGE_TAG
 export PLATFORMS
 
-.PHONY: check-generated check-generated-api-gateway-bindings check-generated-go check-slurm-watchdog-deps check-tidy-go format-python generate-api-gateway-bindings generate-go install-go-tools lint lint-buf lint-go lint-python lint-typescript test test-go test-go-race test-nightly-selection-contract test-python test-typescript test-unit test-slurm-advisor-controller-chart-e2e test-slurm-advisor-controller-image test-slurm-advisor-controller-systemd test-slurm-advisor-harness tidy-go verify-go vet-go
+.PHONY: check-generated check-generated-api-gateway-bindings check-generated-go check-slurm-watchdog-deps check-tidy-go format-python generate-api-gateway-bindings generate-go install-go-tools lint lint-buf lint-go lint-python lint-typescript test test-go test-go-envtest test-go-race test-nightly-selection-contract test-python test-typescript test-unit test-slurm-advisor-controller-chart-e2e test-slurm-advisor-controller-image test-slurm-advisor-controller-systemd test-slurm-advisor-harness tidy-go verify-go vet-go
 
 lint: format-python lint-python lint-go lint-buf check-generated lint-typescript
 
@@ -77,6 +77,9 @@ test-go:
 
 test-go-race:
 	scripts/ci/test-go.sh $(GO_PACKAGE_ARGS) -- -race
+
+test-go-envtest:
+	scripts/ci/test-go-envtest.sh
 
 vet-go:
 	scripts/ci/vet-go.sh $(GO_PACKAGE_ARGS)

@@ -701,9 +701,10 @@ func TestRejectedOpenWriteLeavesNothingToClose(t *testing.T) {
 }
 
 // After an ambiguous closure write, the next reconcile reads the exact
-// attempt. Only a terminal row for the same UID acknowledges the closure; an
-// open or missing row is written again, read failures back off, and a row
-// owned by another workload UID is reported without retry.
+// attempt. Only a terminal row for the same attempt and UID acknowledges the
+// closure; an open or missing row is written again, read failures back off,
+// and a row recorded for another attempt or workload UID is reported without
+// retry.
 func TestAmbiguousClosureIsSettledByExactRead(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -737,6 +738,12 @@ func TestAmbiguousClosureIsSettledByExactRead(t *testing.T) {
 					"scheduler": structpb.NewStringValue("kubernetes"), "workload_uid": structpb.NewStringValue("other-uid"),
 				}}
 			},
+		},
+		{
+			// The row is found by the canonical ID and has the workload's UID,
+			// but its stored attempt index records a different attempt.
+			name: "terminal row of another attempt index conflicts", closureCommits: true, wantConflict: true,
+			beforeRead: func(g *observationGateway) { g.rows[firstAttemptID].AttemptIndex++ },
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1299,9 +1306,12 @@ func TestRejectedClosureKeepsUnenrolledRecheck(t *testing.T) {
 
 // Pod removals can reach the controller before the workload event that
 // explains them. Dropping tracked nodes from a cached running observation
-// requires the live workload to confirm a running attempt. Otherwise the last
-// node evidence is kept, every attempt of a lost UID is closed with it, or the
-// name is revisited once the cache can catch up.
+// requires the live workload to confirm a running attempt. A live native
+// terminal outcome of the same attempt is recorded with the last node evidence,
+// even during deletion; one reported for another attempt of the same UID is
+// not. Otherwise the last node evidence is kept, every attempt
+// of a lost UID is closed with it, or the name is revisited once the cache can
+// catch up.
 func TestNodeRemovalIsVerifiedAgainstLiveWorkload(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -1311,7 +1321,9 @@ func TestNodeRemovalIsVerifiedAgainstLiveWorkload(t *testing.T) {
 		addNode     bool
 		wantClosure bool
 		wantRequeue bool
-		wantNodes   []string
+		// wantFailed expects the live failure to be recorded with wantNodes.
+		wantFailed bool
+		wantNodes  []string
 	}{
 		{
 			name: "workload is being deleted", addNode: true, wantNodes: []string{"node-a", "node-b"},
@@ -1348,11 +1360,44 @@ func TestNodeRemovalIsVerifiedAgainstLiveWorkload(t *testing.T) {
 			},
 		},
 		{
-			name: "workload stopped running", wantRequeue: true,
+			name: "workload failed", wantFailed: true, wantNodes: []string{"node-a"},
 			live: func(_ *testing.T, cached *unstructured.Unstructured) client.Reader {
 				failed := cached.DeepCopy()
 				setCondition(failed, "Failed")
 				return kubeClient([]schema.GroupVersionKind{pyTorchJobKind}, failed)
+			},
+		},
+		{
+			name: "workload failed and is being deleted", addNode: true, wantFailed: true, wantNodes: []string{"node-a", "node-b"},
+			live: func(t *testing.T, cached *unstructured.Unstructured) client.Reader {
+				failed := cached.DeepCopy()
+				setCondition(failed, "Failed")
+				failed.SetFinalizers([]string{"test/hold"})
+				live := kubeClient([]schema.GroupVersionKind{pyTorchJobKind}, failed)
+				if err := live.Delete(t.Context(), failed); err != nil {
+					t.Fatal(err)
+				}
+				return live
+			},
+		},
+		{
+			name: "workload is unenrolled after failing", wantRequeue: true,
+			live: func(_ *testing.T, cached *unstructured.Unstructured) client.Reader {
+				unenrolled := cached.DeepCopy()
+				setCondition(unenrolled, "Failed")
+				unenrolled.SetLabels(map[string]string{jobIDLabel: secondJobID})
+				return kubeClient([]schema.GroupVersionKind{pyTorchJobKind}, unenrolled)
+			},
+		},
+		{
+			name: "workload failed in another attempt", wantRequeue: true,
+			live: func(_ *testing.T, cached *unstructured.Unstructured) client.Reader {
+				otherAttempt := cached.DeepCopy()
+				labels := otherAttempt.GetLabels()
+				labels[attemptLabel] = "2"
+				otherAttempt.SetLabels(labels)
+				setCondition(otherAttempt, "Failed")
+				return kubeClient([]schema.GroupVersionKind{pyTorchJobKind}, otherAttempt)
 			},
 		},
 	} {
@@ -1395,6 +1440,13 @@ func TestNodeRemovalIsVerifiedAgainstLiveWorkload(t *testing.T) {
 				if len(f.r.tracked) != 0 {
 					t.Fatalf("an acknowledged closure ends tracking: %v", f.r.tracked)
 				}
+			case tc.wantFailed:
+				failed := requireWrite(t, f.gateway)
+				if failed.GetState() != pb.JobStatus_JOB_STATUS_FAILED || failed.GetAttemptIndex() != 0 ||
+					!slices.Equal(failed.GetAllocatedNodes(), tc.wantNodes) ||
+					failed.GetSchedulerMetadata().GetFields()["termination_reason"].GetStringValue() != "ObservedFailed" {
+					t.Fatalf("a live failure must be recorded with its reason and the attempt's nodes: %v", failed)
+				}
 			case tc.wantNodes != nil:
 				if kept := requireWrite(t, f.gateway); kept.GetState() != pb.JobStatus_JOB_STATUS_RUNNING ||
 					!slices.Equal(kept.GetAllocatedNodes(), tc.wantNodes) {
@@ -1410,6 +1462,48 @@ func TestNodeRemovalIsVerifiedAgainstLiveWorkload(t *testing.T) {
 			}
 			noWrites(t, f.gateway)
 		})
+	}
+}
+
+// A live failure found while the cache still shows the attempt running is
+// recorded as the attempt's pending terminal outcome. When that write is
+// ambiguous and the workload is then deleted, closure replays the failure with
+// its reason and nodes rather than DELETED.
+func TestLiveTerminalOutcomeSurvivesDeletion(t *testing.T) {
+	f := newPyTorchFixture(t, "Running", "test/hold")
+	reconcileWorkload(t, f.r, f.request)
+	running := requireWrite(t, f.gateway)
+	stale := workloadObject(pyTorchJobKind)
+	if err := f.kube.Get(t.Context(), f.request.NamespacedName, stale); err != nil {
+		t.Fatal(err)
+	}
+	stale.SetResourceVersion("")
+	stale.SetFinalizers(nil)
+	cache := kubeClient(f.r.kinds, stale)
+	f.r.cache = cache
+	f.update(t, func(w *unstructured.Unstructured) { setCondition(w, "Failed") })
+	f.removePod(t)
+
+	f.gateway.failNext(codes.Unavailable, false)
+	if _, err := f.r.Reconcile(t.Context(), f.request); err == nil || isTerminalReconcileError(err) {
+		t.Fatalf("an ambiguous terminal write must be retried by the queue: %v", err)
+	}
+	f.markDeleting(t)
+	f.update(t, func(w *unstructured.Unstructured) { w.SetFinalizers(nil) })
+	if err := cache.Delete(t.Context(), stale); err != nil {
+		t.Fatal(err)
+	}
+
+	reconcileWorkload(t, f.r, f.request)
+	closure := requireWrite(t, f.gateway)
+	if closure.GetHeimdallJobId() != running.GetHeimdallJobId() || closure.GetState() != pb.JobStatus_JOB_STATUS_FAILED ||
+		!slices.Equal(closure.GetAllocatedNodes(), []string{"node-a"}) ||
+		closure.GetSchedulerMetadata().GetFields()["termination_reason"].GetStringValue() != "ObservedFailed" {
+		t.Fatalf("deletion must replay the live failure with its reason and nodes: %v", closure)
+	}
+	noWrites(t, f.gateway)
+	if row := f.gateway.row(running.GetHeimdallJobId()); row.GetState() != pb.JobStatus_JOB_STATUS_FAILED || len(f.r.tracked) != 0 {
+		t.Fatalf("closure must end with a FAILED row and no tracking: %v %v", row, f.r.tracked)
 	}
 }
 
@@ -1480,13 +1574,15 @@ func (f *pyTorchFixture) placeWorker(t *testing.T, node string) *corev1.Pod {
 // and restore nodes the attempt no longer uses. Once the grace period ends,
 // the controller reads the row and repairs it from the current observation.
 // A node held only by the stored row is dropped only when the live workload is
-// a running attempt; during teardown the stored nodes are kept.
+// a running attempt; during teardown the stored nodes are kept, and a live
+// failure is recorded with them.
 func TestLateOpenWriteIsRepairedAfterGrace(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		// teardown makes deletion visible before the check.
-		teardown  func(*testing.T, *pyTorchFixture)
-		wantNodes []string
+		// teardown makes deletion or failure visible before the check.
+		teardown   func(*testing.T, *pyTorchFixture)
+		wantFailed bool
+		wantNodes  []string
 	}{
 		{name: "running workload drops the stale node", wantNodes: []string{"node-a"}},
 		{
@@ -1506,6 +1602,18 @@ func TestLateOpenWriteIsRepairedAfterGrace(t *testing.T) {
 					t.Fatal(err)
 				}
 				f.r.live = live
+			},
+		},
+		{
+			name: "failure seen only by the live read keeps the stale node", wantFailed: true, wantNodes: []string{"node-a", "node-b"},
+			teardown: func(t *testing.T, f *pyTorchFixture) {
+				failed := workloadObject(pyTorchJobKind)
+				if err := f.kube.Get(t.Context(), f.request.NamespacedName, failed); err != nil {
+					t.Fatal(err)
+				}
+				failed.SetResourceVersion("")
+				setCondition(failed, "Failed")
+				f.r.live = kubeClient(f.r.kinds, failed)
 			},
 		},
 	} {
@@ -1546,7 +1654,11 @@ func TestLateOpenWriteIsRepairedAfterGrace(t *testing.T) {
 			clock.advance(time.Second)
 			reconcileWorkload(t, f.r, f.request)
 			repaired := requireWrite(t, f.gateway)
-			if f.gateway.reads() != 1 || repaired.GetState() != pb.JobStatus_JOB_STATUS_RUNNING ||
+			wantState := pb.JobStatus_JOB_STATUS_RUNNING
+			if tc.wantFailed {
+				wantState = pb.JobStatus_JOB_STATUS_FAILED
+			}
+			if f.gateway.reads() != 1 || repaired.GetState() != wantState ||
 				!slices.Equal(repaired.GetAllocatedNodes(), tc.wantNodes) {
 				t.Fatalf("one read must lead to one repair of the current observation: %v", repaired)
 			}
@@ -1623,8 +1735,9 @@ func TestLateCommitCheckWaitsForTheLastAmbiguousWrite(t *testing.T) {
 }
 
 // The check never overrides a terminal row or a row owned by another
-// workload, recreates a missing row, and after repeated read failures writes
-// only an observation the live workload confirms as running.
+// workload, recreates a missing row, repairs a stale open state even when the
+// nodes match, and after repeated read failures writes only an observation the
+// live workload confirms as running.
 func TestLateCommitCheckSettlesStoredRow(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -1656,10 +1769,30 @@ func TestLateCommitCheckSettlesStoredRow(t *testing.T) {
 				f.gateway.locked(func() { delete(f.gateway.rows, id) })
 			},
 		},
+		{
+			name: "row with the same nodes but a stale open state is rewritten", wantWrite: true,
+			before: func(_ *testing.T, f *pyTorchFixture, id string) {
+				f.gateway.locked(func() { f.gateway.rows[id].State = pb.JobStatus_JOB_STATUS_PENDING })
+			},
+		},
 		{name: "unreadable row of a running workload is rewritten", failedReads: lateCommitReads, wantWrite: true},
 		{
 			name: "unreadable row of a deleting workload is kept", failedReads: lateCommitReads,
 			before: func(t *testing.T, f *pyTorchFixture, _ string) { f.markDeleting(t) },
+		},
+		{
+			// The cache still shows the attempt running, so only the live read
+			// can reveal the deletion that forbids replacing unknown nodes.
+			name: "unreadable row of a workload deleting only in the live read is kept", failedReads: lateCommitReads,
+			before: func(t *testing.T, f *pyTorchFixture, _ string) {
+				stale := workloadObject(pyTorchJobKind)
+				if err := f.kube.Get(t.Context(), f.request.NamespacedName, stale); err != nil {
+					t.Fatal(err)
+				}
+				stale.SetResourceVersion("")
+				f.r.cache = kubeClient(f.r.kinds, stale)
+				f.markDeleting(t)
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
