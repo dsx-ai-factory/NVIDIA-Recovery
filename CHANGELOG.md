@@ -6,6 +6,10 @@ This file records notable user-facing changes to NVIDIA Recovery.
 
 ### Changed
 
+- Include Advice Operator in Go build, generation, lint, vet, test, and CI checks;
+  support explicit image builds and retain its source and standalone chart in
+  release source archives.
+
 - Accept external code and documentation contributions with maintainer approval
   of non-maintainer CI heads through NVIDIA copy-pr-bot.
 - Make GitHub the sole development and CI authority; retire GitLab configuration.

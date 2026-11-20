@@ -26,8 +26,8 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def normalize(raw, destination, excluded_roots=()):
-    """Normalize archive metadata, omitting specified roots beneath its top directory."""
+def normalize(raw, destination):
+    """Normalize archive metadata while retaining its payload."""
     with (
         tarfile.open(fileobj=io.BytesIO(raw), mode="r:*") as source,
         destination.open("wb") as output,
@@ -35,9 +35,6 @@ def normalize(raw, destination, excluded_roots=()):
         tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as target,
     ):
         for member in sorted(source.getmembers(), key=lambda item: item.name):
-            relative = Path(*Path(member.name).parts[1:])
-            if any(relative == Path(root) or Path(root) in relative.parents for root in excluded_roots):
-                continue
             member.mtime = member.uid = member.gid = 0
             member.uname = member.gname = ""
             member.pax_headers = {}
@@ -53,7 +50,7 @@ def inspect_archive(path, prefix, required):
             if Path(name).is_absolute() or ".." in parts or not (name == prefix or name.startswith(prefix + "/")):
                 raise ValueError(f"unsafe or unexpected archive path: {name}")
             # Distribute the provider Helm chart, not a checkout of its source/client.
-            if {"advice-operator", "attribution-source", "attribution-client"} & set(parts) or (
+            if {"attribution-source", "attribution-client"} & set(parts) or (
                 "attribution-service" in parts
                 and parts[1:4] != ("deploy", "helm", "attribution-service")
                 and parts[1:3] != ("charts", "attribution-service")
@@ -101,6 +98,8 @@ def verify(directory, expected_sha=None, expected_version=None):
             "LICENSE",
             "THIRD_PARTY_NOTICES.md",
             "RELEASE.md",
+            "advice-operator/go.mod",
+            "deploy/helm/advice-operator/Chart.yaml",
             f"docs/releases/v{version}.md",
             "deploy/helm/nvidia-recovery/Chart.lock",
         ],
@@ -154,13 +153,21 @@ def package(version, destination, ref):
         work = Path(temporary)
         prefix = f"nvidia-recovery-{version}"
         source = destination / f"{prefix}-source.tar.gz"
-        # Advice Operator is vendored for downstream consumers, not released yet.
         normalize(
             run("git", "archive", "--format=tar", f"--prefix={prefix}/", sha),
             source,
-            excluded_roots=("advice-operator", "deploy/helm/advice-operator"),
         )
-        inspect_archive(source, prefix, ["LICENSE", "RELEASE.md", f"docs/releases/v{version}.md"])
+        inspect_archive(
+            source,
+            prefix,
+            [
+                "LICENSE",
+                "RELEASE.md",
+                f"docs/releases/v{version}.md",
+                "advice-operator/go.mod",
+                "deploy/helm/advice-operator/Chart.yaml",
+            ],
+        )
         with tarfile.open(source) as archive:
             archive.extractall(work, filter="data")
         root = work / prefix

@@ -73,6 +73,10 @@ for package in "${packages[@]}"; do
     ci_require_command go
     ci_log "testing Go package $package in $package_dir"
     (
+        if [[ "$package" == advice-operator ]]; then
+            KUBEBUILDER_ASSETS="$("$SCRIPT_DIR/setup-advice-operator-envtest.sh")"
+            export KUBEBUILDER_ASSETS
+        fi
         cd "$package_dir"
         if ((${#go_test_args[@]} > 0)); then
             go test ./... "${go_test_args[@]}"
