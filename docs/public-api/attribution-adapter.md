@@ -60,6 +60,11 @@ A finding targets either a `Node` or `AllJobResources` and includes an
 isolation from an empty list, a missing confidence value, or an informational
 error. Recovery policy belongs to the caller and downstream policy processing.
 
+For a `STRAGGLER` detection signal, the Adapter also returns a `Node` finding
+for each node in the provider's straggler digests. Its `symptom` is
+`Straggler (<pattern>)`, for example `Straggler (Megatron Pattern)`. Other
+detection signals ignore those digests.
+
 The public error enum contains `timeout`, `insufficient_telemetry`,
 `service_error`, and `no_attribution_available`. These are response data, not
 HTTP status codes. Provider processing failures can return HTTP 200 with
