@@ -5,18 +5,18 @@
 /**
  * @description AuditEventPartialSuccess describes events rejected from an otherwise accepted batch.
  * @type object
-*/
+ */
 export interface V1AuditEventPartialSuccess {
-    /**
-     * @description Number of rejected events.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    rejectedEvents?: number;
-    /**
-     * @description Human-readable explanation of why events were rejected.
-     * @type string | undefined
-    */
-    errorMessage?: string;
+  /**
+   * @description Number of rejected events.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  rejectedEvents?: number;
+  /**
+   * @description Human-readable explanation of why events were rejected.
+   * @type string | undefined
+   */
+  errorMessage?: string;
 }

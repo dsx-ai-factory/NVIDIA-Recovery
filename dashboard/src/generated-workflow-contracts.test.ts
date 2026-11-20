@@ -237,13 +237,16 @@ describe("API Gateway generated workflow ID contracts", () => {
       v1CreateOrUpdateJobRequestSchema,
       { jobId: "job-1", attemptIndex: 0 },
     ],
-  ])("requires workflowId in the generated %s Zod schema", (_, schema, value) => {
-    expect(schema.safeParse(value).success).toBe(false);
-    expect(
-      schema.safeParse({
-        ...value,
-        workflowId: "workflow/%_ e\u0301 多字节🚀",
-      }).success,
-    ).toBe(true);
-  });
+  ])(
+    "requires workflowId in the generated %s Zod schema",
+    (_, schema, value) => {
+      expect(schema.safeParse(value).success).toBe(false);
+      expect(
+        schema.safeParse({
+          ...value,
+          workflowId: "workflow/%_ e\u0301 多字节🚀",
+        }).success,
+      ).toBe(true);
+    },
+  );
 });

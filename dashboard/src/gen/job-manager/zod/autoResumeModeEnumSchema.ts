@@ -4,4 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * This enum class defines the auto resume mode for the job.
+ * SINGLETON_DEPENDENCY: NVIDIA Recovery will use the existing singleton dependency jobs to resume the progress.
+ * REQUEUE: NVIDIA Recovery will requeue the same job to resume the progress.
+ */
 export const autoResumeModeEnumSchema = z.enum(['singleton_dependency', 'requeue']).describe('This enum class defines the auto resume mode for the job.\n\nSINGLETON_DEPENDENCY: NVIDIA Recovery will use the existing singleton dependency jobs to resume the progress.\nREQUEUE: NVIDIA Recovery will requeue the same job to resume the progress.')

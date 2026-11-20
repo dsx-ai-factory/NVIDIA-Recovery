@@ -9,7 +9,7 @@ import type { V1CreateAuditEventsResponse } from './V1CreateAuditEventsResponse'
 /**
  * @description CreateAuditEventsResponse reports full or partial batch acceptance.
  * @type object
-*/
+ */
 export type AuditServiceCreateAuditEventsStatus200 = V1CreateAuditEventsResponse;
 
 export type AuditServiceCreateAuditEventsStatusDefault = RpcStatus;
@@ -17,22 +17,22 @@ export type AuditServiceCreateAuditEventsStatusDefault = RpcStatus;
 /**
  * @description CreateAuditEventsRequest is a batch of producer audit events to ingest.
  * @type object
-*/
+ */
 export type AuditServiceCreateAuditEventsBody = V1CreateAuditEventsRequest;
 
 export interface AuditServiceCreateAuditEventsOptions {
-    body: AuditServiceCreateAuditEventsBody;
-    path?: never;
-    query?: never;
-    headers?: never;
+  body: AuditServiceCreateAuditEventsBody;
+  path?: never;
+  query?: never;
+  headers?: never;
 }
 
 export interface AuditServiceCreateAuditEventsResponses {
-    "200": AuditServiceCreateAuditEventsStatus200;
-    default: AuditServiceCreateAuditEventsStatusDefault;
+  '200': AuditServiceCreateAuditEventsStatus200;
+  default: AuditServiceCreateAuditEventsStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type AuditServiceCreateAuditEventsResponse = (AuditServiceCreateAuditEventsStatus200 | AuditServiceCreateAuditEventsStatusDefault);
+ */
+export type AuditServiceCreateAuditEventsResponse = AuditServiceCreateAuditEventsStatus200;

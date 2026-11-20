@@ -4,8 +4,12 @@
 
 import * as z from 'zod'
 
+/**
+ * The public facing data model of a job group's aggregated metadata, derived from
+ * the job execution records belonging to the group.
+ */
 export const jobGroupStatusSchema = z.object({
   job_group_id: z.string(),
   unique_job_count: z.int(),
   total_job_attempt_count: z.int(),
-}).describe('The public facing data model of a job group\'s aggregated metadata, derived from\nthe job execution records belonging to the group.').meta({ examples: [{}] })
+}).describe('The public facing data model of a job group\'s aggregated metadata, derived from\nthe job execution records belonging to the group.').meta({ examples: [{"job_group_id":"job_group_id","unique_job_count":6,"total_job_attempt_count":1}] })

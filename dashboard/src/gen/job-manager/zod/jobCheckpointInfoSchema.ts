@@ -4,7 +4,10 @@
 
 import * as z from 'zod'
 
+/**
+ * Data structure that represents a job checkpoint event.
+ */
 export const jobCheckpointInfoSchema = z.object({
   timestamp: z.iso.datetime(),
   uuid: z.string(),
-}).describe('Data structure that represents a job checkpoint event.').meta({ examples: [{}] })
+}).describe('Data structure that represents a job checkpoint event.').meta({ examples: [{"uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"}] })

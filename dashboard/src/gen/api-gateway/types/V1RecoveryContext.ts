@@ -5,36 +5,37 @@
 import type { V1RecoveryOperationKey } from './V1RecoveryOperation'
 
 /**
- * @description RecoveryContext carries one durable recovery sequence\'s W3C trace context.\nIt is correlation data and does not authorize or otherwise change scheduler actions.
+ * @description RecoveryContext carries one durable recovery sequence's W3C trace context.
+ * It is correlation data and does not authorize or otherwise change scheduler actions.
  * @type object
-*/
+ */
 export interface V1RecoveryContext {
-    /**
-     * @description The durable recovery sequence UUID assigned by Job Manager.
-     * @type string
-    */
-    sequenceId: string;
-    /**
-     * @description The canonical W3C traceparent for later recovery work.
-     * @type string
-    */
-    traceparent: string;
-    /**
-     * @description The canonical W3C tracestate, when present.
-     * @type string | undefined
-    */
-    tracestate?: string;
-    /**
-     * @description When the triggering condition was observed.
-     *
-     * Format: `date-time`
-     * @type string
-    */
-    triggeredAt: string;
-    /**
-     * @description The scheduler-neutral recovery operation.
-     * @default 'RECOVERY_OPERATION_UNSPECIFIED'
-     * @type string
-    */
-    operation: V1RecoveryOperationKey;
+  /**
+   * @description The durable recovery sequence UUID assigned by Job Manager.
+   * @type string
+   */
+  sequenceId: string;
+  /**
+   * @description The canonical W3C traceparent for later recovery work.
+   * @type string
+   */
+  traceparent: string;
+  /**
+   * @description The canonical W3C tracestate, when present.
+   * @type string | undefined
+   */
+  tracestate?: string;
+  /**
+   * @description When the triggering condition was observed.
+   *
+   * Format: `date-time`
+   * @type string
+   */
+  triggeredAt: string;
+  /**
+   * @description The scheduler-neutral recovery operation.
+   * @default 'RECOVERY_OPERATION_UNSPECIFIED'
+   * @type string
+   */
+  operation: V1RecoveryOperationKey;
 }

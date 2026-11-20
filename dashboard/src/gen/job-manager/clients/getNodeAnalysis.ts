@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetNodeAnalysisOptions, GetNodeAnalysisResponses } from '../types/GetNodeAnalysis'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /jobs/node-analysis`
  * @description Analyze node sets across multiple jobs using set algebra expressions.
  * This endpoint evaluates set algebra expressions over job node lists to identify
  * commonalities and differences between jobs. It supports union (U), intersection (&),
@@ -42,10 +43,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * - Database errors
  * - Unexpected failures
  * @summary Get Node Analysis
- * {@link /jobs/node-analysis}
  */
 export function getNodeAnalysis<ThrowOnError extends boolean = true>(options: Options<GetNodeAnalysisOptions, ThrowOnError>): Unwrappable<RequestResult<GetNodeAnalysisResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/jobs/node-analysis', styles: { query: { expr: { style: 'form', explode: true }, group_by: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetNodeAnalysisResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetNodeAnalysisResponses, ThrowOnError>({ method: 'GET', url: '/jobs/node-analysis', ...config, styles: { ...config.styles, query: { expr: { style: 'form', explode: true }, group_by: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

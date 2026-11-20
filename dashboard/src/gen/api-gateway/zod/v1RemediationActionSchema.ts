@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { v1ResourceDetailSchema } from './v1ResourceDetailSchema'
 
+/**
+ * RemediationAction represents an action taken to remediate an issue.
+ */
 export const v1RemediationActionSchema = z.object({
   actionType: z.string().optional().describe('The type of action (e.g., "exclude_node", "restart_job").'),
   timestamp: z.iso.datetime().optional().describe('When the action was taken.'),

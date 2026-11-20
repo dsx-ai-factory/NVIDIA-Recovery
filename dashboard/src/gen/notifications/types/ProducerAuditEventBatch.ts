@@ -7,7 +7,7 @@ import type { ProducerAuditEvent } from './ProducerAuditEvent'
 /**
  * @description A batch of audit events to ingest.
  * @type object
-*/
+ */
 export interface ProducerAuditEventBatch {
-    items: ProducerAuditEvent[];
+  items: ProducerAuditEvent[];
 }

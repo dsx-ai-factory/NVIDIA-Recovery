@@ -10,45 +10,50 @@ import type { V1JobDagDependency } from './V1JobDagDependency'
 /**
  * @description JobRecoveryConfig contains typed recovery policy for scheduler jobs.
  * @type object
-*/
+ */
 export interface V1JobRecoveryConfig {
-    /**
-     * @description Job-level auto-resume mode.
-     * @default 'AUTO_RESUME_MODE_UNSPECIFIED'
-     * @type string | undefined
-    */
-    autoResumeMode?: JobRecoveryConfigAutoResumeModeKey;
-    /**
-     * @description Maximum number of times a job can be requeued. Must be positive when present.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    maxRequeueTimes?: number;
-    /**
-     * @description Whether normal completion should trigger requeue. Presence overrides the system default.
-     * @type boolean | undefined
-    */
-    requeueOnCompletion?: boolean;
-    /**
-     * @description Job-level anomaly detection policy supplied by the scheduler adapter.
-     * @type object | undefined
-    */
-    anomalyDetectionConfig?: V1JobAnomalyDetectionConfig;
-    /**
-     * @description Parent gates that must be satisfied before this job becomes eligible.
-     * @type array | undefined
-    */
-    dagDependencies?: V1JobDagDependency[];
-    /**
-     * @description Action to apply after all DAG dependencies are satisfied.
-     * @default 'DAG_ACTION_UNSPECIFIED'
-     * @type string | undefined
-    */
-    dagAction?: JobRecoveryConfigDagActionKey;
-    /**
-     * @description Optional APS routing environment preserved exactly from the scheduler job.
-     * @type string | undefined
-    */
-    environment?: string;
+  /**
+   * @description Job-level auto-resume mode.
+   * @default 'AUTO_RESUME_MODE_UNSPECIFIED'
+   * @type string | undefined
+   */
+  autoResumeMode?: JobRecoveryConfigAutoResumeModeKey;
+  /**
+   * @description Maximum number of times a job can be requeued. Must be positive when present.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  maxRequeueTimes?: number;
+  /**
+   * @description Whether normal completion should trigger requeue. Presence overrides the system default.
+   * @type boolean | undefined
+   */
+  requeueOnCompletion?: boolean;
+  /**
+   * @description Job-level anomaly detection policy supplied by the scheduler adapter.
+   * @type object | undefined
+   */
+  anomalyDetectionConfig?: V1JobAnomalyDetectionConfig;
+  /**
+   * @description Parent gates that must be satisfied before this job becomes eligible.
+   * @type array | undefined
+   */
+  dagDependencies?: V1JobDagDependency[];
+  /**
+   * @description Action to apply after all DAG dependencies are satisfied.
+   * @default 'DAG_ACTION_UNSPECIFIED'
+   * @type string | undefined
+   */
+  dagAction?: JobRecoveryConfigDagActionKey;
+  /**
+   * @description Optional APS routing environment preserved exactly from the scheduler job.
+   * @type string | undefined
+   */
+  environment?: string;
+  /**
+   * @description Whether requeued attempts intentionally write to the same log files.
+   * @type boolean | undefined
+   */
+  logFilePathsSharedAcrossAttempts?: boolean;
 }

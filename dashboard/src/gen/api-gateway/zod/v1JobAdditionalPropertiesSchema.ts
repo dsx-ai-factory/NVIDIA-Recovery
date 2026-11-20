@@ -4,7 +4,10 @@
 
 import * as z from 'zod'
 
+/**
+ * JobAdditionalProperties contains additional configuration properties for jobs.
+ */
 export const v1JobAdditionalPropertiesSchema = z.object({
-  maxRequeueTimes: z.int().optional().describe('Maximum number of times a job can be requeued. -1 means unlimited.'),
+  maxRequeueTimes: z.int32().optional().describe('Maximum number of times a job can be requeued. -1 means unlimited.'),
   enableNvrx: z.boolean().optional().describe('Whether NVRX is enabled for this job.'),
 }).describe('JobAdditionalProperties contains additional configuration properties for jobs.')

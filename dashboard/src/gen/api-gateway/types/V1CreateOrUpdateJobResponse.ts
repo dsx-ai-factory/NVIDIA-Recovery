@@ -7,11 +7,11 @@ import type { V1Job } from './V1Job'
 /**
  * @description CreateOrUpdateJobResponse is the response for creating or updating a job.
  * @type object
-*/
+ */
 export interface V1CreateOrUpdateJobResponse {
-    /**
-     * @description The created or updated job.
-     * @type object | undefined
-    */
-    job?: V1Job;
+  /**
+   * @description The created or updated job.
+   * @type object | undefined
+   */
+  job?: V1Job;
 }

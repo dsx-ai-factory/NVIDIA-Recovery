@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { ApiKeysServiceListApiKeysOptions, ApiKeysServiceListApiKeysResponses } from '../types/ApiKeysServiceListApiKeys'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /v1/keys`
  * @description API-key listing is disabled in this build. This compatibility endpoint always returns an internal error.
  * @summary Disabled API-key listing compatibility endpoint.
- * {@link /v1/keys}
  */
 export function apiKeysServiceListApiKeys<ThrowOnError extends boolean = true>(options: Options<ApiKeysServiceListApiKeysOptions, ThrowOnError> = {}): Unwrappable<RequestResult<ApiKeysServiceListApiKeysResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/v1/keys', ...config }) as Promise<RequestResult<ApiKeysServiceListApiKeysResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<ApiKeysServiceListApiKeysResponses, ThrowOnError>({ method: 'GET', url: '/v1/keys', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

@@ -7,11 +7,11 @@ import type { RpcStatus } from './RpcStatus'
 import type { V1UpdateApiKeyAuthorizationsResponse } from './V1UpdateApiKeyAuthorizationsResponse'
 
 export interface ApiKeysServiceUpdateApiKeyAuthorizationsPath {
-    /**
-     * @description Legacy key ID path parameter retained for compatibility.
-     * @type string
-    */
-    keyId: string;
+  /**
+   * @description Legacy key ID path parameter retained for compatibility.
+   * @type string
+   */
+  keyId: string;
 }
 
 export type ApiKeysServiceUpdateApiKeyAuthorizationsStatus200 = V1UpdateApiKeyAuthorizationsResponse;
@@ -23,19 +23,19 @@ export type ApiKeysServiceUpdateApiKeyAuthorizationsStatusDefault = RpcStatus;
 export type ApiKeysServiceUpdateApiKeyAuthorizationsBodyRequest = ApiKeysServiceUpdateApiKeyAuthorizationsBody;
 
 export interface ApiKeysServiceUpdateApiKeyAuthorizationsOptions {
-    body: ApiKeysServiceUpdateApiKeyAuthorizationsBodyRequest;
-    path: ApiKeysServiceUpdateApiKeyAuthorizationsPath;
-    query?: never;
-    headers?: never;
+  body: ApiKeysServiceUpdateApiKeyAuthorizationsBodyRequest;
+  path: ApiKeysServiceUpdateApiKeyAuthorizationsPath;
+  query?: never;
+  headers?: never;
 }
 
 export interface ApiKeysServiceUpdateApiKeyAuthorizationsResponses {
-    "200": ApiKeysServiceUpdateApiKeyAuthorizationsStatus200;
-    "500": ApiKeysServiceUpdateApiKeyAuthorizationsStatus500;
-    default: ApiKeysServiceUpdateApiKeyAuthorizationsStatusDefault;
+  '200': ApiKeysServiceUpdateApiKeyAuthorizationsStatus200;
+  '500': ApiKeysServiceUpdateApiKeyAuthorizationsStatus500;
+  default: ApiKeysServiceUpdateApiKeyAuthorizationsStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type ApiKeysServiceUpdateApiKeyAuthorizationsResponse = (ApiKeysServiceUpdateApiKeyAuthorizationsStatus200 | ApiKeysServiceUpdateApiKeyAuthorizationsStatus500 | ApiKeysServiceUpdateApiKeyAuthorizationsStatusDefault);
+ */
+export type ApiKeysServiceUpdateApiKeyAuthorizationsResponse = ApiKeysServiceUpdateApiKeyAuthorizationsStatus200;

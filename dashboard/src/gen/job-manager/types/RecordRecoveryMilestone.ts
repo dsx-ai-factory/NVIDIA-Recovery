@@ -9,29 +9,34 @@ import type { RecordRecoveryMilestoneResponse } from './RecordRecoveryMilestoneR
 /**
  * @example {"duplicate":true,"endToEndDurationSeconds":0.08008281904610115,"sequenceCompleted":true}
  * @type object
-*/
+ */
 export type RecordRecoveryMilestoneStatus200 = RecordRecoveryMilestoneResponse;
 
 /**
  * @example {"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}
  * @type object
-*/
+ */
 export type RecordRecoveryMilestoneStatus422 = HTTPValidationError;
 
 /**
  * @example {"completedAt":"2000-01-23T04:56:07.000+00:00","idempotencyKey":"idempotencyKey","action":"slurm.requeue_hold","sequenceId":"sequenceId","operation":"restart","outcome":"planned","completesSequence":true}
  * @type object
-*/
+ */
 export type RecordRecoveryMilestoneBody = RecordRecoveryMilestoneRequest;
 
 export interface RecordRecoveryMilestoneOptions {
-    body: RecordRecoveryMilestoneBody;
-    path?: never;
-    query?: never;
-    headers?: never;
+  body: RecordRecoveryMilestoneBody;
+  path?: never;
+  query?: never;
+  headers?: never;
 }
 
 export interface RecordRecoveryMilestoneResponses {
-    "200": RecordRecoveryMilestoneStatus200;
-    "422": RecordRecoveryMilestoneStatus422;
+  '200': RecordRecoveryMilestoneStatus200;
+  '422': RecordRecoveryMilestoneStatus422;
 }
+
+/**
+ * @description Union of all possible responses
+ */
+export type RecordRecoveryMilestoneResponse2 = RecordRecoveryMilestoneStatus200;

@@ -4,6 +4,6 @@
 
 import * as z from 'zod'
 
-export const getGuardrailRulesStatus200Schema = z.array(z.string())
+export const getGuardrailRulesStatus200Schema = z.array(z.string().nullable())
 
 export const getGuardrailRulesResponseSchema = getGuardrailRulesStatus200Schema

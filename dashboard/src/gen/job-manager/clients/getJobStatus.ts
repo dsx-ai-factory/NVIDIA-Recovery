@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetJobStatusOptions, GetJobStatusResponses } from '../types/GetJobStatus'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /job_status/{job_id}`
  * @description Retrieve the execution status of a specific job.
  * Parameters:
  * job_id (str):
@@ -18,10 +19,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * SlurmJobExecutionStatus:
  * An object of SlurmJobExecutionStatus representing the current execution status of the specified job.
  * @summary Get Job Status
- * {@link /job_status/:job_id}
  */
 export function getJobStatus<ThrowOnError extends boolean = true>(options: Options<GetJobStatusOptions, ThrowOnError>): Unwrappable<RequestResult<GetJobStatusResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/job_status/{job_id}', styles: { path: { jobId: { style: 'simple', explode: false } }, query: { job_attempt_index: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetJobStatusResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetJobStatusResponses, ThrowOnError>({ method: 'GET', url: '/job_status/{job_id}', ...config, styles: { ...config.styles, path: { job_id: { style: 'simple', explode: false }, ...config.styles?.path }, query: { job_attempt_index: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

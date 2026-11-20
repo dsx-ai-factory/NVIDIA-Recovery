@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { ApiKeysServiceCreateApiKeyOptions, ApiKeysServiceCreateApiKeyResponses } from '../types/ApiKeysServiceCreateApiKey'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `POST /v1/keys`
  * @description API-key creation is disabled in this build. This compatibility endpoint always returns an internal error.
  * @summary Disabled API-key creation compatibility endpoint.
- * {@link /v1/keys}
  */
 export function apiKeysServiceCreateApiKey<ThrowOnError extends boolean = true>(options: Options<ApiKeysServiceCreateApiKeyOptions, ThrowOnError>): Unwrappable<RequestResult<ApiKeysServiceCreateApiKeyResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'POST', url: '/v1/keys', ...config }) as Promise<RequestResult<ApiKeysServiceCreateApiKeyResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<ApiKeysServiceCreateApiKeyResponses, ThrowOnError>({ method: 'POST', url: '/v1/keys', contentType: { request: 'application/json' }, ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

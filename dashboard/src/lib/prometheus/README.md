@@ -7,20 +7,17 @@ This module provides Prometheus instrumentation for the NVIDIA Recovery dashboar
 ### Core Components
 
 1. **Registry (`~/server/prometheus.ts`)** - Centralized metrics registry
-
    - All metrics are pre-configured and exported
    - Default Node.js metrics (memory, CPU, GC) included
    - Custom application metrics for HTTP, API calls, and business logic
 
 2. **Instrumentation (`~/lib/prometheus/instrumentation.ts`)** - Helper utilities
-
    - Route normalization to prevent high cardinality
    - HTTP request tracking
    - API client wrappers
    - Error tracking
 
 3. **Metrics Endpoint (`~/app/metrics/route.ts`)** - Prometheus scrape target
-
    - Exposed at `/metrics` (standard Prometheus convention)
    - Unauthenticated (required for Prometheus scraping)
    - Returns metrics in Prometheus text format
@@ -66,19 +63,19 @@ The metrics endpoint is automatically available at `/metrics` once the applicati
 ### Instrumenting API Calls
 
 ```typescript
-import { instrumentApiClient } from '~/lib/prometheus/instrumentation';
+import { instrumentApiClient } from "~/lib/prometheus/instrumentation";
 
 // Create an instrumented fetch client
-const jobManager = instrumentApiClient('job-manager');
+const jobManager = instrumentApiClient("job-manager");
 
 // Use it like normal fetch
-const response = await jobManager('/api/jobs', { method: 'GET' });
+const response = await jobManager("/api/jobs", { method: "GET" });
 ```
 
 ### Recording Custom Metrics
 
 ```typescript
-import { apiRequestDuration, activeSessions } from '~/server/prometheus';
+import { apiRequestDuration, activeSessions } from "~/server/prometheus";
 
 // Record a duration
 const startTime = Date.now();
@@ -86,9 +83,9 @@ const startTime = Date.now();
 const duration = (Date.now() - startTime) / 1000;
 apiRequestDuration.observe(
   {
-    service: 'job-manager',
-    endpoint: '/jobs',
-    method: 'GET',
+    service: "job-manager",
+    endpoint: "/jobs",
+    method: "GET",
     status_code: 200,
   },
   duration,
@@ -98,5 +95,5 @@ apiRequestDuration.observe(
 activeSessions.set(42);
 
 // Increment a counter
-authenticationEvents.inc({ event_type: 'success', auth_method: 'oauth' });
+authenticationEvents.inc({ event_type: "success", auth_method: "oauth" });
 ```

@@ -8,12 +8,16 @@ import { adviceReconciliationStatusSchema } from './adviceReconciliationStatusSc
 
 export const putAdviceReconciliationStatusPathHeimdallIdSchema = z.string()
 
-export const putAdviceReconciliationStatusStatus200Schema = adviceReconciliationStatusSchema.describe('The reconciliation observation for an Advice generation.').meta({ examples: [{}] })
+export const putAdviceReconciliationStatusStatus200Schema = adviceReconciliationStatusSchema.describe('The reconciliation observation for an Advice generation.').meta({ examples: [{"reason":"DESIRED_STATE_OBSERVED","disposition":"PENDING","observedAt":"2000-01-23T04:56:07.000+00:00","transitionedAt":"2000-01-23T04:56:07.000+00:00","observedGeneration":1,"diagnosticMessage":"diagnosticMessage"}] })
 
-export const putAdviceReconciliationStatusStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const putAdviceReconciliationStatusStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const putAdviceReconciliationStatusResponseSchema = putAdviceReconciliationStatusStatus200Schema
 
 export const putAdviceReconciliationStatusErrorSchema = putAdviceReconciliationStatusStatus422Schema
 
-export const putAdviceReconciliationStatusBodySchema = adviceReconciliationStatusSchema.describe('The reconciliation observation for an Advice generation.').meta({ examples: [{}] })
+export const putAdviceReconciliationStatusBodySchema = adviceReconciliationStatusSchema.describe('The reconciliation observation for an Advice generation.').meta({ examples: [{"reason":"DESIRED_STATE_OBSERVED","disposition":"PENDING","observedAt":"2000-01-23T04:56:07.000+00:00","transitionedAt":"2000-01-23T04:56:07.000+00:00","observedGeneration":1,"diagnosticMessage":"diagnosticMessage"}] })
+
+export const putAdviceReconciliationStatusPathSchema = z.object({
+  heimdall_id: putAdviceReconciliationStatusPathHeimdallIdSchema,
+})

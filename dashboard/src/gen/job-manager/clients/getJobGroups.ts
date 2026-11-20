@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetJobGroupsOptions, GetJobGroupsResponses } from '../types/GetJobGroups'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /job_groups`
  * @description Query aggregated job group metadata.
  * GET /job_groups
  * Retrieves a list of job group metadata derived from job execution records, with optional filtering,
@@ -27,10 +28,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * Returns:
  * A JobGroupStatuses object containing the list of job group metadata and total count.
  * @summary Get Job Groups
- * {@link /job_groups}
  */
 export function getJobGroups<ThrowOnError extends boolean = true>(options: Options<GetJobGroupsOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetJobGroupsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/job_groups', styles: { query: { job_group_id: { style: 'form', explode: true }, user: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, sort_by: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetJobGroupsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetJobGroupsResponses, ThrowOnError>({ method: 'GET', url: '/job_groups', ...config, styles: { ...config.styles, query: { job_group_id: { style: 'form', explode: true }, user: { style: 'form', explode: true }, limit: { style: 'form', explode: true }, offset: { style: 'form', explode: true }, sort_by: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

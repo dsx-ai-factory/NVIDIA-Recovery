@@ -7,23 +7,23 @@ import type { JobExecutionError } from './JobExecutionError'
 import type { NodeEvent } from './NodeEvent'
 
 /**
- * @description A representation of an error attribution that\'s made of a JobExecutionError and a list of NodeEvent and GlobalEvent.
+ * @description A representation of an error attribution that's made of a JobExecutionError and a list of NodeEvent and GlobalEvent.
  * @type object
-*/
+ */
 export interface ErrorAttribution {
-    /**
-     * @default '/partials/ErrorAttribution'
-     * @type string | undefined
-    */
-    template_id?: "/partials/ErrorAttribution";
-    /**
-     * @description A representation of a job execution error.
-     * @type object
-    */
-    job_execution_error: JobExecutionError;
-    node_events: NodeEvent[];
-    /**
-     * @default
-    */
-    global_events?: (GlobalEvent[] | null);
+  /**
+   * @default '/partials/ErrorAttribution'
+   * @type string | undefined
+   */
+  template_id?: '/partials/ErrorAttribution';
+  /**
+   * @description A representation of a job execution error.
+   * @type object
+   */
+  job_execution_error: JobExecutionError;
+  node_events: NodeEvent[];
+  /**
+   * @default []
+   */
+  global_events?: GlobalEvent[] | (null | null);
 }

@@ -6,6 +6,9 @@ import * as z from 'zod'
 import { auditEventPageCursorSchema } from './auditEventPageCursorSchema'
 import { auditEventSchema } from './auditEventSchema'
 
+/**
+ * One page of audit events.
+ */
 export const auditEventPageSchema = z.object({
   cursor: auditEventPageCursorSchema.describe('Opaque cursors for the adjacent pages.'),
   items: z.array(auditEventSchema),

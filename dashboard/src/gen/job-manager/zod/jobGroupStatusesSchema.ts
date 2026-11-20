@@ -5,7 +5,11 @@
 import * as z from 'zod'
 import { jobGroupStatusSchema } from './jobGroupStatusSchema'
 
+/**
+ * This class is used to return a list of job group statuses from the job manager's REST API. Since the response is
+ * paginated, this class also contains the total number of items that match the query.
+ */
 export const jobGroupStatusesSchema = z.object({
   item_count: z.int(),
   job_groups: z.array(jobGroupStatusSchema),
-}).describe('This class is used to return a list of job group statuses from the job manager\'s REST API. Since the response is\npaginated, this class also contains the total number of items that match the query.').meta({ examples: [{}] })
+}).describe('This class is used to return a list of job group statuses from the job manager\'s REST API. Since the response is\npaginated, this class also contains the total number of items that match the query.').meta({ examples: [{"item_count":0,"job_groups":[{"job_group_id":"job_group_id","unique_job_count":6,"total_job_attempt_count":1},{"job_group_id":"job_group_id","unique_job_count":6,"total_job_attempt_count":1}]}] })

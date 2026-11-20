@@ -8,17 +8,17 @@ import type { V1NodeConstraints } from './V1NodeConstraints'
 /**
  * @description AdviceRecommendation represents the recommended state and node constraints.
  * @type object
-*/
+ */
 export interface V1AdviceRecommendation {
-    /**
-     * @description Desired state action for the job.
-     * @default 'ADVICE_STATE_UNSPECIFIED'
-     * @type string | undefined
-    */
-    state?: V1AdviceStateKey;
-    /**
-     * @description Node constraints for the job.
-     * @type object | undefined
-    */
-    nodeConstraints?: V1NodeConstraints;
+  /**
+   * @description Desired state action for the job.
+   * @default 'ADVICE_STATE_UNSPECIFIED'
+   * @type string | undefined
+   */
+  state?: V1AdviceStateKey;
+  /**
+   * @description Node constraints for the job.
+   * @type object | undefined
+   */
+  nodeConstraints?: V1NodeConstraints;
 }

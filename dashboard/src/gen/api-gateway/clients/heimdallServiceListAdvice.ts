@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { HeimdallServiceListAdviceOptions, HeimdallServiceListAdviceResponses } from '../types/HeimdallServiceListAdvice'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /v1/advice`
  * @description Retrieve a list of advice for jobs. Advice includes only the desired state and node exclusions that the Advisor has computed for jobs. This is used by the NVIDIA Recovery Job Controller to synchronize job advice updates. Use the `page` parameter to get the next page of advice records.
  * @summary List advice
- * {@link /v1/advice}
  */
 export function heimdallServiceListAdvice<ThrowOnError extends boolean = true>(options: Options<HeimdallServiceListAdviceOptions, ThrowOnError> = {}): Unwrappable<RequestResult<HeimdallServiceListAdviceResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/v1/advice', ...config }) as Promise<RequestResult<HeimdallServiceListAdviceResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<HeimdallServiceListAdviceResponses, ThrowOnError>({ method: 'GET', url: '/v1/advice', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

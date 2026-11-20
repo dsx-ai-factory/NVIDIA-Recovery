@@ -4,9 +4,27 @@
 
 import * as z from 'zod'
 
+/**
+ * Anomaly detection configuration that the user can control per job.
+ * Attributes:
+ *     log_based_crash_enabled (bool): Whether to enable log-based crash detection for the job.
+ *         If set to False, a CRASH anomaly will be generated immediately when the job enters FAILED
+ *         state, without waiting for log analysis. Default is True (log-based detection enabled).
+ *     log_based_timeout_enabled (bool): Whether to enable log-based no-output timeout detection
+ *         (HANGNOOUTPUT) for the job. When set to False, the watcher service will suppress
+ *         HANGNOOUTPUT anomaly publication for the job. Default is True (detection enabled).
+ *     log_based_timeout_threshold_pretraining (int): Per-job no-output timeout threshold (in
+ *         seconds) applied during the pre-training phase. The watcher uses this value as the
+ *         silence window after which a HANGNOOUTPUT anomaly may be raised. Must be a positive
+ *         integer. Default is 960 seconds (16 minutes).
+ *     log_based_timeout_threshold_trainingloop (int): Per-job no-output timeout threshold (in
+ *         seconds) applied during the training loop phase. The watcher uses this value as the
+ *         silence window after which a HANGNOOUTPUT anomaly may be raised. Must be a positive
+ *         integer. Default is 840 seconds (14 minutes).
+ */
 export const anomalyDetectionConfigSchema = z.object({
   log_based_crash_enabled: z.boolean().optional().default(true),
   log_based_timeout_enabled: z.boolean().optional().default(true),
   log_based_timeout_threshold_pretraining: z.int().optional().default(960),
   log_based_timeout_threshold_trainingloop: z.int().optional().default(840),
-}).describe('Anomaly detection configuration that the user can control per job.\n\nAttributes:\n    log_based_crash_enabled (bool): Whether to enable log-based crash detection for the job.\n        If set to False, a CRASH anomaly will be generated immediately when the job enters FAILED\n        state, without waiting for log analysis. Default is True (log-based detection enabled).\n    log_based_timeout_enabled (bool): Whether to enable log-based no-output timeout detection\n        (HANGNOOUTPUT) for the job. When set to False, the watcher service will suppress\n        HANGNOOUTPUT anomaly publication for the job. Default is True (detection enabled).\n    log_based_timeout_threshold_pretraining (int): Per-job no-output timeout threshold (in\n        seconds) applied during the pre-training phase. The watcher uses this value as the\n        silence window after which a HANGNOOUTPUT anomaly may be raised. Must be a positive\n        integer. Default is 960 seconds (16 minutes).\n    log_based_timeout_threshold_trainingloop (int): Per-job no-output timeout threshold (in\n        seconds) applied during the training loop phase. The watcher uses this value as the\n        silence window after which a HANGNOOUTPUT anomaly may be raised. Must be a positive\n        integer. Default is 840 seconds (14 minutes).').meta({ examples: [{}] })
+}).describe('Anomaly detection configuration that the user can control per job.\n\nAttributes:\n    log_based_crash_enabled (bool): Whether to enable log-based crash detection for the job.\n        If set to False, a CRASH anomaly will be generated immediately when the job enters FAILED\n        state, without waiting for log analysis. Default is True (log-based detection enabled).\n    log_based_timeout_enabled (bool): Whether to enable log-based no-output timeout detection\n        (HANGNOOUTPUT) for the job. When set to False, the watcher service will suppress\n        HANGNOOUTPUT anomaly publication for the job. Default is True (detection enabled).\n    log_based_timeout_threshold_pretraining (int): Per-job no-output timeout threshold (in\n        seconds) applied during the pre-training phase. The watcher uses this value as the\n        silence window after which a HANGNOOUTPUT anomaly may be raised. Must be a positive\n        integer. Default is 960 seconds (16 minutes).\n    log_based_timeout_threshold_trainingloop (int): Per-job no-output timeout threshold (in\n        seconds) applied during the training loop phase. The watcher uses this value as the\n        silence window after which a HANGNOOUTPUT anomaly may be raised. Must be a positive\n        integer. Default is 840 seconds (14 minutes).').meta({ examples: [{"log_based_timeout_threshold_trainingloop":9,"log_based_timeout_enabled":true,"log_based_timeout_threshold_pretraining":7,"log_based_crash_enabled":true}] })

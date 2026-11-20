@@ -6,16 +6,31 @@ import * as z from 'zod'
 import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1GetWorkflowsResponseSchema } from './v1GetWorkflowsResponseSchema'
 
+/**
+ * A decimal zero-based offset from the previous response's next_page_token field. Mutually exclusive with page_number.
+ */
 export const heimdallServiceGetWorkflowsQueryPageTokenSchema = z.string().optional().describe('A decimal zero-based offset from the previous response\'s next_page_token field. Mutually exclusive with page_number.')
 
-export const heimdallServiceGetWorkflowsQueryPageNumberSchema = z.int().optional().describe('A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.')
+/**
+ * A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.
+ */
+export const heimdallServiceGetWorkflowsQueryPageNumberSchema = z.int32().optional().describe('A one-based page number. Page N starts at offset (N - 1) * limit. Mutually exclusive with page_token.')
 
-export const heimdallServiceGetWorkflowsQueryLimitSchema = z.int().optional().describe('The maximum number of workflows to return. Defaults to 100 and cannot exceed 250.')
+/**
+ * The maximum number of workflows to return. Defaults to 100 and cannot exceed 250.
+ */
+export const heimdallServiceGetWorkflowsQueryLimitSchema = z.int32().optional().describe('The maximum number of workflows to return. Defaults to 100 and cannot exceed 250.')
 
-export const heimdallServiceGetWorkflowsStatus200Schema = v1GetWorkflowsResponseSchema.describe('GetWorkflowsResponse is the response for the GetWorkflows method.').meta({ examples: [{}] })
+export const heimdallServiceGetWorkflowsStatus200Schema = v1GetWorkflowsResponseSchema.describe('GetWorkflowsResponse is the response for the GetWorkflows method.').meta({ examples: [{"count":1,"workflows":[{"endTime":"2025-06-18T18:37:00.667816956Z","name":"workflow-0","startTime":"2025-06-18T18:17:50.667816956Z","workflowId":"workflow-0"}]}] })
 
 export const heimdallServiceGetWorkflowsStatusDefaultSchema = rpcStatusSchema
 
 export const heimdallServiceGetWorkflowsResponseSchema = heimdallServiceGetWorkflowsStatus200Schema
 
 export const heimdallServiceGetWorkflowsErrorSchema = heimdallServiceGetWorkflowsStatusDefaultSchema
+
+export const heimdallServiceGetWorkflowsQuerySchema = z.object({
+  pageToken: heimdallServiceGetWorkflowsQueryPageTokenSchema,
+  pageNumber: heimdallServiceGetWorkflowsQueryPageNumberSchema,
+  limit: heimdallServiceGetWorkflowsQueryLimitSchema,
+})

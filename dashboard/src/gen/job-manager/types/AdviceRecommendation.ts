@@ -6,20 +6,26 @@ import type { AdviceStateKey } from './AdviceState'
 import type { NodeConstraints } from './NodeConstraints'
 
 /**
- * @description Represents the recommendation portion of advice.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
+ * @description Represents the recommendation portion of advice.
+ *
+ * This model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
  * @example {"nodeConstraints":{"exclusions":["exclusions","exclusions"],"inclusions":["inclusions","inclusions"]},"state":"Restarted"}
  * @type object
-*/
+ */
 export interface AdviceRecommendation {
-    /**
-     * @description Possible states for job advice from the NVIDIA Recovery system.\n\nMatches the Go client schema for NVIDIA Recovery Advice CRD.
-     * @type string | undefined
-    */
-    state?: AdviceStateKey;
-    /**
-     * @description Contains scheduling constraints for a job.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
-     * @example {"exclusions":["exclusions","exclusions"],"inclusions":["inclusions","inclusions"]}
-     * @type object | undefined
-    */
-    nodeConstraints?: NodeConstraints;
+  /**
+   * @description Possible states for job advice from the NVIDIA Recovery system.
+   *
+   * Matches the Go client schema for NVIDIA Recovery Advice CRD.
+   * @type string | undefined
+   */
+  state?: AdviceStateKey;
+  /**
+   * @description Contains scheduling constraints for a job.
+   *
+   * This model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.
+   * @example {"exclusions":["exclusions","exclusions"],"inclusions":["inclusions","inclusions"]}
+   * @type object | undefined
+   */
+  nodeConstraints?: NodeConstraints;
 }

@@ -4,8 +4,11 @@
 
 import * as z from 'zod'
 
+/**
+ * A representation of a job execution error.
+ */
 export const jobExecutionErrorSchema = z.object({
   template_id: z.enum(['/partials/JobExecutionError']).optional().default('/partials/JobExecutionError'),
-  error_message: z.union([z.string(), z.null()]).optional(),
-  error_signature: z.union([z.string(), z.null()]).optional(),
+  error_message: z.union([z.string(), z.null().nullable()]).optional(),
+  error_signature: z.union([z.string(), z.null().nullable()]).optional(),
 }).describe('A representation of a job execution error.')

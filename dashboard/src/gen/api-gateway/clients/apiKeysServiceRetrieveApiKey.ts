@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { ApiKeysServiceRetrieveApiKeyOptions, ApiKeysServiceRetrieveApiKeyResponses } from '../types/ApiKeysServiceRetrieveApiKey'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /v1/keys/{keyId}`
  * @description API-key retrieval is disabled in this build. This compatibility endpoint always returns an internal error.
  * @summary Disabled API-key retrieval compatibility endpoint.
- * {@link /v1/keys/:keyId}
  */
 export function apiKeysServiceRetrieveApiKey<ThrowOnError extends boolean = true>(options: Options<ApiKeysServiceRetrieveApiKeyOptions, ThrowOnError>): Unwrappable<RequestResult<ApiKeysServiceRetrieveApiKeyResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/v1/keys/{keyId}', ...config }) as Promise<RequestResult<ApiKeysServiceRetrieveApiKeyResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<ApiKeysServiceRetrieveApiKeyResponses, ThrowOnError>({ method: 'GET', url: '/v1/keys/{keyId}', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

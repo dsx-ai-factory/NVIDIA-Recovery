@@ -4,4 +4,11 @@
 
 import * as z from 'zod'
 
+/**
+ * AdviceState represents the recommended state action for a job.
+ *  - ADVICE_STATE_UNSPECIFIED: The state is not specified.
+ *  - ADVICE_STATE_RESTARTED: The job should be restarted.
+ *  - ADVICE_STATE_TERMINATED: The job should be terminated.
+ *  - ADVICE_STATE_RELEASED: The exact job attempt should be scheduler-eligible.
+ */
 export const v1AdviceStateSchema = z.enum(['ADVICE_STATE_UNSPECIFIED', 'ADVICE_STATE_RESTARTED', 'ADVICE_STATE_TERMINATED', 'ADVICE_STATE_RELEASED']).default('ADVICE_STATE_UNSPECIFIED').describe('AdviceState represents the recommended state action for a job.\n\n - ADVICE_STATE_UNSPECIFIED: The state is not specified.\n - ADVICE_STATE_RESTARTED: The job should be restarted.\n - ADVICE_STATE_TERMINATED: The job should be terminated.\n - ADVICE_STATE_RELEASED: The exact job attempt should be scheduler-eligible.')

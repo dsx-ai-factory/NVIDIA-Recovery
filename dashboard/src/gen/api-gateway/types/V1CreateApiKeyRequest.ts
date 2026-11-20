@@ -5,21 +5,21 @@
 import type { V1ApiKeyAuthorizations } from './V1ApiKeyAuthorizations'
 
 export interface V1CreateApiKeyRequest {
-    /**
-     * @description Legacy key description input ignored by the disabled compatibility endpoint.
-     * @type string | undefined
-    */
-    description?: string;
-    /**
-     * @description Legacy expiration input ignored by the disabled compatibility endpoint.
-     *
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    expiresAt?: string;
-    /**
-     * @description Legacy authorization input ignored by the disabled compatibility endpoint.
-     * @type object | undefined
-    */
-    authorizations?: V1ApiKeyAuthorizations;
+  /**
+   * @description Legacy key description input ignored by the disabled compatibility endpoint.
+   * @type string | undefined
+   */
+  description?: string;
+  /**
+   * @description Legacy expiration input ignored by the disabled compatibility endpoint.
+   *
+   * Format: `date-time`
+   * @type string | undefined
+   */
+  expiresAt?: string;
+  /**
+   * @description Legacy authorization input ignored by the disabled compatibility endpoint.
+   * @type object | undefined
+   */
+  authorizations?: V1ApiKeyAuthorizations;
 }

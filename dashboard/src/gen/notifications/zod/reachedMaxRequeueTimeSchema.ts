@@ -4,6 +4,18 @@
 
 import * as z from 'zod'
 
+/**
+ * The job has reached the maximum requeue time.
+ * Examples:
+ *     >>> message = ReachedMaxRequeueTime(
+ *     ...     job_id="123", job_attempt_index=7, job_name="some-job", message="hello message"
+ *     ... )
+ *     >>> expected_message = (
+ *     ...     "The job 123(7) job name some-job has reached the max requeue time, reason: hello message."
+ *     ... )
+ *     >>> assert_equal(message.render_message(), expected_message)
+ *     >>> assert_equal(message.render_title(), "Max requeue limit reached for job 123")
+ */
 export const reachedMaxRequeueTimeSchema = z.object({
   template_id: z.enum(['/templates/ReachedMaxRequeueTime']).optional().default('/templates/ReachedMaxRequeueTime'),
   job_id: z.string(),

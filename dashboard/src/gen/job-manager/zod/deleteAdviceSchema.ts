@@ -9,8 +9,12 @@ export const deleteAdvicePathHeimdallIdSchema = z.string()
 
 export const deleteAdviceStatus200Schema = z.unknown()
 
-export const deleteAdviceStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const deleteAdviceStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const deleteAdviceResponseSchema = deleteAdviceStatus200Schema
 
 export const deleteAdviceErrorSchema = deleteAdviceStatus422Schema
+
+export const deleteAdvicePathSchema = z.object({
+  heimdall_id: deleteAdvicePathHeimdallIdSchema,
+})

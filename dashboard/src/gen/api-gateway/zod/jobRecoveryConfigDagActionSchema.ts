@@ -4,4 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * DagAction defines what Job Manager should request after all dependencies are satisfied.
+ *  - DAG_ACTION_UNSPECIFIED: No DAG action was specified.
+ *  - DAG_ACTION_RELEASE: Release the held child so it becomes scheduler-eligible.
+ */
 export const jobRecoveryConfigDagActionSchema = z.enum(['DAG_ACTION_UNSPECIFIED', 'DAG_ACTION_RELEASE']).default('DAG_ACTION_UNSPECIFIED').describe('DagAction defines what Job Manager should request after all dependencies are satisfied.\n\n - DAG_ACTION_UNSPECIFIED: No DAG action was specified.\n - DAG_ACTION_RELEASE: Release the held child so it becomes scheduler-eligible.')

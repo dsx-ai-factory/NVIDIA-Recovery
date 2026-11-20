@@ -7,48 +7,125 @@ import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { jobExecutionStatusesSchema } from './jobExecutionStatusesSchema'
 import { jobTimeFilterTargetSchema } from './jobTimeFilterTargetSchema'
 
+/**
+ * Deprecated query parameter, it used to control whether full job records will be returned or not, now it always returns full job records.
+ * @deprecated
+ */
 export const getJobsQueryCompleteDataSchema = z.boolean().optional().default(false).describe('Deprecated query parameter, it used to control whether full job records will be returned or not, now it always returns full job records.')
 
+/**
+ * The job_id filter.
+ */
 export const getJobsQueryJobIdSchema = z.string().nullish().describe('The job_id filter.')
 
+/**
+ * The job_attempt_index filter. (Cannot be used by itself)
+ */
 export const getJobsQueryJobAttemptIndexSchema = z.string().nullish().describe('The job_attempt_index filter. (Cannot be used by itself)')
 
+/**
+ * The heimdall_job_id (UUID) filter. If provided, other job_id/job_attempt_index filters are ignored.
+ */
 export const getJobsQueryHeimdallJobIdSchema = z.string().nullish().describe('The heimdall_job_id (UUID) filter. If provided, other job_id/job_attempt_index filters are ignored.')
 
+/**
+ * The user filter.
+ */
 export const getJobsQueryUserSchema = z.string().nullish().describe('The user filter.')
 
+/**
+ * The job_name filter.
+ */
 export const getJobsQueryJobNameSchema = z.string().nullish().describe('The job_name filter.')
 
+/**
+ * The exact workflow_id filter.
+ */
 export const getJobsQueryWorkflowIdSchema = z.string().min(1).refine((value) => { const characters = Array.from(value); return characters.length <= 256 && characters.every((character) => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff); }, { message: "Must contain at most 256 Unicode scalar values" }).nullish().describe('The exact workflow_id filter.')
 
+/**
+ * How to match job_name: 'prefix' (default, case-insensitive starts with), 'exact' (case-sensitive exact match), or 'fuzzy' (case-insensitive substring match).
+ */
 export const getJobsQueryJobNameMatchSchema = z.enum(['prefix', 'exact', 'fuzzy']).optional().default('prefix').describe('How to match job_name: \'prefix\' (default, case-insensitive starts with), \'exact\' (case-sensitive exact match), or \'fuzzy\' (case-insensitive substring match).')
 
+/**
+ * The slurm job_state filter, cannot be specified with completed_jobs
+ */
 export const getJobsQueryStateSchema = z.string().nullish().describe('The slurm job_state filter, cannot be specified with completed_jobs')
 
+/**
+ * The maximum number of records to return.
+ */
 export const getJobsQueryLimitSchema = z.int().optional().default(50).describe('The maximum number of records to return.')
 
+/**
+ * The offset to start the records from.
+ */
 export const getJobsQueryOffsetSchema = z.int().optional().default(0).describe('The offset to start the records from.')
 
+/**
+ * If specified, either return completed or running jobs, cannot be specified together with state
+ */
 export const getJobsQueryCompletedJobsSchema = z.boolean().nullish().describe('If specified, either return completed or running jobs, cannot be specified together with state')
 
+/**
+ * Return jobs that can seed scheduler reconciliation: all non-final jobs plus failure-like terminal jobs. COMPLETED and REQUEUED jobs are excluded because their recovery is driven by exact-attempt Advice. Cannot be specified together with state or completed_jobs.
+ */
 export const getJobsQueryReconciliationEligibleJobsSchema = z.boolean().optional().default(false).describe('Return jobs that can seed scheduler reconciliation: all non-final jobs plus failure-like terminal jobs. COMPLETED and REQUEUED jobs are excluded because their recovery is driven by exact-attempt Advice. Cannot be specified together with state or completed_jobs.')
 
 export const getJobsQueryTimeFilterTargetSchema = jobTimeFilterTargetSchema.optional().describe('Filter jobs by this job time, requires either from or to time filter times')
 
+/**
+ * The job time filter start time
+ */
 export const getJobsQueryTimeFilterFromSchema = z.iso.datetime().nullish().describe('The job time filter start time')
 
+/**
+ * The job time filter end time
+ */
 export const getJobsQueryTimeFilterToSchema = z.iso.datetime().nullish().describe('The job time filter end time')
 
+/**
+ * Comma separated list of fields to sort by. The sort will happen in the same order as the order of the fields. Valid input is a comma-separated list of 'field:order' pairs.e.g., 'job_id:asc, job_attempt_index:desc'.
+ */
 export const getJobsQuerySortBySchema = z.string().nullish().describe('Comma separated list of fields to sort by. The sort will happen in the same order as the order of the fields. Valid input is a comma-separated list of \'field:order\' pairs.e.g., \'job_id:asc, job_attempt_index:desc\'.')
 
+/**
+ * Filter by job group ID. Returns all job attempts belonging to this job group.
+ */
 export const getJobsQueryJobGroupIdSchema = z.string().nullish().describe('Filter by job group ID. Returns all job attempts belonging to this job group.')
 
+/**
+ * When job_group_id is not provided, controls whether to include job attempts that belong to a job group. Defaults to True. When False, only returns standalone job attempts. Ignored when job_group_id is provided.
+ */
 export const getJobsQueryIncludeJobGroupAttemptsSchema = z.boolean().optional().default(true).describe('When job_group_id is not provided, controls whether to include job attempts that belong to a job group. Defaults to True. When False, only returns standalone job attempts. Ignored when job_group_id is provided.')
 
-export const getJobsStatus200Schema = jobExecutionStatusesSchema.describe('This class is used to return a list of job execution statuses from the job manager\'s REST API. Since the response is\npaginated, this class also contains the total number of items that match the query.').meta({ examples: [{}] })
+export const getJobsStatus200Schema = jobExecutionStatusesSchema.describe('This class is used to return a list of job execution statuses from the job manager\'s REST API. Since the response is\npaginated, this class also contains the total number of items that match the query.').meta({ examples: [{"item_count":0,"statuses":[{"cluster":"cluster","workflow_id":"workflow_id","exclusion_node_list":["exclusion_node_list","exclusion_node_list"],"retry_of":"retry_of","total_cpu_count":5,"worker_cluster_name":"worker_cluster_name","config_validation_failure_types":["config_validation_failure_types","config_validation_failure_types"],"total_gpu_count":1,"aps_spec":{"workflow_id":"workflow_id","environment":"environment","workflow_name":"workflow_name","log_file_paths_shared_across_attempts":false,"max_requeue_times":2,"anomaly_detection_config":{"log_based_timeout_threshold_trainingloop":9,"log_based_timeout_enabled":true,"log_based_timeout_threshold_pretraining":7,"log_based_crash_enabled":true},"auto_resume_mode":"singleton_dependency","requeue_on_completion":true,"nvrx":"nvrx","dag_action":"release","dag_dependencies":[{"trigger":"completed","target":{"name":"name","type":"name"}},{"trigger":"completed","target":{"name":"name","type":"name"}}]},"log_file_paths":["log_file_paths","log_file_paths"],"partition":"partition","failed_node_list":["failed_node_list","failed_node_list"],"reservation":"reservation","state":"state","node_count":6,"state_reason":"state_reason","submit_time":"2000-01-23T04:56:07.000+00:00","dependency":"dependency","inclusion_node_list":["inclusion_node_list","inclusion_node_list"],"end_time":"2000-01-23T04:56:07.000+00:00","sticky_exclusion_node_list":["sticky_exclusion_node_list","sticky_exclusion_node_list"],"checkpoints":[{"uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"},{"uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"}],"anomalies":[{"processed":true,"original_watcher_anomaly_event":"original_watcher_anomaly_event","isolation_result_json":"isolation_result_json","trace_id":"trace_id","handled_by":"HEIMDALL","anomaly_type":"anomaly_type","uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"},{"processed":true,"original_watcher_anomaly_event":"original_watcher_anomaly_event","isolation_result_json":"isolation_result_json","trace_id":"trace_id","handled_by":"HEIMDALL","anomaly_type":"anomaly_type","uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"}],"command":"command","job_attempt_index":0,"start_time":"2000-01-23T04:56:07.000+00:00","allocated_node_list":["allocated_node_list","allocated_node_list"],"total_memory_mb":5,"filename":"filename","job_name":"job_name","job_group_id":"job_group_id","job_id":"job_id","heimdall_job_id":"046b6c7f-0b8a-43b9-b35d-6489e6daee91","last_updated_at":"2000-01-23T04:56:07.000+00:00","namespace":"namespace","schedulerMetadata":{"key":""},"user":"user"},{"cluster":"cluster","workflow_id":"workflow_id","exclusion_node_list":["exclusion_node_list","exclusion_node_list"],"retry_of":"retry_of","total_cpu_count":5,"worker_cluster_name":"worker_cluster_name","config_validation_failure_types":["config_validation_failure_types","config_validation_failure_types"],"total_gpu_count":1,"aps_spec":{"workflow_id":"workflow_id","environment":"environment","workflow_name":"workflow_name","log_file_paths_shared_across_attempts":false,"max_requeue_times":2,"anomaly_detection_config":{"log_based_timeout_threshold_trainingloop":9,"log_based_timeout_enabled":true,"log_based_timeout_threshold_pretraining":7,"log_based_crash_enabled":true},"auto_resume_mode":"singleton_dependency","requeue_on_completion":true,"nvrx":"nvrx","dag_action":"release","dag_dependencies":[{"trigger":"completed","target":{"name":"name","type":"name"}},{"trigger":"completed","target":{"name":"name","type":"name"}}]},"log_file_paths":["log_file_paths","log_file_paths"],"partition":"partition","failed_node_list":["failed_node_list","failed_node_list"],"reservation":"reservation","state":"state","node_count":6,"state_reason":"state_reason","submit_time":"2000-01-23T04:56:07.000+00:00","dependency":"dependency","inclusion_node_list":["inclusion_node_list","inclusion_node_list"],"end_time":"2000-01-23T04:56:07.000+00:00","sticky_exclusion_node_list":["sticky_exclusion_node_list","sticky_exclusion_node_list"],"checkpoints":[{"uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"},{"uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"}],"anomalies":[{"processed":true,"original_watcher_anomaly_event":"original_watcher_anomaly_event","isolation_result_json":"isolation_result_json","trace_id":"trace_id","handled_by":"HEIMDALL","anomaly_type":"anomaly_type","uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"},{"processed":true,"original_watcher_anomaly_event":"original_watcher_anomaly_event","isolation_result_json":"isolation_result_json","trace_id":"trace_id","handled_by":"HEIMDALL","anomaly_type":"anomaly_type","uuid":"uuid","timestamp":"2000-01-23T04:56:07.000+00:00"}],"command":"command","job_attempt_index":0,"start_time":"2000-01-23T04:56:07.000+00:00","allocated_node_list":["allocated_node_list","allocated_node_list"],"total_memory_mb":5,"filename":"filename","job_name":"job_name","job_group_id":"job_group_id","job_id":"job_id","heimdall_job_id":"046b6c7f-0b8a-43b9-b35d-6489e6daee91","last_updated_at":"2000-01-23T04:56:07.000+00:00","namespace":"namespace","schedulerMetadata":{"key":""},"user":"user"}]}] })
 
-export const getJobsStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getJobsStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const getJobsResponseSchema = getJobsStatus200Schema
 
 export const getJobsErrorSchema = getJobsStatus422Schema
+
+export const getJobsQuerySchema = z.object({
+  complete_data: getJobsQueryCompleteDataSchema,
+  job_id: getJobsQueryJobIdSchema,
+  job_attempt_index: getJobsQueryJobAttemptIndexSchema,
+  heimdall_job_id: getJobsQueryHeimdallJobIdSchema,
+  user: getJobsQueryUserSchema,
+  job_name: getJobsQueryJobNameSchema,
+  workflow_id: getJobsQueryWorkflowIdSchema,
+  job_name_match: getJobsQueryJobNameMatchSchema,
+  state: getJobsQueryStateSchema,
+  limit: getJobsQueryLimitSchema,
+  offset: getJobsQueryOffsetSchema,
+  completed_jobs: getJobsQueryCompletedJobsSchema,
+  reconciliation_eligible_jobs: getJobsQueryReconciliationEligibleJobsSchema,
+  time_filter_target: getJobsQueryTimeFilterTargetSchema,
+  time_filter_from: getJobsQueryTimeFilterFromSchema,
+  time_filter_to: getJobsQueryTimeFilterToSchema,
+  sort_by: getJobsQuerySortBySchema,
+  job_group_id: getJobsQueryJobGroupIdSchema,
+  include_job_group_attempts: getJobsQueryIncludeJobGroupAttemptsSchema,
+})

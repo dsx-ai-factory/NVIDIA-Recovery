@@ -4,4 +4,8 @@
 
 import * as z from 'zod'
 
+/**
+ * Legacy authorization shape retained for disabled compatibility endpoints.
+ * Disabled endpoints do not evaluate or mutate API-key authorizations.
+ */
 export const v1ApiKeyAuthorizationsSchema = z.object({}).describe('Legacy authorization shape retained for disabled compatibility endpoints.\nDisabled endpoints do not evaluate or mutate API-key authorizations.')

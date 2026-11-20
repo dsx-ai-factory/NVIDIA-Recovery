@@ -5,13 +5,13 @@
 /**
  * @description A representation of a global attribution event (job-level, not tied to specific nodes).
  * @type object
-*/
+ */
 export interface GlobalEvent {
-    /**
-     * @default '/partials/GlobalEvent'
-     * @type string | undefined
-    */
-    template_id?: "/partials/GlobalEvent";
-    error_attribution: string;
-    error_attribution_sources: string[];
+  /**
+   * @default '/partials/GlobalEvent'
+   * @type string | undefined
+   */
+  template_id?: '/partials/GlobalEvent';
+  error_attribution: string;
+  error_attribution_sources: string[];
 }

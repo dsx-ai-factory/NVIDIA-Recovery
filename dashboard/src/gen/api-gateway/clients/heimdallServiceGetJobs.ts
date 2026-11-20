@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { HeimdallServiceGetJobsOptions, HeimdallServiceGetJobsResponses } from '../types/HeimdallServiceGetJobs'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /v1/jobs`
  * @description Retrieve a list of jobs that the Advisor is aware of. Jobs are ordered by creation time ascending for synchronization purposes. Use the `page` parameter to get the next page of jobs.
  * @summary List jobs
- * {@link /v1/jobs}
  */
 export function heimdallServiceGetJobs<ThrowOnError extends boolean = true>(options: Options<HeimdallServiceGetJobsOptions, ThrowOnError> = {}): Unwrappable<RequestResult<HeimdallServiceGetJobsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/v1/jobs', styles: { query: { workflowIds: { style: 'form', explode: true }, jobIds: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<HeimdallServiceGetJobsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<HeimdallServiceGetJobsResponses, ThrowOnError>({ method: 'GET', url: '/v1/jobs', ...config, styles: { ...config.styles, query: { workflowIds: { style: 'form', explode: true }, jobIds: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

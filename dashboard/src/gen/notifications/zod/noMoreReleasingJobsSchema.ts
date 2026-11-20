@@ -4,6 +4,17 @@
 
 import * as z from 'zod'
 
+/**
+ * autonomous recovery engine can't release any more jobs.
+ * Examples:
+ *     >>> message = NoMoreReleasingJobs(job_name="some-job", user="some-user")
+ *     >>> expected_message = '''\
+ *     ... No more jobs in `PENDING(JobHeldUser)` state for job name: some-job - won't release any new jobs.
+ *     ... '''
+ *     >>> assert_equal(message.render_message(), expected_message)
+ *     >>> expected_title = "No more pending jobs for some-job"
+ *     >>> assert_equal(message.render_title(), expected_title)
+ */
 export const noMoreReleasingJobsSchema = z.object({
   template_id: z.enum(['/templates/NoMoreReleasingJobs']).optional().default('/templates/NoMoreReleasingJobs'),
   job_name: z.string(),

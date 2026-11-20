@@ -4,4 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * TriggerCondition defines the parent state that satisfies this dependency.
+ *  - TRIGGER_CONDITION_UNSPECIFIED: No trigger condition was specified.
+ *  - TRIGGER_CONDITION_COMPLETED: The parent must complete successfully.
+ */
 export const jobDagDependencyTriggerConditionSchema = z.enum(['TRIGGER_CONDITION_UNSPECIFIED', 'TRIGGER_CONDITION_COMPLETED']).default('TRIGGER_CONDITION_UNSPECIFIED').describe('TriggerCondition defines the parent state that satisfies this dependency.\n\n - TRIGGER_CONDITION_UNSPECIFIED: No trigger condition was specified.\n - TRIGGER_CONDITION_COMPLETED: The parent must complete successfully.')

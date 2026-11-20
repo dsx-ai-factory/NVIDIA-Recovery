@@ -5,6 +5,23 @@
 import * as z from 'zod'
 import { jobExecutionErrorSchema } from './jobExecutionErrorSchema'
 
+/**
+ * Represents an event that occurred on a node during job execution.
+ * This model captures details about node events including error attribution,
+ * timestamps, and relationships to jobs and errors.
+ * Attributes:
+ *     job_id: ID of the job associated with this event
+ *     job_attempt_index: Index of the job attempt
+ *     node: Name of the node where the event occurred
+ *     timestamp: When the event occurred
+ *     attribution: Classification of the error (hardware/software/system/unknown)
+ *     attribution_type: Type of telemetry data used for attribution
+ *     attribution_origin: Origin of the attribution
+ *     attribution_sources: Sources of the attribution
+ *     actions: Actions taken by ADI
+ *     fact_status: Status of the FACT service
+ *     error: The associated error details
+ */
 export const nodeEventSchema = z.object({
   node: z.string(),
   timestamp: z.iso.datetime(),
@@ -12,7 +29,7 @@ export const nodeEventSchema = z.object({
   job_attempt_index: z.int(),
   job_start_time: z.iso.datetime().nullish(),
   job_end_time: z.iso.datetime().nullish(),
-  job_execution_error: jobExecutionErrorSchema.describe('Represents an error that occurred during job execution.\n\nThis model captures details about errors including their type, code, signature,\nand descriptive information to help with debugging and error tracking.\n\nAttributes:\n    code: The error code if available, zero otherwise\n    message: Short error message\n    description: Detailed description of the error\n    signature: A unique signature identifying this specific error').meta({ examples: [{}] }),
+  job_execution_error: jobExecutionErrorSchema.describe('Represents an error that occurred during job execution.\n\nThis model captures details about errors including their type, code, signature,\nand descriptive information to help with debugging and error tracking.\n\nAttributes:\n    code: The error code if available, zero otherwise\n    message: Short error message\n    description: Detailed description of the error\n    signature: A unique signature identifying this specific error').meta({ examples: [{"code":1,"signature":"signature","description":"description","message":"message"}] }),
   cluster: z.string().nullish(),
   error_attribution: z.string(),
   error_attribution_type: z.string(),
@@ -21,4 +38,4 @@ export const nodeEventSchema = z.object({
   exclusion_type: z.string(),
   original_exclusion_type: z.string().nullish(),
   fact_status: z.string(),
-}).describe('Represents an event that occurred on a node during job execution.\n\nThis model captures details about node events including error attribution,\ntimestamps, and relationships to jobs and errors.\n\nAttributes:\n    job_id: ID of the job associated with this event\n    job_attempt_index: Index of the job attempt\n    node: Name of the node where the event occurred\n    timestamp: When the event occurred\n    attribution: Classification of the error (hardware/software/system/unknown)\n    attribution_type: Type of telemetry data used for attribution\n    attribution_origin: Origin of the attribution\n    attribution_sources: Sources of the attribution\n    actions: Actions taken by ADI\n    fact_status: Status of the FACT service\n    error: The associated error details').meta({ examples: [{}] })
+}).describe('Represents an event that occurred on a node during job execution.\n\nThis model captures details about node events including error attribution,\ntimestamps, and relationships to jobs and errors.\n\nAttributes:\n    job_id: ID of the job associated with this event\n    job_attempt_index: Index of the job attempt\n    node: Name of the node where the event occurred\n    timestamp: When the event occurred\n    attribution: Classification of the error (hardware/software/system/unknown)\n    attribution_type: Type of telemetry data used for attribution\n    attribution_origin: Origin of the attribution\n    attribution_sources: Sources of the attribution\n    actions: Actions taken by ADI\n    fact_status: Status of the FACT service\n    error: The associated error details').meta({ examples: [{"cluster":"cluster","error_attribution_origin":"error_attribution_origin","job_end_time":"2000-01-23T04:56:07.000+00:00","job_start_time":"2000-01-23T04:56:07.000+00:00","error_attribution":"error_attribution","job_execution_error":{"code":1,"signature":"signature","description":"description","message":"message"},"job_attempt_index":6,"node":"node","original_exclusion_type":"original_exclusion_type","error_attribution_sources":["error_attribution_sources","error_attribution_sources"],"fact_status":"fact_status","job_id":"job_id","exclusion_type":"exclusion_type","error_attribution_type":"error_attribution_type","timestamp":"2000-01-23T04:56:07.000+00:00"}] })

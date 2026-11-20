@@ -5,9 +5,9 @@
 import type { V1ApiKey } from './V1ApiKey'
 
 export interface V1UpdateApiKeyAuthorizationsResponse {
-    /**
-     * @description Legacy response field. Disabled endpoints always return an error instead.
-     * @type object | undefined
-    */
-    key?: V1ApiKey;
+  /**
+   * @description Legacy response field. Disabled endpoints always return an error instead.
+   * @type object | undefined
+   */
+  key?: V1ApiKey;
 }

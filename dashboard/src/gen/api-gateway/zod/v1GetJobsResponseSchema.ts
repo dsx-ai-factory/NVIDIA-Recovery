@@ -5,8 +5,11 @@
 import * as z from 'zod'
 import { v1JobSchema } from './v1JobSchema'
 
+/**
+ * GetJobsResponse is the response for listing jobs.
+ */
 export const v1GetJobsResponseSchema = z.object({
   jobs: z.array(v1JobSchema).optional().describe('The list of jobs.'),
-  count: z.int().optional().describe('The total count of jobs returned.'),
+  count: z.int32().optional().describe('The total count of jobs returned.'),
   nextPageToken: z.string().optional().describe('The decimal zero-based offset to use for the next page of results.'),
 }).describe('GetJobsResponse is the response for listing jobs.')

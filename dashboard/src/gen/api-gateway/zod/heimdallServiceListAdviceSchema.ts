@@ -6,10 +6,19 @@ import * as z from 'zod'
 import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1ListAdviceResponseSchema } from './v1ListAdviceResponseSchema'
 
+/**
+ * The opaque page token from the previous response's next_page_token field.
+ */
 export const heimdallServiceListAdviceQueryPageSchema = z.string().optional().describe('The opaque page token from the previous response\'s next_page_token field.')
 
-export const heimdallServiceListAdviceQueryLimitSchema = z.int().optional().describe('The maximum number of advice records to return. Defaults to 100 and cannot exceed 250.')
+/**
+ * The maximum number of advice records to return. Defaults to 100 and cannot exceed 250.
+ */
+export const heimdallServiceListAdviceQueryLimitSchema = z.int32().optional().describe('The maximum number of advice records to return. Defaults to 100 and cannot exceed 250.')
 
+/**
+ * Return only Advice that can still require reconciliation.
+ */
 export const heimdallServiceListAdviceQueryOnlyActiveSchema = z.boolean().optional().describe('Return only Advice that can still require reconciliation.')
 
 export const heimdallServiceListAdviceStatus200Schema = v1ListAdviceResponseSchema.describe('ListAdviceResponse is the response for listing advice.')
@@ -19,3 +28,9 @@ export const heimdallServiceListAdviceStatusDefaultSchema = rpcStatusSchema
 export const heimdallServiceListAdviceResponseSchema = heimdallServiceListAdviceStatus200Schema
 
 export const heimdallServiceListAdviceErrorSchema = heimdallServiceListAdviceStatusDefaultSchema
+
+export const heimdallServiceListAdviceQuerySchema = z.object({
+  page: heimdallServiceListAdviceQueryPageSchema,
+  limit: heimdallServiceListAdviceQueryLimitSchema,
+  onlyActive: heimdallServiceListAdviceQueryOnlyActiveSchema,
+})

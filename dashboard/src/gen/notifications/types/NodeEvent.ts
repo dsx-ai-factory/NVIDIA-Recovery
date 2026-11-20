@@ -5,15 +5,15 @@
 /**
  * @description A representation of a node attribution event.
  * @type object
-*/
+ */
 export interface NodeEvent {
-    /**
-     * @default '/partials/NodeEvent'
-     * @type string | undefined
-    */
-    template_id?: "/partials/NodeEvent";
-    node: string;
-    exclusion_type: string;
-    error_attribution: string;
-    error_attribution_sources: string[];
+  /**
+   * @default '/partials/NodeEvent'
+   * @type string | undefined
+   */
+  template_id?: '/partials/NodeEvent';
+  node: string;
+  exclusion_type: string;
+  error_attribution: string;
+  error_attribution_sources: string[];
 }

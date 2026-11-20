@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { ApiKeysServiceUpdateApiKeyAuthorizationsOptions, ApiKeysServiceUpdateApiKeyAuthorizationsResponses } from '../types/ApiKeysServiceUpdateApiKeyAuthorizations'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `PUT /v1/keys/{keyId}/authorizations`
  * @description API-key authorization updates are disabled in this build. This compatibility endpoint always returns an internal error.
  * @summary Disabled API-key authorization update compatibility endpoint.
- * {@link /v1/keys/:keyId/authorizations}
  */
 export function apiKeysServiceUpdateApiKeyAuthorizations<ThrowOnError extends boolean = true>(options: Options<ApiKeysServiceUpdateApiKeyAuthorizationsOptions, ThrowOnError>): Unwrappable<RequestResult<ApiKeysServiceUpdateApiKeyAuthorizationsResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'PUT', url: '/v1/keys/{keyId}/authorizations', ...config }) as Promise<RequestResult<ApiKeysServiceUpdateApiKeyAuthorizationsResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<ApiKeysServiceUpdateApiKeyAuthorizationsResponses, ThrowOnError>({ method: 'PUT', url: '/v1/keys/{keyId}/authorizations', contentType: { request: 'application/json' }, ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

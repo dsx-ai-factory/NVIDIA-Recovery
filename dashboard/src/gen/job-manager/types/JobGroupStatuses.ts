@@ -5,11 +5,12 @@
 import type { JobGroupStatus } from './JobGroupStatus'
 
 /**
- * @description This class is used to return a list of job group statuses from the job manager\'s REST API. Since the response is\npaginated, this class also contains the total number of items that match the query.
+ * @description This class is used to return a list of job group statuses from the job manager's REST API. Since the response is
+ * paginated, this class also contains the total number of items that match the query.
  * @example {"item_count":0,"job_groups":[{"job_group_id":"job_group_id","unique_job_count":6,"total_job_attempt_count":1},{"job_group_id":"job_group_id","unique_job_count":6,"total_job_attempt_count":1}]}
  * @type object
-*/
+ */
 export interface JobGroupStatuses {
-    item_count: number;
-    job_groups: JobGroupStatus[];
+  item_count: number;
+  job_groups: JobGroupStatus[];
 }

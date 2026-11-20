@@ -8,19 +8,26 @@ import { adviceReconciliationStatusSchema } from './adviceReconciliationStatusSc
 import { issueInputSchema } from './issueInputSchema'
 import { recoveryContextSchema } from './recoveryContextSchema'
 
+/**
+ * Represents advice for a job from the NVIDIA Recovery system.
+ * This model matches the NVIDIA Recovery Go client schema (flattened structure) rather than
+ * the CRD structure (nested spec). The API returns a flattened version where jobId and
+ * restartCount are at the top level alongside the advice recommendation and issues.
+ * This is the public facing model returned from the job manager's REST API.
+ */
 export const adviceInputSchema = z.object({
   id: z.string(),
   visible: z.boolean().optional().default(false),
   jobId: z.string(),
   restartCount: z.int(),
-  schedulerMetadata: z.object({}).catchall(z.unknown()).optional().default({}),
-  advice: adviceRecommendationSchema.describe('Represents the recommendation portion of advice.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{}] }),
+  schedulerMetadata: z.record(z.string(), z.unknown()).optional().default({}),
+  advice: adviceRecommendationSchema.describe('Represents the recommendation portion of advice.\n\nThis model is compatible with the NVIDIA Recovery Advice CRD and matches the Go client schema.').meta({ examples: [{"nodeConstraints":{"exclusions":["exclusions","exclusions"],"inclusions":["inclusions","inclusions"]},"state":"Restarted"}] }),
   generation: z.int().min(1).optional().default(1),
   desiredStateChangedAt: z.iso.datetime().nullish(),
-  reconciliationStatus: adviceReconciliationStatusSchema.optional().describe('The reconciliation observation for an Advice generation.').meta({ examples: [{}] }),
+  reconciliationStatus: adviceReconciliationStatusSchema.optional().describe('The reconciliation observation for an Advice generation.').meta({ examples: [{"reason":"DESIRED_STATE_OBSERVED","disposition":"PENDING","observedAt":"2000-01-23T04:56:07.000+00:00","transitionedAt":"2000-01-23T04:56:07.000+00:00","observedGeneration":1,"diagnosticMessage":"diagnosticMessage"}] }),
   issues: z.array(issueInputSchema).nullish(),
-  factAttribution: z.object({}).catchall(z.unknown()).nullish(),
-  recoveryContext: recoveryContextSchema.optional().meta({ examples: [{}] }),
+  factAttribution: z.record(z.string(), z.unknown()).nullish(),
+  recoveryContext: recoveryContextSchema.optional().meta({ examples: [{"tracestate":"tracestate","traceparent":"traceparent","triggeredAt":"2000-01-23T04:56:07.000+00:00","sequenceId":"sequenceId","operation":"restart"}] }),
   createdAt: z.iso.datetime().nullish(),
   updatedAt: z.iso.datetime().nullish(),
 }).describe('Represents advice for a job from the NVIDIA Recovery system.\n\nThis model matches the NVIDIA Recovery Go client schema (flattened structure) rather than\nthe CRD structure (nested spec). The API returns a flattened version where jobId and\nrestartCount are at the top level alongside the advice recommendation and issues.\n\nThis is the public facing model returned from the job manager\'s REST API.')

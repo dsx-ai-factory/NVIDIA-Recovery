@@ -5,6 +5,9 @@
 import * as z from 'zod'
 import { recoveryContextSchema } from './recoveryContextSchema'
 
+/**
+ * Canonical context of an existing backend-owned recovery sequence.
+ */
 export const getRecoverySequenceResponseSchema = z.object({
-  recoveryContext: recoveryContextSchema.meta({ examples: [{}] }),
-}).describe('Canonical context of an existing backend-owned recovery sequence.').meta({ examples: [{}] })
+  recoveryContext: recoveryContextSchema.meta({ examples: [{"tracestate":"tracestate","traceparent":"traceparent","triggeredAt":"2000-01-23T04:56:07.000+00:00","sequenceId":"sequenceId","operation":"restart"}] }),
+}).describe('Canonical context of an existing backend-owned recovery sequence.').meta({ examples: [{"recoveryContext":{"tracestate":"tracestate","traceparent":"traceparent","triggeredAt":"2000-01-23T04:56:07.000+00:00","sequenceId":"sequenceId","operation":"restart"}}] })

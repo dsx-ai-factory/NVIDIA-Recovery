@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { DeleteAdviceOptions, DeleteAdviceResponses } from '../types/DeleteAdvice'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `DELETE /advice/{heimdall_id}`
  * @description Delete an advice record by its NVIDIA Recovery ID.
  * Parameters:
  * heimdall_id (str):
@@ -17,10 +18,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * Raises:
  * HTTPException: 404 if not found, 400 if invalid ID format, 500 on server error.
  * @summary Delete Advice
- * {@link /advice/:heimdall_id}
  */
 export function deleteAdvice<ThrowOnError extends boolean = true>(options: Options<DeleteAdviceOptions, ThrowOnError>): Unwrappable<RequestResult<DeleteAdviceResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'DELETE', url: '/advice/{heimdall_id}', styles: { path: { heimdallId: { style: 'simple', explode: false } } }, ...config }) as Promise<RequestResult<DeleteAdviceResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<DeleteAdviceResponses, ThrowOnError>({ method: 'DELETE', url: '/advice/{heimdall_id}', ...config, styles: { ...config.styles, path: { heimdall_id: { style: 'simple', explode: false }, ...config.styles?.path } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

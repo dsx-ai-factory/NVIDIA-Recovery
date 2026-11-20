@@ -6,14 +6,25 @@ import * as z from 'zod'
 import { HTTPValidationErrorSchema } from './HTTPValidationErrorSchema'
 import { nodeAnalysisResponseSchema } from './nodeAnalysisResponseSchema'
 
+/**
+ * Set algebra expression (e.g., '12345/0 U 12346/0 - 12347/0')
+ */
 export const getNodeAnalysisQueryExprSchema = z.string().describe('Set algebra expression (e.g., \'12345/0 U 12346/0 - 12347/0\')')
 
+/**
+ * Group results by 'rack' or 'none'. Default is 'none'.
+ */
 export const getNodeAnalysisQueryGroupBySchema = z.string().optional().default('none').describe('Group results by \'rack\' or \'none\'. Default is \'none\'.')
 
-export const getNodeAnalysisStatus200Schema = nodeAnalysisResponseSchema.describe('Response model for node set analysis endpoint.\n\nThis response contains the result of evaluating a set algebra expression\nover job node lists, optionally grouped by rack.').meta({ examples: [{}] })
+export const getNodeAnalysisStatus200Schema = nodeAnalysisResponseSchema.describe('Response model for node set analysis endpoint.\n\nThis response contains the result of evaluating a set algebra expression\nover job node lists, optionally grouped by rack.').meta({ examples: [{"result":{"nodes":["nodes","nodes"],"count":0},"expression":"expression","jobsQueried":["jobsQueried","jobsQueried"],"groupedByRack":{"key":["groupedByRack","groupedByRack"]}}] })
 
-export const getNodeAnalysisStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{}] })
+export const getNodeAnalysisStatus422Schema = HTTPValidationErrorSchema.meta({ examples: [{"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}] })
 
 export const getNodeAnalysisResponseSchema = getNodeAnalysisStatus200Schema
 
 export const getNodeAnalysisErrorSchema = getNodeAnalysisStatus422Schema
+
+export const getNodeAnalysisQuerySchema = z.object({
+  expr: getNodeAnalysisQueryExprSchema,
+  group_by: getNodeAnalysisQueryGroupBySchema,
+})

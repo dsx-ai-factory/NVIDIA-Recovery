@@ -7,11 +7,11 @@ import type { V1Workflow } from './V1Workflow'
 /**
  * @description GetWorkflowResponse is the response for the GetWorkflow method.
  * @type object
-*/
+ */
 export interface V1GetWorkflowResponse {
-    /**
-     * @description The workflow.
-     * @type object | undefined
-    */
-    workflow?: V1Workflow;
+  /**
+   * @description The workflow.
+   * @type object | undefined
+   */
+  workflow?: V1Workflow;
 }

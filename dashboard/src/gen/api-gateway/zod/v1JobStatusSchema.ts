@@ -4,4 +4,16 @@
 
 import * as z from 'zod'
 
+/**
+ * JobStatus represents the state of a job.
+ *  - JOB_STATUS_UNSPECIFIED: The status is not specified.
+ *  - JOB_STATUS_PENDING: The job has been created but is not started yet due to being queued, waiting for resources or
+ * is pulling container images etc...
+ *  - JOB_STATUS_RUNNING: The job is scheduled and has started running.
+ *  - JOB_STATUS_STOPPED: A stopped job is no longer running or using resources.
+ *  - JOB_STATUS_COMPLETED: The job completed without reporting an error.
+ *  - JOB_STATUS_FAILED: The job exited with an error status.
+ *  - JOB_STATUS_CANCELLED: Job was cancelled by the user or system.
+ *  - JOB_STATUS_DELETED: The job is deleted.
+ */
 export const v1JobStatusSchema = z.enum(['JOB_STATUS_UNSPECIFIED', 'JOB_STATUS_PENDING', 'JOB_STATUS_RUNNING', 'JOB_STATUS_STOPPED', 'JOB_STATUS_COMPLETED', 'JOB_STATUS_FAILED', 'JOB_STATUS_CANCELLED', 'JOB_STATUS_DELETED']).default('JOB_STATUS_UNSPECIFIED').describe('JobStatus represents the state of a job.\n\n - JOB_STATUS_UNSPECIFIED: The status is not specified.\n - JOB_STATUS_PENDING: The job has been created but is not started yet due to being queued, waiting for resources or\nis pulling container images etc...\n - JOB_STATUS_RUNNING: The job is scheduled and has started running.\n - JOB_STATUS_STOPPED: A stopped job is no longer running or using resources.\n - JOB_STATUS_COMPLETED: The job completed without reporting an error.\n - JOB_STATUS_FAILED: The job exited with an error status.\n - JOB_STATUS_CANCELLED: Job was cancelled by the user or system.\n - JOB_STATUS_DELETED: The job is deleted.')

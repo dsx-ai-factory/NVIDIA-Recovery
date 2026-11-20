@@ -6,14 +6,29 @@ import * as z from 'zod'
 import { rpcStatusSchema } from './rpcStatusSchema'
 import { v1GetJobResponseSchema } from './v1GetJobResponseSchema'
 
+/**
+ * The job identifier.
+ */
 export const heimdallServiceGetJobPathHeimdallJobIdSchema = z.string().describe('The job identifier.')
 
+/**
+ * If true, interpret heimdall_job_id as a UUID and query by heimdall_job_id directly.
+ * If false or not set (default), parse as "{job_id}-{attempt_index}" format.
+ */
 export const heimdallServiceGetJobQueryUseHeimdallIdSchema = z.boolean().optional().describe('If true, interpret heimdall_job_id as a UUID and query by heimdall_job_id directly.\nIf false or not set (default), parse as "{job_id}-{attempt_index}" format.')
 
-export const heimdallServiceGetJobStatus200Schema = v1GetJobResponseSchema.describe('GetJobResponse is the response for the GetJob method.').meta({ examples: [{}] })
+export const heimdallServiceGetJobStatus200Schema = v1GetJobResponseSchema.describe('GetJobResponse is the response for the GetJob method.').meta({ examples: [{"job":{"attemptIndex":0,"heimdallJobId":"test-job-0","jobId":"test-job","nodes":["node1","node2","node3"],"state":"JOB_STATUS_COMPLETED","workflowId":"test-workflow"}}] })
 
 export const heimdallServiceGetJobStatusDefaultSchema = rpcStatusSchema
 
 export const heimdallServiceGetJobResponseSchema = heimdallServiceGetJobStatus200Schema
 
 export const heimdallServiceGetJobErrorSchema = heimdallServiceGetJobStatusDefaultSchema
+
+export const heimdallServiceGetJobPathSchema = z.object({
+  heimdallJobId: heimdallServiceGetJobPathHeimdallJobIdSchema,
+})
+
+export const heimdallServiceGetJobQuerySchema = z.object({
+  useHeimdallId: heimdallServiceGetJobQueryUseHeimdallIdSchema,
+})

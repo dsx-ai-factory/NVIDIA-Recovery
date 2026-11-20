@@ -7,23 +7,23 @@ import type { V1Job } from './V1Job'
 /**
  * @description GetJobsBySchedulerIdResponse is the response for getting jobs by scheduler ID.
  * @type object
-*/
+ */
 export interface V1GetJobsBySchedulerIdResponse {
-    /**
-     * @description The list of jobs.
-     * @type array | undefined
-    */
-    jobs?: V1Job[];
-    /**
-     * @description The total count of jobs returned.
-     *
-     * Format: `int32`
-     * @type integer | undefined
-    */
-    count?: number;
-    /**
-     * @description The decimal zero-based offset to use for the next page of results.
-     * @type string | undefined
-    */
-    nextPageToken?: string;
+  /**
+   * @description The list of jobs.
+   * @type array | undefined
+   */
+  jobs?: V1Job[];
+  /**
+   * @description The total count of jobs returned.
+   *
+   * Format: `int32`
+   * @type integer | undefined
+   */
+  count?: number;
+  /**
+   * @description The decimal zero-based offset to use for the next page of results.
+   * @type string | undefined
+   */
+  nextPageToken?: string;
 }

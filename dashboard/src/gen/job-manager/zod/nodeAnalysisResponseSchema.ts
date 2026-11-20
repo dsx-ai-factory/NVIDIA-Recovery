@@ -5,9 +5,14 @@
 import * as z from 'zod'
 import { nodeAnalysisResultSchema } from './nodeAnalysisResultSchema'
 
+/**
+ * Response model for node set analysis endpoint.
+ * This response contains the result of evaluating a set algebra expression
+ * over job node lists, optionally grouped by rack.
+ */
 export const nodeAnalysisResponseSchema = z.object({
   expression: z.string().describe('The original expression that was evaluated'),
-  result: nodeAnalysisResultSchema.describe('Result of node set analysis containing the computed node set.').meta({ examples: [{}] }),
-  groupedByRack: z.object({}).catchall(z.array(z.string())).nullish(),
+  result: nodeAnalysisResultSchema.describe('Result of node set analysis containing the computed node set.').meta({ examples: [{"nodes":["nodes","nodes"],"count":0}] }),
+  groupedByRack: z.record(z.string(), z.array(z.string())).nullish(),
   jobsQueried: z.array(z.string()).describe('List of job IDs (format: job_id/attempt_index) that were queried'),
-}).describe('Response model for node set analysis endpoint.\n\nThis response contains the result of evaluating a set algebra expression\nover job node lists, optionally grouped by rack.').meta({ examples: [{}] })
+}).describe('Response model for node set analysis endpoint.\n\nThis response contains the result of evaluating a set algebra expression\nover job node lists, optionally grouped by rack.').meta({ examples: [{"result":{"nodes":["nodes","nodes"],"count":0},"expression":"expression","jobsQueried":["jobsQueried","jobsQueried"],"groupedByRack":{"key":["groupedByRack","groupedByRack"]}}] })

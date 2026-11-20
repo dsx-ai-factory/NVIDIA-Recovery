@@ -6,30 +6,30 @@ import type { HTTPValidationError } from './HTTPValidationError'
 import type { UserPreferencesPublic } from './UserPreferencesPublic'
 
 export interface UserPreferencesGetPath {
-    username: string;
+  username: string;
 }
 
 /**
- * @description A user\'s notification preferences.
+ * @description A user's notification preferences.
  * @type object
-*/
+ */
 export type UserPreferencesGetStatus200 = UserPreferencesPublic;
 
 export type UserPreferencesGetStatus422 = HTTPValidationError;
 
 export interface UserPreferencesGetOptions {
-    body?: never;
-    path: UserPreferencesGetPath;
-    query?: never;
-    headers?: never;
+  body?: never;
+  path: UserPreferencesGetPath;
+  query?: never;
+  headers?: never;
 }
 
 export interface UserPreferencesGetResponses {
-    "200": UserPreferencesGetStatus200;
-    "422": UserPreferencesGetStatus422;
+  '200': UserPreferencesGetStatus200;
+  '422': UserPreferencesGetStatus422;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type UserPreferencesGetResponse = (UserPreferencesGetStatus200 | UserPreferencesGetStatus422);
+ */
+export type UserPreferencesGetResponse = UserPreferencesGetStatus200;

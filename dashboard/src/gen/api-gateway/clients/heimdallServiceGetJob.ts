@@ -4,15 +4,15 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { HeimdallServiceGetJobOptions, HeimdallServiceGetJobResponses } from '../types/HeimdallServiceGetJob'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /v1/jobs/{heimdallJobId}`
  * @description Retrieve a specific job by its UUID.
  * @summary Get job by ID
- * {@link /v1/jobs/:heimdallJobId}
  */
 export function heimdallServiceGetJob<ThrowOnError extends boolean = true>(options: Options<HeimdallServiceGetJobOptions, ThrowOnError>): Unwrappable<RequestResult<HeimdallServiceGetJobResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/v1/jobs/{heimdallJobId}', ...config }) as Promise<RequestResult<HeimdallServiceGetJobResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<HeimdallServiceGetJobResponses, ThrowOnError>({ method: 'GET', url: '/v1/jobs/{heimdallJobId}', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

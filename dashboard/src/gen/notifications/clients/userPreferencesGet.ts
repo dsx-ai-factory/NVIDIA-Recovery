@@ -4,14 +4,14 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { UserPreferencesGetOptions, UserPreferencesGetResponses } from '../types/UserPreferencesGet'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /user-preferences/{username}`
  * @summary Retrieve a user's notification preferences.
- * {@link /user-preferences/:username}
  */
 export function userPreferencesGet<ThrowOnError extends boolean = true>(options: Options<UserPreferencesGetOptions, ThrowOnError>): Unwrappable<RequestResult<UserPreferencesGetResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/user-preferences/{username}', ...config }) as Promise<RequestResult<UserPreferencesGetResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<UserPreferencesGetResponses, ThrowOnError>({ method: 'GET', url: '/user-preferences/{username}', ...config, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

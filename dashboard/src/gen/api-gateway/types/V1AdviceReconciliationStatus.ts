@@ -8,44 +8,44 @@ import type { V1AdviceReconciliationReasonKey } from './V1AdviceReconciliationRe
 /**
  * @description AdviceReconciliationStatus records one generation-scoped reconciliation observation.
  * @type object
-*/
+ */
 export interface V1AdviceReconciliationStatus {
-    /**
-     * @description Advice generation observed by the controller.
-     *
-     * Format: `int64`
-     * @type string | undefined
-    */
-    observedGeneration?: string;
-    /**
-     * @description Current lifecycle disposition for the observed generation.
-     * @default 'ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED'
-     * @type string | undefined
-    */
-    disposition?: V1AdviceReconciliationDispositionKey;
-    /**
-     * @description Stable machine-readable explanation for the disposition.
-     * @default 'ADVICE_RECONCILIATION_REASON_UNSPECIFIED'
-     * @type string | undefined
-    */
-    reason?: V1AdviceReconciliationReasonKey;
-    /**
-     * @description Time of the fresh scheduler or policy observation.
-     *
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    observedAt?: string;
-    /**
-     * @description Time the disposition or reason last changed.
-     *
-     * Format: `date-time`
-     * @type string | undefined
-    */
-    transitionedAt?: string;
-    /**
-     * @description Optional bounded diagnostic text for operators.
-     * @type string | undefined
-    */
-    diagnosticMessage?: string;
+  /**
+   * @description Advice generation observed by the controller.
+   *
+   * Format: `int64`
+   * @type string | undefined
+   */
+  observedGeneration?: string;
+  /**
+   * @description Current lifecycle disposition for the observed generation.
+   * @default 'ADVICE_RECONCILIATION_DISPOSITION_UNSPECIFIED'
+   * @type string | undefined
+   */
+  disposition?: V1AdviceReconciliationDispositionKey;
+  /**
+   * @description Stable machine-readable explanation for the disposition.
+   * @default 'ADVICE_RECONCILIATION_REASON_UNSPECIFIED'
+   * @type string | undefined
+   */
+  reason?: V1AdviceReconciliationReasonKey;
+  /**
+   * @description Time of the fresh scheduler or policy observation.
+   *
+   * Format: `date-time`
+   * @type string | undefined
+   */
+  observedAt?: string;
+  /**
+   * @description Time the disposition or reason last changed.
+   *
+   * Format: `date-time`
+   * @type string | undefined
+   */
+  transitionedAt?: string;
+  /**
+   * @description Optional bounded diagnostic text for operators.
+   * @type string | undefined
+   */
+  diagnosticMessage?: string;
 }

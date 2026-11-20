@@ -4,9 +4,10 @@
 
 import type { Options, Unwrappable, RequestResult } from '../.kubb/client'
 import type { GetAdviceOptions, GetAdviceResponses } from '../types/GetAdvice'
-import { client, withUnwrap } from '../.kubb/client'
+import { client, withUnwrap, resolveThrowOnError } from '../.kubb/client'
 
 /**
+ * `GET /advice`
  * @description Retrieve a list of advice for jobs.
  * This endpoint returns advice recommendations from the NVIDIA Recovery system for jobs
  * that have been analyzed for issues such as crashes, hangs, or stragglers.
@@ -27,10 +28,9 @@ import { client, withUnwrap } from '../.kubb/client'
  * A response containing a list of advice items and an optional nextPageToken
  * for pagination.
  * @summary Get Advice
- * {@link /advice}
  */
 export function getAdvice<ThrowOnError extends boolean = true>(options: Options<GetAdviceOptions, ThrowOnError> = {}): Unwrappable<RequestResult<GetAdviceResponses, ThrowOnError>> {
-  const { client: request = client, ...config } = options
+  const { client: apiClient = client, ...config } = options
 
-  return withUnwrap(request({ method: 'GET', url: '/advice', styles: { query: { page_size: { style: 'form', explode: true }, page_token: { style: 'form', explode: true }, job_id: { style: 'form', explode: true }, include_hidden: { style: 'form', explode: true }, created_after: { style: 'form', explode: true }, only_active: { style: 'form', explode: true } } }, ...config }) as Promise<RequestResult<GetAdviceResponses, ThrowOnError>>)
+  return withUnwrap(apiClient<GetAdviceResponses, ThrowOnError>({ method: 'GET', url: '/advice', ...config, styles: { ...config.styles, query: { page_size: { style: 'form', explode: true }, page_token: { style: 'form', explode: true }, job_id: { style: 'form', explode: true }, include_hidden: { style: 'form', explode: true }, created_after: { style: 'form', explode: true }, only_active: { style: 'form', explode: true }, ...config.styles?.query } }, throwOnError: resolveThrowOnError(config.throwOnError, true) }))
 }

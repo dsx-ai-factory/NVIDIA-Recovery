@@ -4,4 +4,7 @@
 
 import * as z from 'zod'
 
+/**
+ * Lifecycle disposition reported by an Advice reconciler.
+ */
 export const adviceReconciliationDispositionSchema = z.enum(['PENDING', 'CONVERGED', 'ABANDONED']).describe('Lifecycle disposition reported by an Advice reconciler.')

@@ -4,6 +4,12 @@
 
 import * as z from 'zod'
 
+/**
+ * A representation of a job, including id and attempt index.
+ * Examples:
+ *     >>> JobRepr(job_id="456", job_attempt_index=7).render_message()
+ *     '456(7)'
+ */
 export const jobReprSchema = z.object({
   template_id: z.enum(['/partials/JobRepr']).optional().default('/partials/JobRepr'),
   job_id: z.string(),

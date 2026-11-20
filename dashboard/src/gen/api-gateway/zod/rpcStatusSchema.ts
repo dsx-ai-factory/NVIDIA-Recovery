@@ -6,7 +6,7 @@ import * as z from 'zod'
 import { protobufAnySchema } from './protobufAnySchema'
 
 export const rpcStatusSchema = z.object({
-  code: z.int().optional(),
+  code: z.int32().optional(),
   message: z.string().optional(),
   details: z.array(protobufAnySchema).optional(),
 })

@@ -4,4 +4,8 @@
 
 import * as z from 'zod'
 
+/**
+ * Possible states for job advice from the NVIDIA Recovery system.
+ * Matches the Go client schema for NVIDIA Recovery Advice CRD.
+ */
 export const adviceStateSchema = z.enum(['Restarted', 'Terminated', 'Released']).describe('Possible states for job advice from the NVIDIA Recovery system.\n\nMatches the Go client schema for NVIDIA Recovery Advice CRD.')

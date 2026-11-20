@@ -40,55 +40,61 @@ describe("/api/auth/[...nextauth]", () => {
     nextAuthMock.mockClear();
   });
 
-  it.each([
-    "GET",
-    "POST",
-  ] as const)("returns 404 for %s when authentication is unavailable", async (method) => {
-    getAuthConfigurationMock.mockReturnValue({
-      available: false,
-      provider: null,
-    });
+  it.each(["GET", "POST"] as const)(
+    "returns 404 for %s when authentication is unavailable",
+    async (method) => {
+      getAuthConfigurationMock.mockReturnValue({
+        available: false,
+        provider: null,
+      });
 
-    const route = await import("./route");
-    const request = new NextRequest("http://dashboard.test/api/auth/session", {
-      method,
-    });
-    const context = {
-      params: Promise.resolve({ nextauth: ["session"] }),
-    };
+      const route = await import("./route");
+      const request = new NextRequest(
+        "http://dashboard.test/api/auth/session",
+        {
+          method,
+        },
+      );
+      const context = {
+        params: Promise.resolve({ nextauth: ["session"] }),
+      };
 
-    const response = await route[method](request, context);
+      const response = await route[method](request, context);
 
-    expect(response.status).toBe(404);
-    expect(nextAuthMock).not.toHaveBeenCalled();
-    expect(delegateMock).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(404);
+      expect(nextAuthMock).not.toHaveBeenCalled();
+      expect(delegateMock).not.toHaveBeenCalled();
+    },
+  );
 
-  it.each([
-    "GET",
-    "POST",
-  ] as const)("delegates %s to NextAuth when authentication is available", async (method) => {
-    const authOptions = { providers: [] };
-    const delegatedResponse = new Response("delegated", { status: 200 });
-    getAuthConfigurationMock.mockReturnValue({
-      available: true,
-      provider: "starfleet",
-    });
-    getAuthOptionsMock.mockReturnValue(authOptions);
-    delegateMock.mockResolvedValue(delegatedResponse);
+  it.each(["GET", "POST"] as const)(
+    "delegates %s to NextAuth when authentication is available",
+    async (method) => {
+      const authOptions = { providers: [] };
+      const delegatedResponse = new Response("delegated", { status: 200 });
+      getAuthConfigurationMock.mockReturnValue({
+        available: true,
+        provider: "starfleet",
+      });
+      getAuthOptionsMock.mockReturnValue(authOptions);
+      delegateMock.mockResolvedValue(delegatedResponse);
 
-    const route = await import("./route");
-    const request = new NextRequest("http://dashboard.test/api/auth/session", {
-      method,
-    });
-    const context = {
-      params: Promise.resolve({ nextauth: ["session"] }),
-    };
+      const route = await import("./route");
+      const request = new NextRequest(
+        "http://dashboard.test/api/auth/session",
+        {
+          method,
+        },
+      );
+      const context = {
+        params: Promise.resolve({ nextauth: ["session"] }),
+      };
 
-    const response = await route[method](request, context);
+      const response = await route[method](request, context);
 
-    expect(nextAuthMock).toHaveBeenCalledWith(authOptions);
-    expect(delegateMock).toHaveBeenCalledWith(request, context);
-    expect(response).toBe(delegatedResponse);
-  });
+      expect(nextAuthMock).toHaveBeenCalledWith(authOptions);
+      expect(delegateMock).toHaveBeenCalledWith(request, context);
+      expect(response).toBe(delegatedResponse);
+    },
+  );
 });

@@ -4,7 +4,10 @@
 
 import * as z from 'zod'
 
+/**
+ * Identify a target job by its name.
+ */
 export const jobReferenceByNameSchema = z.object({
   type: z.enum(['name']).optional().default('name'),
   name: z.string(),
-}).describe('Identify a target job by its name.').meta({ examples: [{}] })
+}).describe('Identify a target job by its name.').meta({ examples: [{"name":"name","type":"name"}] })

@@ -6,11 +6,11 @@ import type { RpcStatus } from './RpcStatus'
 import type { V1RetrieveApiKeyResponse } from './V1RetrieveApiKeyResponse'
 
 export interface ApiKeysServiceRetrieveApiKeyPath {
-    /**
-     * @description Legacy key ID path parameter retained for compatibility.
-     * @type string
-    */
-    keyId: string;
+  /**
+   * @description Legacy key ID path parameter retained for compatibility.
+   * @type string
+   */
+  keyId: string;
 }
 
 export type ApiKeysServiceRetrieveApiKeyStatus200 = V1RetrieveApiKeyResponse;
@@ -20,19 +20,19 @@ export type ApiKeysServiceRetrieveApiKeyStatus500 = unknown;
 export type ApiKeysServiceRetrieveApiKeyStatusDefault = RpcStatus;
 
 export interface ApiKeysServiceRetrieveApiKeyOptions {
-    body?: never;
-    path: ApiKeysServiceRetrieveApiKeyPath;
-    query?: never;
-    headers?: never;
+  body?: never;
+  path: ApiKeysServiceRetrieveApiKeyPath;
+  query?: never;
+  headers?: never;
 }
 
 export interface ApiKeysServiceRetrieveApiKeyResponses {
-    "200": ApiKeysServiceRetrieveApiKeyStatus200;
-    "500": ApiKeysServiceRetrieveApiKeyStatus500;
-    default: ApiKeysServiceRetrieveApiKeyStatusDefault;
+  '200': ApiKeysServiceRetrieveApiKeyStatus200;
+  '500': ApiKeysServiceRetrieveApiKeyStatus500;
+  default: ApiKeysServiceRetrieveApiKeyStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type ApiKeysServiceRetrieveApiKeyResponse = (ApiKeysServiceRetrieveApiKeyStatus200 | ApiKeysServiceRetrieveApiKeyStatus500 | ApiKeysServiceRetrieveApiKeyStatusDefault);
+ */
+export type ApiKeysServiceRetrieveApiKeyResponse = ApiKeysServiceRetrieveApiKeyStatus200;

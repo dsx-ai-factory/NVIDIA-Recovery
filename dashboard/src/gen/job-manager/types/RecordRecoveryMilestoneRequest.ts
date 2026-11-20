@@ -9,28 +9,28 @@ import type { RecoverySchedulerActionOutcomeKey } from './RecoverySchedulerActio
 /**
  * @example {"completedAt":"2000-01-23T04:56:07.000+00:00","idempotencyKey":"idempotencyKey","action":"slurm.requeue_hold","sequenceId":"sequenceId","operation":"restart","outcome":"planned","completesSequence":true}
  * @type object
-*/
+ */
 export interface RecordRecoveryMilestoneRequest {
-    /**
-     * @minLength 1
-     * @maxLength 64
-     * @type string
-    */
-    sequenceId: string;
-    /**
-     * @minLength 1
-     * @maxLength 128
-     * @type string
-    */
-    idempotencyKey: string;
-    operation: RecoveryOperationKey;
-    action: RecoverySchedulerActionKey;
-    outcome: RecoverySchedulerActionOutcomeKey;
-    completesSequence: boolean;
-    /**
-     * @description
-     * Format: `date-time`
-     * @type string
-    */
-    completedAt: string;
+  /**
+   * @minLength 1
+   * @maxLength 64
+   * @type string
+   */
+  sequenceId: string;
+  /**
+   * @minLength 1
+   * @maxLength 128
+   * @type string
+   */
+  idempotencyKey: string;
+  operation: RecoveryOperationKey;
+  action: RecoverySchedulerActionKey;
+  outcome: RecoverySchedulerActionOutcomeKey;
+  completesSequence: boolean;
+  /**
+   * @description
+   * Format: `date-time`
+   * @type string
+   */
+  completedAt: string;
 }

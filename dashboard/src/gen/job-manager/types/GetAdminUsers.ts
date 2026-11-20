@@ -5,45 +5,45 @@
 import type { HTTPValidationError } from './HTTPValidationError'
 
 export interface GetAdminUsersQuery {
-    job_states?: string[] | null;
-    /**
-     * @default 25
-     * @type integer | undefined
-    */
-    limit?: number;
-    /**
-     * @default 0
-     * @type integer | undefined
-    */
-    offset?: number;
-    /**
-     * @default false
-     * @type boolean | undefined
-    */
-    desc?: boolean;
+  job_states?: string[] | null;
+  /**
+   * @default 25
+   * @type integer | undefined
+   */
+  limit?: number;
+  /**
+   * @default 0
+   * @type integer | undefined
+   */
+  offset?: number;
+  /**
+   * @default false
+   * @type boolean | undefined
+   */
+  desc?: boolean;
 }
 
-export type GetAdminUsersStatus200 = string[];
+export type GetAdminUsersStatus200 = (string | null)[];
 
 /**
  * @example {"detail":[{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"},{"msg":"msg","loc":["ValidationError_loc_inner","ValidationError_loc_inner"],"input":"","ctx":"{}","type":"type"}]}
  * @type object
-*/
+ */
 export type GetAdminUsersStatus422 = HTTPValidationError;
 
 export interface GetAdminUsersOptions {
-    body?: never;
-    path?: never;
-    query?: GetAdminUsersQuery;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query?: GetAdminUsersQuery;
+  headers?: never;
 }
 
 export interface GetAdminUsersResponses {
-    "200": GetAdminUsersStatus200;
-    "422": GetAdminUsersStatus422;
+  '200': GetAdminUsersStatus200;
+  '422': GetAdminUsersStatus422;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type GetAdminUsersResponse = (GetAdminUsersStatus200 | GetAdminUsersStatus422);
+ */
+export type GetAdminUsersResponse = GetAdminUsersStatus200;

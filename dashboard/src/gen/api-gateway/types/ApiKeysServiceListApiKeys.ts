@@ -12,19 +12,19 @@ export type ApiKeysServiceListApiKeysStatus500 = unknown;
 export type ApiKeysServiceListApiKeysStatusDefault = RpcStatus;
 
 export interface ApiKeysServiceListApiKeysOptions {
-    body?: never;
-    path?: never;
-    query?: never;
-    headers?: never;
+  body?: never;
+  path?: never;
+  query?: never;
+  headers?: never;
 }
 
 export interface ApiKeysServiceListApiKeysResponses {
-    "200": ApiKeysServiceListApiKeysStatus200;
-    "500": ApiKeysServiceListApiKeysStatus500;
-    default: ApiKeysServiceListApiKeysStatusDefault;
+  '200': ApiKeysServiceListApiKeysStatus200;
+  '500': ApiKeysServiceListApiKeysStatus500;
+  default: ApiKeysServiceListApiKeysStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type ApiKeysServiceListApiKeysResponse = (ApiKeysServiceListApiKeysStatus200 | ApiKeysServiceListApiKeysStatus500 | ApiKeysServiceListApiKeysStatusDefault);
+ */
+export type ApiKeysServiceListApiKeysResponse = ApiKeysServiceListApiKeysStatus200;

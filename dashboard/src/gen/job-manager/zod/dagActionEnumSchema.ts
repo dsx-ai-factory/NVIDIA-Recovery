@@ -4,4 +4,8 @@
 
 import * as z from 'zod'
 
+/**
+ * The action to take on the target job in a DAG step.
+ * RELEASE: Release the target job so it becomes eligible for scheduling.
+ */
 export const dagActionEnumSchema = z.enum(['release']).describe('The action to take on the target job in a DAG step.\n\nRELEASE: Release the target job so it becomes eligible for scheduling.')

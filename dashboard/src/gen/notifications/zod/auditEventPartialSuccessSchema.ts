@@ -4,6 +4,9 @@
 
 import * as z from 'zod'
 
+/**
+ * Partial result; accepted equals submitted minus rejected.
+ */
 export const auditEventPartialSuccessSchema = z.object({
   rejected_events: z.int().min(1).describe('Number of rejected events.'),
   error_message: z.string().describe('Human-readable explanation of why events were rejected.'),

@@ -4,4 +4,7 @@
 
 import * as z from 'zod'
 
+/**
+ * Machine-readable explanation for the latest DAG dependency evaluation.
+ */
 export const dagDependencyReasonCodeEnumSchema = z.enum(['WAITING_FOR_PARENT_REGISTRATION', 'WAITING_FOR_PARENT_COMPLETION', 'DEPENDENCY_SATISFIED_WAITING_FOR_OTHERS', 'PARENT_NAME_AMBIGUOUS', 'PARENT_TERMINATED']).describe('Machine-readable explanation for the latest DAG dependency evaluation.')

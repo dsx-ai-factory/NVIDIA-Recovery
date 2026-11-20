@@ -6,43 +6,44 @@ import type { RpcStatus } from './RpcStatus'
 import type { V1GetJobResponse } from './V1GetJobResponse'
 
 export interface HeimdallServiceGetJobPath {
-    /**
-     * @description The job identifier.
-     * @type string
-    */
-    heimdallJobId: string;
+  /**
+   * @description The job identifier.
+   * @type string
+   */
+  heimdallJobId: string;
 }
 
 export interface HeimdallServiceGetJobQuery {
-    /**
-     * @description If true, interpret heimdall_job_id as a UUID and query by heimdall_job_id directly.\nIf false or not set (default), parse as \"{job_id}-{attempt_index}\" format.
-     * @type boolean | undefined
-    */
-    useHeimdallId?: boolean;
+  /**
+   * @description If true, interpret heimdall_job_id as a UUID and query by heimdall_job_id directly.
+   * If false or not set (default), parse as "{job_id}-{attempt_index}" format.
+   * @type boolean | undefined
+   */
+  useHeimdallId?: boolean;
 }
 
 /**
  * @description GetJobResponse is the response for the GetJob method.
  * @example {"job":{"attemptIndex":0,"heimdallJobId":"test-job-0","jobId":"test-job","nodes":["node1","node2","node3"],"state":"JOB_STATUS_COMPLETED","workflowId":"test-workflow"}}
  * @type object
-*/
+ */
 export type HeimdallServiceGetJobStatus200 = V1GetJobResponse;
 
 export type HeimdallServiceGetJobStatusDefault = RpcStatus;
 
 export interface HeimdallServiceGetJobOptions {
-    body?: never;
-    path: HeimdallServiceGetJobPath;
-    query?: HeimdallServiceGetJobQuery;
-    headers?: never;
+  body?: never;
+  path: HeimdallServiceGetJobPath;
+  query?: HeimdallServiceGetJobQuery;
+  headers?: never;
 }
 
 export interface HeimdallServiceGetJobResponses {
-    "200": HeimdallServiceGetJobStatus200;
-    default: HeimdallServiceGetJobStatusDefault;
+  '200': HeimdallServiceGetJobStatus200;
+  default: HeimdallServiceGetJobStatusDefault;
 }
 
 /**
  * @description Union of all possible responses
-*/
-export type HeimdallServiceGetJobResponse = (HeimdallServiceGetJobStatus200 | HeimdallServiceGetJobStatusDefault);
+ */
+export type HeimdallServiceGetJobResponse = HeimdallServiceGetJobStatus200;

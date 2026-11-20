@@ -5,7 +5,11 @@
 import * as z from 'zod'
 import { dagDependencyResponseSchema } from './dagDependencyResponseSchema'
 
+/**
+ * Response model for listing DAG dependency records. The response is paginated —
+ * item_count reflects the total number of matching records, not the page size.
+ */
 export const listDagDependenciesResponseSchema = z.object({
   item_count: z.int(),
   dag_dependencies: z.array(dagDependencyResponseSchema),
-}).describe('Response model for listing DAG dependency records. The response is paginated —\nitem_count reflects the total number of matching records, not the page size.').meta({ examples: [{}] })
+}).describe('Response model for listing DAG dependency records. The response is paginated —\nitem_count reflects the total number of matching records, not the page size.').meta({ examples: [{"item_count":0,"dag_dependencies":[{"reason_code":"WAITING_FOR_PARENT_REGISTRATION","action_time":"2000-01-23T04:56:07.000+00:00","dependent_job_action":"dependent_job_action","dependency_trigger_condition":"dependency_trigger_condition","reason_message":"reason_message","last_evaluated_at":"2000-01-23T04:56:07.000+00:00","dependent_job_id":"dependent_job_id","dependency_job_identifier_type":"dependency_job_identifier_type","dependency_job_identifier":"dependency_job_identifier","reason_details":{"key":""},"action_status":"action_status"},{"reason_code":"WAITING_FOR_PARENT_REGISTRATION","action_time":"2000-01-23T04:56:07.000+00:00","dependent_job_action":"dependent_job_action","dependency_trigger_condition":"dependency_trigger_condition","reason_message":"reason_message","last_evaluated_at":"2000-01-23T04:56:07.000+00:00","dependent_job_id":"dependent_job_id","dependency_job_identifier_type":"dependency_job_identifier_type","dependency_job_identifier":"dependency_job_identifier","reason_details":{"key":""},"action_status":"action_status"}]}] })

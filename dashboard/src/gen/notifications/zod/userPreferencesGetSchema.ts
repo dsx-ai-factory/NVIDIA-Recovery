@@ -15,3 +15,7 @@ export const userPreferencesGetStatus422Schema = HTTPValidationErrorSchema
 export const userPreferencesGetResponseSchema = userPreferencesGetStatus200Schema
 
 export const userPreferencesGetErrorSchema = userPreferencesGetStatus422Schema
+
+export const userPreferencesGetPathSchema = z.object({
+  username: userPreferencesGetPathUsernameSchema,
+})

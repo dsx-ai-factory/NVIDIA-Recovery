@@ -50,7 +50,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     );
     if (process.env.NODE_ENV !== "production") {
       return NextResponse.json(
-        { error: "Failed to get jobs", errorDetails: error },
+        { error: "Failed to get notifications", errorDetails: error },
         { status: 500 },
       );
     } else {
