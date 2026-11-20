@@ -39,6 +39,16 @@ def launcher(
         raise pytest.UsageError("qualification requires a Kubernetes workload launcher")
     tracked = DiagnosticLauncher(types[selected](AdmissionClient(scenario_services)), tmp_path)
     yield tracked
+    cancel_owned(tracked)
+
+
+def cancel_owned(tracked: DiagnosticLauncher) -> None:
+    """Save diagnostics for and cancel every workload this test submitted, including terminal ones.
+
+    The scenario runner cancels only jobs that are still active, so a workload that already succeeded or failed
+    would otherwise be left in the cluster without its evidence. Every owned workload is attempted even when an
+    earlier one fails, and the failures are raised together.
+    """
     errors = []
     for job_id in tracked.owned:
         try:
