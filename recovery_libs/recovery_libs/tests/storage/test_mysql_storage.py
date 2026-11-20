@@ -1388,6 +1388,207 @@ def test_upsert_job_record_snapshot_does_not_detach_tracked_record(connection, m
     assert inspect(result.inserted_record).session is None
 
 
+def test_upsert_rejects_reusing_a_kubernetes_attempt_for_a_different_workload(mysql_storage, session):
+    now = datetime.now(UTC)
+    existing = create_example_slurm_job_record(job_id="training", attempt_index=0, submit_time=now, last_updated_at=now)
+    existing.scheduler_metadata = {"scheduler": "kubernetes", "workload_uid": "original"}
+    replacement = create_example_slurm_job_record(
+        job_id="training", attempt_index=0, submit_time=now, last_updated_at=now
+    )
+    replacement.scheduler_metadata = {"scheduler": "kubernetes", "workload_uid": "replacement"}
+    session.scalars.return_value.first.return_value = existing
+
+    with pytest.raises(RecoveryStorageInputValidationError, match="conflicting stored Kubernetes workload identity"):
+        mysql_storage.upsert_job_record(replacement)
+
+    assert existing.scheduler_metadata["workload_uid"] == "original"
+    session.commit.assert_not_called()
+
+
+_WORKLOAD_LOOKUP = {
+    "namespace": "training",
+    "job_name": "training",
+    "job_kind": "JobSet",
+    "job_api_version": "jobset.x-k8s.io/v1alpha2",
+}
+"""Lookup identity that discovery publishes for every workload observation."""
+
+
+def _kubernetes_record(state, nodes, **metadata):
+    now = datetime.now(UTC)
+    record = create_example_slurm_job_record(job_id="training", attempt_index=0, submit_time=now, last_updated_at=now)
+    record.state = state
+    record.allocated_node_list = nodes
+    record.scheduler_metadata = {"scheduler": "kubernetes", "workload_uid": "workload", **_WORKLOAD_LOOKUP, **metadata}
+    return record
+
+
+def _without(record, *keys):
+    for key in keys:
+        record.scheduler_metadata.pop(key)
+    return record
+
+
+@pytest.mark.parametrize("final_state", ["STOPPED", "COMPLETED", "FAILED", "CANCELLED", "DELETED"])
+def test_upsert_keeps_final_kubernetes_outcome_against_late_observations(mysql_storage, session, final_state):
+    existing = _kubernetes_record(final_state, ["node-a"], termination_reason="BackoffLimitExceeded")
+    session.scalars.return_value.first.return_value = existing
+    other_final = "COMPLETED" if final_state == "DELETED" else "DELETED"
+
+    for late in (
+        _kubernetes_record("RUNNING", ["node-a", "node-b"]),
+        _kubernetes_record(other_final, []),
+        _kubernetes_record("UNKNOWN", ["node-c"]),
+    ):
+        result = mysql_storage.upsert_job_record(late)
+
+        assert result.inserted_record.state == final_state
+        assert result.inserted_record.allocated_node_list == ["node-a"]
+        assert result.inserted_record.scheduler_metadata["termination_reason"] == "BackoffLimitExceeded"
+
+
+@pytest.mark.parametrize("unrecognized", ["UNKNOWN", ""])
+def test_upsert_lets_verified_deletion_replace_an_unrecognized_kubernetes_state(mysql_storage, session, unrecognized):
+    """An unrecognized state is not an outcome, so it cannot block the closure that discovery retries."""
+    existing = _kubernetes_record("RUNNING", ["node-a", "node-b"])
+    session.scalars.return_value.first.return_value = existing
+
+    mysql_storage.upsert_job_record(_kubernetes_record(unrecognized, ["node-a"]))
+    assert existing.state == unrecognized
+    assert existing.allocated_node_list == ["node-a"]
+
+    result = mysql_storage.upsert_job_record(_kubernetes_record("DELETED", ["node-c"]))
+    assert result.inserted_record.state == "DELETED"
+    assert result.inserted_record.allocated_node_list == ["node-a", "node-c"]
+
+
+@pytest.mark.parametrize("missing", ["namespace", "job_name", "job_kind", "job_api_version"])
+def test_upsert_rejects_a_new_kubernetes_attempt_without_lookup_identity(mysql_storage, session, missing):
+    session.scalars.return_value.first.return_value = None
+
+    with pytest.raises(RecoveryStorageInputValidationError, match=missing):
+        mysql_storage.upsert_job_record(_without(_kubernetes_record("RUNNING", []), missing))
+
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("job_name", ""),
+        ("job_name", " training"),
+        ("namespace", "team a"),
+        ("namespace", 7),
+        ("namespace", None),
+        ("job_name", "a/b"),
+        ("job_kind", "Job Set"),
+        ("job_api_version", "a/b/c"),
+        ("job_api_version", "/v1"),
+        ("job_api_version", "jobset.x-k8s.io/"),
+    ],
+)
+def test_upsert_rejects_unusable_kubernetes_lookup_values(mysql_storage, session, key, value):
+    session.scalars.return_value.first.return_value = None
+
+    with pytest.raises(RecoveryStorageInputValidationError, match=key):
+        mysql_storage.upsert_job_record(_kubernetes_record("RUNNING", [], **{key: value}))
+
+    session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("stored_state", ["RUNNING", "FAILED"])
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("job_name", "renamed"),
+        ("namespace", "elsewhere"),
+        ("job_kind", "PyTorchJob"),
+        ("job_api_version", "jobset.x-k8s.io/v1"),
+    ],
+)
+def test_upsert_rejects_retargeting_a_kubernetes_workload_uid(mysql_storage, session, stored_state, key, value):
+    existing = _kubernetes_record(stored_state, ["node-a"])
+    session.scalars.return_value.first.return_value = existing
+
+    with pytest.raises(RecoveryStorageInputValidationError, match="lookup identity"):
+        mysql_storage.upsert_job_record(_kubernetes_record("RUNNING", ["node-b"], **{key: value}))
+
+    assert existing.scheduler_metadata[key] == _WORKLOAD_LOOKUP[key]
+    assert existing.state == stored_state
+    session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("stored_state", ["RUNNING", "FAILED"])
+def test_upsert_keeps_kubernetes_lookup_identity_omitted_by_an_update(mysql_storage, session, stored_state):
+    existing = _kubernetes_record(stored_state, ["node-a"])
+    session.scalars.return_value.first.return_value = existing
+
+    result = mysql_storage.upsert_job_record(_without(_kubernetes_record("RUNNING", ["node-a"]), *_WORKLOAD_LOOKUP))
+
+    stored = result.inserted_record.scheduler_metadata
+    assert {key: stored[key] for key in _WORKLOAD_LOOKUP} == _WORKLOAD_LOOKUP
+
+
+def test_upsert_fills_lookup_identity_missing_from_a_stored_kubernetes_attempt(mysql_storage, session):
+    """Rows written before the lookup fence may lack keys; each is filled once and then fixed."""
+    existing = _without(_kubernetes_record("RUNNING", ["node-a"]), "job_kind", "job_api_version")
+    session.scalars.return_value.first.return_value = existing
+
+    mysql_storage.upsert_job_record(_without(_kubernetes_record("RUNNING", ["node-a"]), *_WORKLOAD_LOOKUP))
+    assert "job_kind" not in existing.scheduler_metadata
+    assert existing.scheduler_metadata["job_name"] == "training"
+
+    mysql_storage.upsert_job_record(_kubernetes_record("RUNNING", ["node-a"]))
+    assert {key: existing.scheduler_metadata[key] for key in _WORKLOAD_LOOKUP} == _WORKLOAD_LOOKUP
+
+    with pytest.raises(RecoveryStorageInputValidationError, match="lookup identity"):
+        mysql_storage.upsert_job_record(_kubernetes_record("RUNNING", ["node-a"], job_kind="PyTorchJob"))
+
+
+def test_upsert_repairs_lookup_identity_of_a_final_kubernetes_attempt_without_changing_its_outcome(
+    mysql_storage, session
+):
+    existing = _without(_kubernetes_record("FAILED", ["node-a"], termination_reason="BackoffLimitExceeded"), "job_kind")
+    session.scalars.return_value.first.return_value = existing
+
+    result = mysql_storage.upsert_job_record(_kubernetes_record("DELETED", ["node-b"]))
+
+    assert result.inserted_record.state == "FAILED"
+    assert result.inserted_record.allocated_node_list == ["node-a"]
+    assert result.inserted_record.scheduler_metadata == {
+        "scheduler": "kubernetes",
+        "workload_uid": "workload",
+        "termination_reason": "BackoffLimitExceeded",
+        **_WORKLOAD_LOOKUP,
+    }
+
+
+def test_upsert_accepts_kubernetes_rows_without_a_workload_uid_unchanged(mysql_storage, session):
+    """Producers that report scheduler kubernetes without a discovered object keep their behavior."""
+    session.scalars.return_value.first.return_value = None
+    legacy = _kubernetes_record("RUNNING", [])
+    legacy.scheduler_metadata = {"scheduler": "kubernetes"}
+
+    result = mysql_storage.upsert_job_record(legacy)
+
+    assert result.was_created
+    session.commit.assert_called_once_with()
+
+
+def test_upsert_tracks_open_kubernetes_nodes_and_keeps_them_through_final_cleanup(mysql_storage, session):
+    existing = _kubernetes_record("RUNNING", ["node-a", "node-b"])
+    session.scalars.return_value.first.return_value = existing
+
+    mysql_storage.upsert_job_record(_kubernetes_record("RUNNING", ["node-a"]))
+    assert existing.allocated_node_list == ["node-a"]
+
+    result = mysql_storage.upsert_job_record(_kubernetes_record("DELETED", []))
+    assert result.inserted_record.state == "DELETED"
+    assert result.inserted_record.allocated_node_list == ["node-a"]
+    assert result.inserted_record.end_time is None
+
+
 def test_upsert_job_record_preserves_existing_anomalies_when_update_omits_them(mysql_storage, session):
     now = datetime.now(UTC)
     existing_job = create_example_slurm_job_record(

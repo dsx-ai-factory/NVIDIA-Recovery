@@ -46,6 +46,7 @@ from recovery_libs.schema.aps_spec.spec import (
     DagTriggerConditionEnum,
 )
 from recovery_libs.schema.event_type import EventType
+from recovery_libs.schema.job_manager.kubernetes_identity import is_direct_kubernetes_observation
 from recovery_libs.schema.job_manager.models import (
     Advice,
     AdviceState,
@@ -1903,6 +1904,7 @@ class JobManager:
         Only the elected leader scans storage. Scheduler refreshes belong to the
         Advisor Controller; this watcher neither requests updates nor consults
         broker queues. ``run_once`` performs a single scan instead of polling.
+        Event-driven Kubernetes observations carry no periodic freshness signal.
         """
         interval = int(self.config["service"].get("stale_job_scan_frequency_seconds", 300))
         stale_threshold_seconds = int(self.config["service"].get("stale_job_threshold_seconds", 300))
@@ -1927,7 +1929,9 @@ class JobManager:
                             [
                                 job
                                 for job in non_terminated_jobs
-                                if job.last_updated_at and job.last_updated_at < now - stale_threshold
+                                if job.last_updated_at
+                                and job.last_updated_at < now - stale_threshold
+                                and not is_direct_kubernetes_observation(job.scheduler_metadata)
                             ]
                         )
                         logger.debug(

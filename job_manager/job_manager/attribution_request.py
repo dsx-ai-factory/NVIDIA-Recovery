@@ -22,6 +22,7 @@ from opentelemetry import trace
 from opentelemetry.context import Context
 from recovery_libs.event_bus.event_bus_utils import RabbitMQPublisher
 from recovery_libs.schema.event_type import EventType
+from recovery_libs.schema.job_manager.kubernetes_identity import is_direct_kubernetes_observation
 from recovery_libs.schema.job_updates_attribution_request.attribution_request import AttributionRequest
 from recovery_libs.storage.dataclass import SlurmJobExecutionRecord
 from recovery_libs.tracing.recovery import recovery_headers
@@ -76,6 +77,16 @@ def emit_attribution_request_if_needed(
         logger.info(
             f"AttributionRequest skipped for job {record.job_id} attempt {record.job_attempt_index}: "
             "no ADI-processable anomaly."
+        )
+        return False
+    if is_direct_kubernetes_observation(record.scheduler_metadata):
+        # Kubernetes node membership carries no qualified global-rank mapping,
+        # so rank-sensitive attribution would mislead. Skip before the claim:
+        # the anomaly stays recorded and attribution can run once qualified.
+        ATTRIBUTION_REQUEST_SKIPPED_COUNTER.labels(reason="rank_mapping_unqualified").inc()
+        logger.info(
+            f"AttributionRequest skipped for job {record.job_id} attempt {record.job_attempt_index}: "
+            "Kubernetes rank mapping is not qualified."
         )
         return False
     if not storage.claim_attribution_request_emission(record.job_id, record.job_attempt_index):

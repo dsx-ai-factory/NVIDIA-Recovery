@@ -1776,7 +1776,14 @@ class TestJobManager(unittest.TestCase):
             attempt_index=0,
             state="RUNNING",
         )
-        self._job_manager.storage.read_job_records.side_effect = [([record], 1), ([], 1)]
+        kubernetes_record = create_example_slurm_job_record(
+            job_id="7e913d4d-98fa-4468-937d-15a7a925155e",
+            last_updated_at=record.last_updated_at,
+            attempt_index=0,
+            state="RUNNING",
+        )
+        kubernetes_record.scheduler_metadata = {"scheduler": "kubernetes", "workload_uid": "object-uid"}
+        self._job_manager.storage.read_job_records.side_effect = [([record, kubernetes_record], 2), ([], 2)]
         with patch.object(self._job_manager, "update_job_record") as update:
             self._job_manager.find_stale_jobs(run_once=True)
 

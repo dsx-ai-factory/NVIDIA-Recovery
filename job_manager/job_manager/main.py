@@ -27,6 +27,7 @@ from recovery_libs.audit import (
 )
 from recovery_libs.schema.aps_spec.spec import ApsSlurmJobSpec, AutoResumeModeEnum
 from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_id
+from recovery_libs.schema.job_manager.kubernetes_identity import is_direct_kubernetes_observation
 from recovery_libs.schema.job_manager.models import (
     Advice,
     AdviceReconciliationStatus,
@@ -78,6 +79,7 @@ from job_manager.constants import INFINITE_SYSTEM_REQUEUE_LIMIT
 from job_manager.job_lifecycle_times import (
     INVALID_SLURM_LIFECYCLE_TIMES_DETAIL,
     SlurmLifecycleTimesValidationError,
+    normalize_lifecycle_time,
     project_job_lifecycle_times,
 )
 from job_manager.job_log_file_paths import (
@@ -473,20 +475,60 @@ def post_jobs(
             job_group_id=job.job_group_id,
         )
 
-        # Defaults are for scheduler-neutral operator ingress. A partial Slurm
-        # accounting update must leave absent values unset so storage preserves
-        # richer fields previously learned from squeue.
-        if job.scheduler_metadata.get("scheduler") != "slurm":
-            if not job.user:
-                job.user = "unknown"
-            if not job.cluster:
-                job.cluster = "unknown"
-            if not job.command:
-                job.command = "not_applicable"
-        if not job.aps_spec:
-            job.aps_spec = ApsSlurmJobSpec(auto_resume_mode=AutoResumeModeEnum.REQUEUE)
-        elif not job.aps_spec.auto_resume_mode:
-            job.aps_spec.auto_resume_mode = AutoResumeModeEnum.REQUEUE
+        scheduler = job.scheduler_metadata.get("scheduler")
+        workload_observation = is_direct_kubernetes_observation(job.scheduler_metadata)
+        if scheduler == "kubernetes" and "workload_uid" in job.scheduler_metadata and not workload_observation:
+            # A present but malformed UID must not fall back to legacy ingress,
+            # which would bypass the storage workload identity fence.
+            raise RecoveryStorageInputValidationError("Kubernetes workload UID must be a nonempty string")
+        if workload_observation:
+            try:
+                job_uuid = uuid.UUID(job.job_id)
+            except ValueError as error:
+                raise RecoveryStorageInputValidationError(
+                    "Kubernetes discovery requires a canonical job UUID"
+                ) from error
+            if job_uuid.int == 0 or str(job_uuid) != job.job_id:
+                raise RecoveryStorageInputValidationError("Kubernetes discovery requires a canonical job UUID")
+            if job.job_attempt_index < 0:
+                raise RecoveryStorageInputValidationError("Kubernetes attempt index must be nonnegative")
+            # Storage fills the canonical attempt UUID only when it is absent.
+            # Reject a mismatch from discovery without imposing that check on
+            # legacy producers.
+            if job.heimdall_job_id not in (None, generate_heimdall_job_id(job.job_id, job.job_attempt_index)):
+                raise RecoveryStorageInputValidationError("Kubernetes attempt UUID does not match job identity")
+            # Discovery reports evidence only. Neither an implicit nor a
+            # supplied policy may enable recovery for it; unknown fields stay
+            # unset instead of receiving legacy placeholders.
+            job.aps_spec = None
+            # Discovery publishes complete node snapshots, but Gateway omits an
+            # empty list. Treat the omission as removal of every node rather
+            # than as a partial update that preserves stored nodes.
+            job.allocated_node_list = job.allocated_node_list or []
+            # Gateway has no typed lifecycle-time fields, so discovery carries
+            # execution timestamps in scheduler metadata.
+            for field in ("submit_time", "start_time", "end_time"):
+                metadata_key = f"kubernetes_{field}"
+                if (raw_time := job.scheduler_metadata.get(metadata_key)) is not None:
+                    try:
+                        setattr(job, field, normalize_lifecycle_time(raw_time, metadata_key=metadata_key))
+                    except ValueError as error:
+                        raise RecoveryStorageInputValidationError(str(error)) from error
+        else:
+            # Defaults are for scheduler-neutral operator ingress. A partial
+            # Slurm accounting update must leave absent values unset so storage
+            # preserves richer fields previously learned from squeue.
+            if scheduler != "slurm":
+                if not job.user:
+                    job.user = "unknown"
+                if not job.cluster:
+                    job.cluster = "unknown"
+                if not job.command:
+                    job.command = "not_applicable"
+            if not job.aps_spec:
+                job.aps_spec = ApsSlurmJobSpec(auto_resume_mode=AutoResumeModeEnum.REQUEUE)
+            elif not job.aps_spec.auto_resume_mode:
+                job.aps_spec.auto_resume_mode = AutoResumeModeEnum.REQUEUE
 
         job.submit_time, job.start_time, job.end_time = project_job_lifecycle_times(
             scheduler_metadata=job.scheduler_metadata,
@@ -495,7 +537,9 @@ def post_jobs(
             start_time=job.start_time,
             end_time=job.end_time,
         )
-        populate_heimdall_id_log_path = needs_heimdall_job_id_placeholder(
+        # The legacy placeholder names a log file after the Heimdall job ID.
+        # Discovery has no such log, so its log paths stay unset.
+        populate_heimdall_id_log_path = not workload_observation and needs_heimdall_job_id_placeholder(
             scheduler_metadata=job.scheduler_metadata,
             log_file_paths=job.log_file_paths,
         )
@@ -520,7 +564,9 @@ def post_jobs(
         # and scheduler timeouts into false-positive recoveries (see the healthy
         # negative-control and scheduler-timeout e2e contracts). The controller
         # drives the requeue for a failed job from its own reconcile loop.
-        effective_final_state = resolve_effective_final_state(job_record)
+        # Discovery reports terminal states as evidence. Recovery from those
+        # states requires a scheduler integration with recovery policy.
+        effective_final_state = None if workload_observation else resolve_effective_final_state(job_record)
         known_record = None
         if effective_final_state is not None:
             known_record = job_manager.storage.read_job_record(  # type: ignore[union-attr]
@@ -551,7 +597,7 @@ def post_jobs(
         # Slurm can briefly report a previous attempt's path after requeue.
         # Preserve a reused path only when the workload explicitly declares
         # that its attempts intentionally share log files.
-        if job.scheduler_metadata.get("scheduler") == "slurm":
+        if scheduler == "slurm":
             sanitize_log_file_paths_for_retry(job_record, job_manager.storage)  # type: ignore[union-attr]
 
         # Upsert the job record
@@ -591,7 +637,7 @@ def post_jobs(
         dag_support_enabled = job_manager._is_dag_support_enabled()  # type: ignore[union-attr]
         is_explicitly_cancelled = updated_record.state == SlurmJobFinalStates.CANCELLED.value
         is_dag_parent_stopped = dag_support_enabled and updated_record.state == SlurmJobFinalStates.STOPPED.value
-        should_persist_terminal_advice = (
+        should_persist_terminal_advice = not workload_observation and (
             is_explicitly_cancelled or is_dag_parent_stopped or state_based_crash_recovery_enabled
         )
         if should_persist_terminal_advice and job_manager._is_advice_management_enabled():  # type: ignore[union-attr]
@@ -1255,9 +1301,10 @@ def get_jobs(
                     )
                 sort_by_fields.append((field, order))
         else:
-            # This is to be compatible with the previous behavior where the jobs were sorted by job_id in ascending
-            # order by default.
+            # Keep Slurm's numeric job order. Rows tied by that sort, including
+            # Kubernetes UUIDs, need a unique tie-breaker across pages.
             sort_by_fields.append(("job_id", SortOrderEnum.ASC.value))
+            sort_by_fields.append(("id", SortOrderEnum.ASC.value))
 
         records, count = job_manager.storage.read_job_records(  # type: ignore[union-attr]
             complete_data=complete_data,
@@ -1320,7 +1367,9 @@ def _get_states(
     elif state is not None:
         return [state]
     elif completed_jobs is not None:
-        return [s.value for s in SlurmJobFinalStates] if completed_jobs else [s.value for s in SlurmJobNonFinalStates]
+        if completed_jobs:
+            return [*(s.value for s in SlurmJobFinalStates), "DELETED"]
+        return [s.value for s in SlurmJobNonFinalStates]
     else:
         return []
 

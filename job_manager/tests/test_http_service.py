@@ -42,6 +42,7 @@ from recovery_libs.storage.base import RecoveryStorageException
 from recovery_libs.storage.dataclass import (
     AdviceReconciliationStatusRecord,
     AdviceRecord,
+    ApplicationIntentionRecord,
     JobConfigValidationFailureTypes,
 )
 from recovery_libs.storage.job_execution_errors import (
@@ -70,6 +71,137 @@ class TestHttpService(unittest.TestCase):
     def setUp(self):
         self._config = create_basic_service_config()
         self._client = TestClient(app)
+
+    def test_kubernetes_terminal_observation_persists_without_recovery(self):
+        job_id = "7e913d4d-98fa-4468-937d-15a7a925155e"
+        metadata = {
+            "scheduler": "kubernetes",
+            "workload_uid": "workload-uid",
+            "kubernetes_submit_time": "2026-11-17T15:00:00Z",
+            "kubernetes_start_time": "2026-11-17T15:01:00Z",
+            "kubernetes_end_time": "2026-11-17T15:02:00Z",
+            "termination_reason": "BackoffLimitExceeded",
+        }
+        with patch("job_manager.main.job_manager") as manager:
+            self._use_real_job_upsert_boundary(manager)
+            manager.storage.upsert_job_record.side_effect = lambda record, **_: (record, True, None)
+            response = self._client.post(
+                "/jobs",
+                json={
+                    "job_id": job_id,
+                    "job_attempt_index": 2,
+                    "workflow_id": job_id,
+                    "state": "FAILED",
+                    "scheduler_metadata": metadata,
+                    # A supplied policy that would enable state-based crash
+                    # recovery for a legacy producer.
+                    "aps_spec": {"anomaly_detection_config": {"log_based_crash_enabled": False}},
+                },
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        result = SlurmJobExecutionStatus.model_validate(response.json())
+        self.assertEqual(response.json()["schedulerMetadata"], metadata)
+        self.assertEqual(result.submit_time, datetime(2026, 11, 17, 15, tzinfo=UTC))
+        self.assertEqual(result.start_time, datetime(2026, 11, 17, 15, 1, tzinfo=UTC))
+        self.assertEqual(result.end_time, datetime(2026, 11, 17, 15, 2, tzinfo=UTC))
+        self.assertEqual(result.allocated_node_list, [])
+        self.assertIsNone(result.aps_spec)
+        self.assertIsNone(result.log_file_paths)
+        self.assertIsNone(result.user)
+        self.assertIsNone(result.command)
+        manager.audit_buffer.add.assert_called_once()
+        manager._generate_crash_event.assert_not_called()
+        manager._maybe_emit_attribution_request.assert_not_called()
+
+    def test_kubernetes_registration_reconciles_a_saved_cancellation(self):
+        job_id = "7e913d4d-98fa-4468-937d-15a7a925155e"
+        with (
+            patch("job_manager.main.job_manager") as manager,
+            patch("job_manager.service.create_terminal_advice_for_job") as persist_advice,
+        ):
+            self._use_real_job_upsert_boundary(manager)
+            manager.storage.upsert_job_record.side_effect = lambda record, **_: (record, True, None)
+            manager._is_advice_management_enabled.return_value = True
+            manager.reconcile_application_intention.side_effect = JobManager.reconcile_application_intention.__get__(
+                manager, JobManager
+            )
+            manager.storage.read_application_intention.return_value = ApplicationIntentionRecord(
+                job_id=job_id,
+                desired_state=ApplicationIntentionDesiredState.CANCELLED.value,
+                reason="training converged",
+                created_at=datetime.now(UTC),
+            )
+            manager.storage.read_advice_by_job.return_value = None
+
+            response = self._client.post(
+                "/jobs",
+                json={
+                    "job_id": job_id,
+                    "job_attempt_index": 2,
+                    "workflow_id": job_id,
+                    "state": "RUNNING",
+                    "scheduler_metadata": {"scheduler": "kubernetes", "workload_uid": "workload-uid"},
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        persist_advice.assert_called_once()
+        advice = persist_advice.call_args.kwargs
+        self.assertEqual(advice["job_id"], job_id)
+        self.assertEqual(advice["job_attempt_index"], 2)
+        self.assertEqual(advice["terminal_advice"].value, "application_requested_cancellation")
+        self.assertEqual(advice["audit_reason"], "training converged")
+
+    def test_kubernetes_registration_rejects_malformed_workload_uid(self):
+        job_id = "7e913d4d-98fa-4468-937d-15a7a925155e"
+        for uid in ("", None, 123):
+            with self.subTest(uid=uid), patch("job_manager.main.job_manager") as manager:
+                response = self._client.post(
+                    "/jobs",
+                    json={
+                        "job_id": job_id,
+                        "job_attempt_index": 0,
+                        "workflow_id": job_id,
+                        "state": "RUNNING",
+                        "scheduler_metadata": {"scheduler": "kubernetes", "workload_uid": uid},
+                    },
+                )
+                self.assertEqual(response.status_code, 400, response.text)
+                manager.upsert_job_record.assert_not_called()
+
+    def test_kubernetes_registration_rejects_invalid_attempt_identity(self):
+        job_id = "7e913d4d-98fa-4468-937d-15a7a925155e"
+        for invalid_id, attempt in (("not-a-uuid", 0), (job_id.upper(), 0), (str(uuid.UUID(int=0)), 0), (job_id, -1)):
+            with self.subTest(job_id=invalid_id, attempt=attempt), patch("job_manager.main.job_manager") as manager:
+                response = self._client.post(
+                    "/jobs",
+                    json={
+                        "job_id": invalid_id,
+                        "job_attempt_index": attempt,
+                        "workflow_id": job_id,
+                        "state": "RUNNING",
+                        "scheduler_metadata": {"scheduler": "kubernetes", "workload_uid": "workload-uid"},
+                    },
+                )
+                self.assertEqual(response.status_code, 400, response.text)
+                manager.upsert_job_record.assert_not_called()
+
+    def test_kubernetes_registration_rejects_another_attempts_heimdall_id(self):
+        job_id = "7e913d4d-98fa-4468-937d-15a7a925155e"
+        with patch("job_manager.main.job_manager") as manager:
+            response = self._client.post(
+                "/jobs",
+                json={
+                    "job_id": job_id,
+                    "job_attempt_index": 0,
+                    "heimdall_job_id": str(generate_heimdall_job_id(job_id, 1)),
+                    "workflow_id": job_id,
+                    "state": "RUNNING",
+                    "scheduler_metadata": {"scheduler": "kubernetes", "workload_uid": "workload-uid"},
+                },
+            )
+        self.assertEqual(response.status_code, 400, response.text)
+        manager.upsert_job_record.assert_not_called()
 
     @staticmethod
     def _use_real_job_upsert_boundary(job_manager_mock):

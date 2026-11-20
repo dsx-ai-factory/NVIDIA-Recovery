@@ -10,8 +10,8 @@ PLATFORMS ?= linux/amd64
 E2E_PROFILE ?= advisor-act
 SLINKY_SLURM_IMAGE ?= ghcr.io/slinkyproject/sackd:25.05-ubuntu24.04@sha256:dd1f0b6030229b3d602e3d80e6d50cc4f9fd17b325312521dfa07376fffc7569
 SLURM_ADVISOR_CONTROLLER_SLURM_IMAGE ?= $(SLINKY_SLURM_IMAGE)
-# Verify both supported Go modules by default. GO_PACKAGES can select either.
-GO_PACKAGES ?= api-gateway slurm-advisor-controller
+# Verify supported Go modules by default. GO_PACKAGES can select a subset.
+GO_PACKAGES ?= api-gateway slurm-advisor-controller kubernetes-job-controller
 GO_PACKAGE_ARGS = $(foreach package,$(GO_PACKAGES),--package $(package))
 GO_TEST_ARGS ?=
 GO_TOOLS_BIN ?= $(CURDIR)/.cache/go-tools/bin

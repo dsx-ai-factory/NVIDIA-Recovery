@@ -204,6 +204,8 @@ jobs:
             api-gateway/go.sum
             slurm-advisor-controller/go.mod
             slurm-advisor-controller/go.sum
+            kubernetes-job-controller/go.mod
+            kubernetes-job-controller/go.sum
 
       - name: Install pinned Go tools
         run: make install-go-tools
@@ -321,6 +323,8 @@ jobs:
             api-gateway/go.sum
             slurm-advisor-controller/go.mod
             slurm-advisor-controller/go.sum
+            kubernetes-job-controller/go.mod
+            kubernetes-job-controller/go.sum
 
       - name: Install pinned Go tools
         run: make install-go-tools
@@ -338,6 +342,7 @@ jobs:
           path: |
             api-gateway/coverage.out
             slurm-advisor-controller/coverage.out
+            kubernetes-job-controller/coverage.out
           if-no-files-found: warn
 
   typescript-lint:
