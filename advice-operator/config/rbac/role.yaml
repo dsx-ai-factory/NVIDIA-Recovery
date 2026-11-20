@@ -31,6 +31,12 @@ rules:
   - patch
   - update
 - apiGroups:
+  - jobset.x-k8s.io
+  resources:
+  - jobsets
+  verbs:
+  - get
+- apiGroups:
   - run.ai
   resources:
   - distributedworkloads

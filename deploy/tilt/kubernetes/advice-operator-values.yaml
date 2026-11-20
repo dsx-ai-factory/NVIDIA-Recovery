@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+fullnameOverride: advice-operator
+image:
+  repository: advice-operator
+  tag: dev
+heimdallAPIGatewayURL: http://mock-advice-gateway:8080
+pollInterval: 1s
+adviceNamespaces: "*"

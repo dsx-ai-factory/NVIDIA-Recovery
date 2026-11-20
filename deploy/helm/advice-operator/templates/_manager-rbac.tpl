@@ -32,6 +32,12 @@ Generated file: do not edit. Run make generate-go GO_PACKAGES=advice-operator.
   - patch
   - update
 - apiGroups:
+  - jobset.x-k8s.io
+  resources:
+  - jobsets
+  verbs:
+  - get
+- apiGroups:
   - run.ai
   resources:
   - distributedworkloads
