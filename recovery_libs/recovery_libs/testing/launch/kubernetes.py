@@ -138,15 +138,41 @@ class KubernetesJobSetLauncher:
     def submit(self, spec: JobSpec) -> Job:
         """Create a uniquely named workload and return its initial snapshot."""
         workload = dict(spec.workload)
-        unknown = workload.keys() - {"image", "command", "replicas"}
+        unknown = workload.keys() - {
+            "image",
+            "command",
+            "replicas",
+            "parallelism",
+            "scheduler_name",
+            "queue",
+            "max_restarts",
+        }
         if unknown or not isinstance(workload.get("image"), str) or not workload["image"]:
-            raise ValueError("JobSet workload requires image and accepts only command and replicas")
+            raise ValueError(
+                "JobSet workload requires image and accepts command, replicas, parallelism, scheduler_name, queue, and max_restarts"
+            )
         command = workload.get("command")
         replicas = workload.get("replicas", 1)
+        parallelism = workload.get("parallelism", 1)
+        scheduler = workload.get("scheduler_name", "default-scheduler")
+        queue = workload.get("queue")
+        max_restarts = workload.get("max_restarts")
+        if max_restarts is not None and (type(max_restarts) is not int or max_restarts < 0):
+            raise ValueError("max_restarts must be a nonnegative integer")
+        if not isinstance(scheduler, str) or not re.fullmatch(r"[a-z0-9]([-a-z0-9.]*[a-z0-9])?", scheduler):
+            raise ValueError("scheduler_name must be a Kubernetes scheduler name")
+        if queue is not None and (
+            not isinstance(queue, str) or not re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", queue)
+        ):
+            raise ValueError("queue must be a Kubernetes queue name")
+        if scheduler == "kai-scheduler" and not queue:
+            raise ValueError("kai-scheduler requires an explicit queue")
         if not isinstance(command, (list, tuple)) or not command or not all(isinstance(x, str) for x in command):
             raise ValueError("JobSet command must be a nonempty sequence of strings")
         if type(replicas) is not int or replicas < 1:
             raise ValueError("JobSet replicas must be a positive integer")
+        if type(parallelism) is not int or parallelism < 1:
+            raise ValueError("JobSet parallelism must be a positive integer")
         if spec.time_limit_minutes is not None and spec.time_limit_minutes < 1:
             raise ValueError("JobSet time limit must be positive")
         if not spec.name:
@@ -154,15 +180,17 @@ class KubernetesJobSetLauncher:
         prefix = re.sub(r"[^a-z0-9-]", "-", spec.name.lower()).strip("-")[:25] or "workload"
         name = f"{prefix}-{uuid4().hex[:16]}"
         labels = {_OWNER: self._owner}
+        if queue:
+            labels["kai.scheduler/queue"] = queue
         template: dict[str, Any] = {
-            "parallelism": 1,
-            "completions": 1,
+            "parallelism": parallelism,
+            "completions": parallelism,
             "backoffLimit": 0,
             "template": {
                 "metadata": {"labels": labels},
                 "spec": {
                     "restartPolicy": "Never",
-                    "schedulerName": "default-scheduler",
+                    "schedulerName": scheduler,
                     "containers": [
                         {
                             "name": "worker",
@@ -180,7 +208,7 @@ class KubernetesJobSetLauncher:
         }
         if spec.time_limit_minutes is not None:
             template["activeDeadlineSeconds"] = spec.time_limit_minutes * 60
-        manifest = {
+        manifest: dict[str, Any] = {
             "apiVersion": "jobset.x-k8s.io/v1alpha2",
             "kind": "JobSet",
             "metadata": {
@@ -191,6 +219,8 @@ class KubernetesJobSetLauncher:
             },
             "spec": {"replicatedJobs": [{"name": "workers", "replicas": replicas, "template": {"spec": template}}]},
         }
+        if max_restarts is not None:
+            manifest["spec"]["failurePolicy"] = {"maxRestarts": max_restarts}
         try:
             record = self._client.create(manifest)
             job = self._snapshot(record, [])

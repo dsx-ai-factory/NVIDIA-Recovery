@@ -194,3 +194,127 @@ def test_kubectl_delete_sends_uid_precondition(monkeypatch):
     assert args[args.index("--raw") + 1] == "/apis/jobset.x-k8s.io/v1alpha2/namespaces/owned/jobsets/workload"
     assert json.loads(kwargs["input"])["preconditions"] == {"uid": "original-uid"}
     assert json.loads(kwargs["input"])["propagationPolicy"] == "Foreground"
+
+
+def test_parallel_jobs_require_all_six_owned_pods():
+    """Two Jobs with three concurrent completions must not pass with only two Pods."""
+    client = Client()
+    launcher = KubernetesJobSetLauncher(client)
+    job = launcher.submit(
+        JobSpec(
+            name="parallel",
+            workload={
+                "image": "busybox:1.37",
+                "command": ["sleep", "300"],
+                "replicas": 2,
+                "parallelism": 3,
+            },
+        )
+    )
+    template = client.records[job.name]["spec"]["replicatedJobs"][0]["template"]["spec"]
+    assert template["parallelism"] == template["completions"] == 3
+    uid = job.job_id.split("/")[-1]
+    client.jobs = [child("job-1", uid), child("job-2", uid)]
+    client.pods = [child("pod-1", "job-1"), child("pod-2", "job-2")]
+    assert launcher.get(job_id=job.job_id).state == JobState.PENDING
+    client.pods.extend(child(f"pod-{index}", "job-1" if index < 5 else "job-2") for index in range(3, 7))
+    snapshot = launcher.get(job_id=job.job_id)
+    assert snapshot.state == JobState.RUNNING
+    assert snapshot.metadata["expected_pods"] == 6
+
+
+@pytest.mark.parametrize("parallelism", [0, -1, True, 1.5, "3"])
+def test_parallelism_requires_a_positive_integer(parallelism):
+    """Malformed scale must be refused before submitting a workload."""
+    client = Client()
+    with pytest.raises(ValueError):
+        KubernetesJobSetLauncher(client).submit(
+            JobSpec(
+                name="invalid",
+                workload={
+                    "image": "busybox:1.37",
+                    "command": ["sleep", "300"],
+                    "parallelism": parallelism,
+                },
+            )
+        )
+    assert not client.records
+
+
+def test_explicit_kai_scheduler_and_queue_reach_pod_templates():
+    """An explicitly selected KAI run must not silently use the default scheduler."""
+    client = Client()
+    launcher = KubernetesJobSetLauncher(client)
+    job = launcher.submit(
+        JobSpec(
+            name="kai",
+            workload={
+                "image": "busybox:1.37",
+                "command": ["sleep", "300"],
+                "scheduler_name": "kai-scheduler",
+                "queue": "qualification",
+            },
+        )
+    )
+    record = client.records[job.name]
+    template = record["spec"]["replicatedJobs"][0]["template"]["spec"]["template"]
+    assert template["spec"]["schedulerName"] == "kai-scheduler"
+    assert template["metadata"]["labels"]["kai.scheduler/queue"] == "qualification"
+    assert (
+        template["metadata"]["labels"]["recovery.nvidia.com/scenario-owner"]
+        == record["metadata"]["labels"]["recovery.nvidia.com/scenario-owner"]
+    )
+
+
+def test_kai_requires_explicit_queue_before_submission():
+    """Missing KAI prerequisites must fail instead of producing a misleading default run."""
+    client = Client()
+    with pytest.raises(ValueError):
+        KubernetesJobSetLauncher(client).submit(
+            JobSpec(
+                name="kai",
+                workload={
+                    "image": "busybox:1.37",
+                    "command": ["sleep", "300"],
+                    "scheduler_name": "kai-scheduler",
+                },
+            )
+        )
+    assert not client.records
+
+
+def test_native_restart_budget_is_explicit_and_per_workload():
+    """Controller retry qualification must set JobSet budget without changing Job retries."""
+    client = Client()
+    launcher = KubernetesJobSetLauncher(client)
+    job = launcher.submit(
+        JobSpec(
+            name="retry",
+            workload={
+                "image": "busybox:1.37",
+                "command": ["sh", "-c", "exit 42"],
+                "max_restarts": 1,
+            },
+        )
+    )
+    record = client.records[job.name]
+    assert record["spec"]["failurePolicy"] == {"maxRestarts": 1}
+    assert record["spec"]["replicatedJobs"][0]["template"]["spec"]["backoffLimit"] == 0
+
+
+@pytest.mark.parametrize("max_restarts", [-1, True, 1.5, "1"])
+def test_invalid_restart_budget_is_rejected(max_restarts):
+    """Malformed restart budgets must not reach the controller."""
+    client = Client()
+    with pytest.raises(ValueError):
+        KubernetesJobSetLauncher(client).submit(
+            JobSpec(
+                name="retry",
+                workload={
+                    "image": "busybox:1.37",
+                    "command": ["sh", "-c", "exit 42"],
+                    "max_restarts": max_restarts,
+                },
+            )
+        )
+    assert not client.records

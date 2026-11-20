@@ -156,6 +156,7 @@ pip-delete-this-directory.txt
 # Unit test / coverage reports
 /reports/e2e/
 /reports/e2e-attribution/
+/reports/workload-map/
 htmlcov/
 .tox/
 .nox/
