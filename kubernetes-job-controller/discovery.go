@@ -316,7 +316,8 @@ func (r *workloadReconciler) liveWorkload(ctx context.Context, name types.Namesp
 // Pod events can arrive before the workload event that explains them, so a
 // cached running object does not prove that a node removal is a running
 // change. Before dropping any tracked node, publish verifies the workload with
-// one live read.
+// one live read. When that read shows the same attempt already terminal, the
+// live outcome is published instead of the cached one.
 //
 // A deduplicated observation after an ambiguous open write goes through
 // checkLateCommit instead.
@@ -354,13 +355,17 @@ func (r *workloadReconciler) publish(ctx context.Context, name types.NamespacedN
 	keep := keepsNodes(workload, update.GetState())
 	if !keep && removesNodes(tracked.last.GetAllocatedNodes(), update.GetAllocatedNodes()) {
 		live, err := r.liveWorkload(ctx, name)
-		switch {
-		case err != nil:
+		if err != nil {
 			// The published nodes stand until the removal can be verified.
 			return reconcile.Result{}, err
+		}
+		current := r.liveAttempt(ctx, live, tracked)
+		switch {
+		case isTerminal(current.GetState()):
+			return r.publishLiveTerminal(ctx, name, tracked, current, update.GetAllocatedNodes())
 		case tracksEnrolled(live, tracked) && live.GetDeletionTimestamp() != nil:
 			keep = true
-		case !r.runningAttempt(ctx, live, tracked):
+		case current.GetState() != pb.JobStatus_JOB_STATUS_RUNNING:
 			// The cache is stale. The live read already decides closure and
 			// revisits, as it would after a cache miss.
 			return r.reconcileLive(ctx, name, live)
@@ -427,17 +432,23 @@ func (r *workloadReconciler) checkLateCommit(ctx context.Context, name types.Nam
 // write may have replaced. stored is the row's node set when known.
 //
 // Dropping a stored node is a node removal, so it needs the same live
-// confirmation of a running, enrolled, undeleted attempt as publish. Otherwise
-// the stored nodes are kept; when they are unknown, nothing is written.
+// confirmation of a running, enrolled, undeleted attempt as publish. A live
+// terminal outcome found by that read is published with the stored nodes.
+// Otherwise the stored nodes are kept; when they are unknown, nothing is
+// written.
 func (r *workloadReconciler) repairLateCommit(ctx context.Context, name types.NamespacedName, tracked *trackedAttempt, update *pb.CreateOrUpdateJobRequest, keep bool, stored []string, known bool) (reconcile.Result, error) {
 	if !keep && (!known || removesNodes(stored, update.GetAllocatedNodes())) {
 		live, err := r.liveWorkload(ctx, name)
-		switch {
-		case err != nil:
+		if err != nil {
 			return reconcile.Result{}, err
+		}
+		current := r.liveAttempt(ctx, live, tracked)
+		switch {
+		case isTerminal(current.GetState()):
+			return r.publishLiveTerminal(ctx, name, tracked, current, stored, update.GetAllocatedNodes())
 		case tracksEnrolled(live, tracked) && live.GetDeletionTimestamp() != nil:
 			keep = true
-		case !r.runningAttempt(ctx, live, tracked):
+		case current.GetState() != pb.JobStatus_JOB_STATUS_RUNNING:
 			return r.reconcileLive(ctx, name, live)
 		}
 	}
@@ -486,16 +497,33 @@ func tracksEnrolled(live *unstructured.Unstructured, tracked *trackedAttempt) bo
 	return live != nil && live.GetUID() == tracked.uid && live.GetLabels()[enrollmentLabel] == "true"
 }
 
-// runningAttempt reports whether live confirms tracked as an enrolled, running
-// attempt that is not being deleted. Only then does a node removal follow
-// live Pods.
-func (r *workloadReconciler) runningAttempt(ctx context.Context, live *unstructured.Unstructured, tracked *trackedAttempt) bool {
-	if !tracksEnrolled(live, tracked) || live.GetDeletionTimestamp() != nil {
-		return false
+// liveAttempt returns the observation of live when it is the enrolled object
+// of tracked and reports the same attempt, or nil otherwise.
+func (r *workloadReconciler) liveAttempt(ctx context.Context, live *unstructured.Unstructured, tracked *trackedAttempt) *pb.CreateOrUpdateJobRequest {
+	if !tracksEnrolled(live, tracked) {
+		return nil
 	}
 	current, err := observation(ctx, live, r.placement)
-	return err == nil && current.GetHeimdallJobId() == tracked.last.GetHeimdallJobId() &&
-		current.GetState() == pb.JobStatus_JOB_STATUS_RUNNING
+	if err != nil || current.GetHeimdallJobId() != tracked.last.GetHeimdallJobId() {
+		return nil
+	}
+	return current
+}
+
+// publishLiveTerminal records the native terminal outcome that a live read
+// found for tracked's attempt while the cache still showed it running. The
+// outcome holds whether or not the workload is being deleted, and it keeps the
+// tracked nodes plus every observed node set, because Pods are removed after
+// termination. It is sent as the pending terminal write, so later retries and
+// verified UID loss replay it rather than DELETED.
+func (r *workloadReconciler) publishLiveTerminal(ctx context.Context, name types.NamespacedName, tracked *trackedAttempt, current *pb.CreateOrUpdateJobRequest, observed ...[]string) (reconcile.Result, error) {
+	nodes := unionNodes(tracked.last.GetAllocatedNodes(), current.GetAllocatedNodes())
+	for _, more := range observed {
+		nodes = unionNodes(nodes, more)
+	}
+	current.AllocatedNodes = nodes
+	next := &trackedAttempt{uid: tracked.uid, last: current}
+	return r.sent(next, r.send(ctx, name, next))
 }
 
 // unionNodes returns the sorted union of two node lists.
