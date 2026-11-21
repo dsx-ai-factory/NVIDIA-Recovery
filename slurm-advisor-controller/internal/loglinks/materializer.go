@@ -27,6 +27,8 @@ const (
 // Config controls filesystem access and bounds all work performed by a
 // Materializer.
 type Config struct {
+	// RenameEnabled gives non-APS primary logs deterministic collector-compatible names.
+	RenameEnabled          bool
 	Destination            string
 	SourceRoots            []string
 	ApplicationPatterns    []string
@@ -45,6 +47,10 @@ type Config struct {
 
 // Target associates exact-attempt Slurm log paths with their owning job.
 type Target struct {
+	// JobName is the scheduler name used to recognize existing APS filenames.
+	JobName string
+	// SubmitTime is the exact attempt submission time; synthesis requires it.
+	SubmitTime   time.Time
 	JobID        string
 	AttemptIndex int32
 	ArrayJobID   string
@@ -91,11 +97,20 @@ type Materializer struct {
 }
 
 type candidate struct {
+	name         string
+	submitTime   time.Time
 	jobID        string
 	attemptIndex int32
 	arrayJobID   string
 	target       string
 	origin       linkOrigin
+}
+
+// scanSeedKey identifies one source path to search around, for one owner when
+// renaming is on and for no particular owner when it is off.
+type scanSeedKey struct {
+	path  string
+	owner scanOwnerKey
 }
 
 type jobAttemptKey struct {
@@ -148,14 +163,13 @@ func (m *Materializer) Sync(ctx context.Context, now time.Time, targets []Target
 		ctx = context.Background()
 	}
 	now = now.UTC()
-	original := cloneRecords(m.owned)
 	state := syncState{
 		owned: cloneRecords(m.owned),
 		dirty: m.manifestNeedsRewrite,
 	}
 
 	m.refreshActiveOwned(ctx, now, targets, &state)
-	primaries := m.collectPrimaryCandidates(ctx, targets, &state)
+	primaries, scanSeeds := m.collectPrimaryCandidates(ctx, targets, &state)
 	for _, primary := range primaries {
 		if ctx.Err() != nil {
 			state.reportContextError()
@@ -166,7 +180,7 @@ func (m *Materializer) Sync(ctx context.Context, now time.Time, targets []Target
 
 	if len(m.patterns) > 0 && cadenceDue(now, m.lastScan, m.config.ScanInterval) {
 		m.lastScan = now
-		m.scan(ctx, now, primaries, &state)
+		m.scan(ctx, now, scanSeeds, &state)
 	}
 	if ctx.Err() == nil && cadenceDue(now, m.lastCleanup, m.config.CleanupInterval) {
 		m.lastCleanup = now
@@ -181,7 +195,9 @@ func (m *Materializer) Sync(ctx context.Context, now time.Time, targets []Target
 				m.owned = state.owned
 				m.manifestNeedsRewrite = false
 			} else {
-				m.owned = original
+				// These records describe links created or checked by this process.
+				// Retain them for retry; unrelated existing links remain unowned.
+				m.owned = state.owned
 				m.manifestNeedsRewrite = true
 			}
 		} else {
@@ -267,7 +283,12 @@ func (m *Materializer) collectPrimaryCandidates(
 	ctx context.Context,
 	targets []Target,
 	state *syncState,
-) []candidate {
+) ([]candidate, []candidate) {
+	// scanSeeds names the directories adjacent-log discovery searches, and for
+	// which job. They are kept apart from primaries so that a primary that cannot
+	// be named does not stop its directory from being searched.
+	var scanSeeds []candidate
+	seededScans := make(map[scanSeedKey]struct{})
 	primaries := make([]candidate, 0, min(m.config.MaxPathsPerSync, len(targets)))
 	seen := make(map[string]struct{}, min(m.config.MaxPathsPerSync, len(targets)))
 	processed := 0
@@ -304,7 +325,7 @@ func (m *Materializer) collectPrimaryCandidates(
 					state.observation.Rejected,
 					len(target.Paths)-pathIndex+remainingPathCount(targets, targetIndex+1),
 				)
-				return primaries
+				return primaries, scanSeeds
 			}
 			processed++
 
@@ -313,11 +334,49 @@ func (m *Materializer) collectPrimaryCandidates(
 				state.observation.Rejected = saturatingIncrement(state.observation.Rejected)
 				continue
 			}
-			if _, ok := seen[normalized]; ok {
+			// With renaming on, directory discovery depends on source validation, not
+			// on whether this primary has enough identity to receive a generated
+			// filename, and every job is an owner of its own directories. With
+			// renaming off, keep the behavior from before the option existed: one
+			// seed per source path, so jobs that share a path are not all added as
+			// owners of its directory, which would let one job's matches use up the
+			// scan's match budget on every pass.
+			seed := scanSeedKey{path: normalized}
+			if m.config.RenameEnabled {
+				seed.owner = scanOwnerKey{
+					jobID: target.JobID, arrayJobID: target.ArrayJobID, attemptIndex: target.AttemptIndex,
+				}
+			}
+			if _, seeded := seededScans[seed]; !seeded {
+				seededScans[seed] = struct{}{}
+				scanSeeds = append(scanSeeds, candidate{
+					jobID: target.JobID, attemptIndex: target.AttemptIndex,
+					arrayJobID: target.ArrayJobID, target: normalized,
+				})
+			}
+			name, renamed, err := Name(target, normalized, m.config.RenameEnabled)
+			if err != nil || (m.config.RenameEnabled && len(name) > m.config.MaxPathLength) ||
+				(renamed && len(filepath.Join(m.config.Destination, name)) > m.config.MaxPathLength) {
+				state.observation.Rejected = saturatingIncrement(state.observation.Rejected)
 				continue
 			}
-			seen[normalized] = struct{}{}
+			key := normalized
+			if m.config.RenameEnabled {
+				// Distinct jobs may intentionally share a source while requiring separate
+				// collector identities. Keep conflicting targets for collision reporting.
+				key = name + "\x00" + normalized
+			}
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			var submitTime time.Time
+			if renamed {
+				submitTime = target.SubmitTime.UTC()
+			}
 			primaries = append(primaries, candidate{
+				name:         name,
+				submitTime:   submitTime,
 				jobID:        target.JobID,
 				attemptIndex: target.AttemptIndex,
 				arrayJobID:   target.ArrayJobID,
@@ -326,11 +385,11 @@ func (m *Materializer) collectPrimaryCandidates(
 			})
 		}
 	}
-	return primaries
+	return primaries, scanSeeds
 }
 
 func (m *Materializer) materialize(value candidate, now time.Time, state *syncState) {
-	name := filepath.Base(value.target)
+	name := value.linkName()
 	destination := filepath.Join(m.config.Destination, name)
 
 	info, err := os.Lstat(destination)
@@ -507,13 +566,23 @@ func (state *syncState) reportContextError() {
 
 func newManifestRecord(value candidate, now time.Time) manifestRecord {
 	return manifestRecord{
-		Name:           filepath.Base(value.target),
+		Name:           value.linkName(),
+		SubmitTime:     value.submitTime,
 		Target:         value.target,
 		JobID:          value.jobID,
 		AttemptIndex:   value.attemptIndex,
 		Origin:         value.origin,
 		LastObservedAt: now,
 	}
+}
+
+// linkName leaves adjacent application-log discovery on the existing basename
+// convention; only planned primary paths carry a synthesized name.
+func (value candidate) linkName() string {
+	if value.name != "" {
+		return value.name
+	}
+	return filepath.Base(value.target)
 }
 
 func normalizeLinkTarget(destination, target string) string {

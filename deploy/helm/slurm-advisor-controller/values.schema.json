@@ -138,8 +138,13 @@
         "maxMatchesPerScan",
         "maxOwnedLinks"
       ],
+      "allOf": [{
+        "if": { "required": ["renameEnabled"], "properties": { "renameEnabled": { "const": true } } },
+        "then": { "properties": { "enabled": { "const": true } } }
+      }],
       "properties": {
         "enabled": { "type": "boolean" },
+        "renameEnabled": { "type": "boolean" },
         "destination": {
           "oneOf": [
             {

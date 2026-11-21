@@ -16,7 +16,11 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-const manifestVersion = 1
+const (
+	legacyManifestVersion = 1
+	// manifestVersion adds submission identity for generated link names.
+	manifestVersion = 2
+)
 
 type linkOrigin string
 
@@ -35,6 +39,9 @@ type manifestRecord struct {
 	Target       string `json:"target"`
 	JobID        string `json:"job_id"`
 	AttemptIndex int32  `json:"attempt_index"`
+	// SubmitTime is present only for generated names, allowing recovery to verify
+	// the name without adopting arbitrary symlinks or relying on the current flag.
+	SubmitTime time.Time `json:"submit_time,omitzero"`
 	// An empty origin is accepted only for conservative recovery of manifests
 	// written before origin tracking was introduced. It behaves like a primary
 	// record until the exact target is observed again.
@@ -145,8 +152,21 @@ func decodeManifest(
 	if !versionSeen || !linksSeen {
 		return nil, report, errors.New("manifest is missing a required field")
 	}
-	if version != manifestVersion {
+	if version != legacyManifestVersion && version != manifestVersion {
 		return nil, report, errors.New("manifest version is unsupported")
+	}
+	// Records are decoded before the envelope version is necessarily known.
+	// Validate the declared schema only after both fields have been read. A
+	// version-1 file cannot legitimately carry generated records, so refuse just
+	// those, like any other invalid record. Rejecting the whole file would also
+	// strip ownership, and therefore cleanup, from every ordinary link in it.
+	if version == legacyManifestVersion {
+		for name, record := range owned {
+			if !record.SubmitTime.IsZero() {
+				delete(owned, name)
+				report.InvalidEntries = saturatingIncrement(report.InvalidEntries)
+			}
+		}
 	}
 	if err := requireJSONEOF(decoder); err != nil {
 		return nil, report, err
@@ -222,8 +242,19 @@ func validateManifestRecord(config Config, record manifestRecord) error {
 	if err != nil {
 		return errors.Wrap(err, "validate manifest target")
 	}
-	if target != record.Target || filepath.Base(target) != record.Name {
-		return errors.New("manifest entry target does not match its name")
+	if target != record.Target {
+		return errors.New("manifest entry target is not normalized")
+	}
+	if filepath.Base(target) == record.Name && !record.SubmitTime.IsZero() {
+		return errors.New("basename manifest entry contains a submission time")
+	}
+	if filepath.Base(target) != record.Name {
+		name, renamed, err := Name(Target{
+			JobID: record.JobID, AttemptIndex: record.AttemptIndex, SubmitTime: record.SubmitTime,
+		}, target, true)
+		if err != nil || !renamed || name != record.Name || record.Origin != linkOriginPrimary {
+			return errors.New("manifest entry target does not match its name")
+		}
 	}
 	if record.JobID == "" || len(record.JobID) > config.MaxPathLength || record.AttemptIndex < 0 {
 		return errors.New("manifest entry job identity is invalid")
@@ -276,11 +307,17 @@ func writeManifest(config Config, records map[string]manifestRecord) (bool, erro
 	}
 	sort.Strings(names)
 	manifest := manifestFile{
-		Version: manifestVersion,
+		Version: legacyManifestVersion,
 		Links:   make([]manifestRecord, 0, len(names)),
 	}
 	for _, name := range names {
-		manifest.Links = append(manifest.Links, records[name])
+		record := records[name]
+		manifest.Links = append(manifest.Links, record)
+		// Keep legacy-only manifests readable by older controllers. Once any
+		// generated record is present, the entire file requires the new reader.
+		if !record.SubmitTime.IsZero() {
+			manifest.Version = manifestVersion
+		}
 	}
 	contents, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {

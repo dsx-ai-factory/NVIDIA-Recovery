@@ -66,6 +66,7 @@ onward. Earlier decisions are not included.
 | [0056](0056-establish-kubernetes-local-development-foundation.md) | accepted | Establish a minimal Tilt-based direct Kubernetes development environment and extend the staged E2E harness before adding Recovery components. |
 | [0057](0057-persist-application-requested-job-termination.md) | accepted | Persist application-requested cancellation by scheduler job ID and translate it into sticky exact-attempt terminal Advice. |
 | [0058](0058-qualify-workload-map-independently.md) | accepted | Qualify Workload-Map through independent object and lifecycle evidence, with reusable local, CI, and cluster checks that do not require Recovery services. |
+| [0060](0060-plan-collector-visible-slurm-log-paths.md) | proposed | Plan opt-in collector-compatible Slurm log-link names and publish matching paths with original-source mappings. |
 
 ADR numbers 0018, 0019, 0023, and 0024 are retired; their external-service
 decisions were removed with maintainer approval. Do not reuse these numbers.

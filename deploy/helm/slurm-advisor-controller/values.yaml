@@ -91,6 +91,8 @@ controller:
     expirationSeconds: 3600
   logLinks:
     enabled: false
+    # Requires enabled=true; generates collector-compatible names for arbitrary stdout files.
+    renameEnabled: false
     destination: {}
     sources: []
     applicationPatterns: []

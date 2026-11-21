@@ -4,7 +4,7 @@ Status: proposed
 
 Date: 2026-07-28
 
-> **Implementation note (2026-09-23):** Core behavior matches the inspected [materializer](../../slurm-advisor-controller/internal/loglinks/materializer.go) and [handoff](../../slurm-advisor-controller/internal/reconcile/async_loglinks.go) at `47a8fdc9`, but acceptance remains unresolved. Deployment qualification was not established by this audit.
+> **Implementation note (2026-11-17):** The [materializer](../../slurm-advisor-controller/internal/loglinks/materializer.go) and [handoff](../../slurm-advisor-controller/internal/reconcile/async_loglinks.go) retain ownership-scoped asynchronous behavior, with opt-in generated names described by [proposed ADR 0060](0060-plan-collector-visible-slurm-log-paths.md). Acceptance of this proposal and deployment qualification remain unresolved.
 
 Revised: 2026-07-28, to make the non-blocking orchestration, source-root trust
 boundary, and collector sandbox contracts explicit.

@@ -203,6 +203,7 @@ func (c *Controller) forgetRejectedJobs(ctx context.Context, snapshot Controller
 }
 
 func (c *Controller) upsertJob(ctx context.Context, job cluster.JobExecutionRecord) error {
+	job = c.withLogLinkPaths(job)
 	req, err := heimdall.BuildCreateOrUpdateJobRequest(job, heimdall.UpsertRequestOptions{Environment: c.Environment})
 	if err != nil {
 		return errors.Wrapf(err, "build upsert request for job %s attempt %d", job.JobID, job.AttemptIndex)
