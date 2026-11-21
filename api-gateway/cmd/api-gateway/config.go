@@ -4,6 +4,7 @@
 package main
 
 import (
+	"net"
 	"os"
 	"strings"
 
@@ -60,13 +61,15 @@ type KubernetesAuthConfig struct {
 
 // AuthConfig holds authentication-related configuration.
 type AuthConfig struct {
-	Insecure         bool `envconfig:"HEIMDALL_INSECURE" default:"false"`
-	OidcEnabled      bool `envconfig:"HEIMDALL_OIDC_ENABLED" default:"true"`
-	OidcConfig       OidcAuthConfig
-	JwtEnabled       bool `envconfig:"HEIMDALL_JWT_ENABLED" default:"false"`
-	JwtConfig        JwtAuthConfig
-	KubernetesConfig KubernetesAuthConfig
-	LoginRedirectURL string `envconfig:"HEIMDALL_LOGIN_REDIRECT_URL" default:"http://localhost:8080/auth/callback"`
+	// TrustHeaderBasedIdentity accepts proxy assertions on loopback-only API listeners.
+	TrustHeaderBasedIdentity bool `envconfig:"HEIMDALL_TRUST_HEADER_BASED_IDENTITY" default:"false"`
+	Insecure                 bool `envconfig:"HEIMDALL_INSECURE" default:"false"`
+	OidcEnabled              bool `envconfig:"HEIMDALL_OIDC_ENABLED" default:"true"`
+	OidcConfig               OidcAuthConfig
+	JwtEnabled               bool `envconfig:"HEIMDALL_JWT_ENABLED" default:"false"`
+	JwtConfig                JwtAuthConfig
+	KubernetesConfig         KubernetesAuthConfig
+	LoginRedirectURL         string `envconfig:"HEIMDALL_LOGIN_REDIRECT_URL" default:"http://localhost:8080/auth/callback"`
 }
 
 // ServerConfig holds server-related configuration.
@@ -130,6 +133,9 @@ func loadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := c.validateHeaderIdentity(); err != nil {
+		return nil, err
+	}
 	// Read standard OTel env vars (not HEIMDALL_-prefixed).
 	//
 	// Auth note: Two env vars handle OTLP authentication:
@@ -144,4 +150,24 @@ func loadConfig() (*Config, error) {
 	c.Otel.Endpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	c.Otel.Token = os.Getenv("OTEL_EXPORTER_OTLP_TOKEN")
 	return &c, nil
+}
+
+// validateHeaderIdentity prevents accidentally exposing assertion-trusting listeners.
+func (c Config) validateHeaderIdentity() error {
+	if !c.Auth.TrustHeaderBasedIdentity {
+		return nil
+	}
+	if c.Auth.Insecure || !c.Server.EnableExternalEndpoints {
+		return errors.New("header identity trust requires authenticated external endpoints")
+	}
+	listeners := map[string]string{
+		"HTTP": c.Server.HTTPServerEndpoint, "gRPC": c.Server.GRPCServerEndpoint,
+	}
+	for name, address := range listeners {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
+			return errors.Errorf("header identity trust requires a literal loopback address for %s", name)
+		}
+	}
+	return nil
 }
