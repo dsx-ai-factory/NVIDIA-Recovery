@@ -6,7 +6,6 @@ package heimdall
 import (
 	"fmt"
 	"slices"
-	"strconv"
 	"time"
 	"unicode/utf8"
 
@@ -191,7 +190,7 @@ func buildSchedulerMetadata(job cluster.JobExecutionRecord, opts UpsertRequestOp
 	if job.ArrayTaskID != "" {
 		metadata["slurm_array_task_id"] = job.ArrayTaskID
 	}
-	if err := validateArrayMetadata(job.JobID, metadata); err != nil {
+	if err := jobidentity.Validate(job.JobID, metadata); err != nil {
 		return nil, err
 	}
 	if job.RawState != "" {
@@ -250,27 +249,6 @@ func buildSchedulerMetadata(job cluster.JobExecutionRecord, opts UpsertRequestOp
 	}
 
 	return out, nil
-}
-
-func validateArrayMetadata(jobID string, metadata map[string]any) error {
-	arrayValue, hasArray := metadata["slurm_array_job_id"]
-	taskValue, hasTask := metadata["slurm_array_task_id"]
-	if !hasArray && !hasTask {
-		return nil
-	}
-	arrayID, arrayOK := arrayValue.(string)
-	taskID, taskOK := taskValue.(string)
-	if !arrayOK || !taskOK || jobID != arrayID+"_"+taskID {
-		return errors.New("Slurm array metadata conflicts with canonical job ID")
-	}
-	for pos, value := range []string{arrayID, taskID} {
-		number, err := strconv.ParseUint(value, 10, 32)
-		// The array ID must be positive; task zero is a valid array member.
-		if err != nil || number >= jobidentity.SlurmNoValue32 || (pos == 0 && number == 0) || strconv.FormatUint(number, 10) != value {
-			return errors.New("invalid Slurm array identity")
-		}
-	}
-	return nil
 }
 
 func formatMetadataTime(value *time.Time) string {

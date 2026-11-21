@@ -101,7 +101,7 @@ func (m *Materializer) scanDirectories(
 		patterns, cached := patternCache[key]
 		if !cached {
 			var err error
-			patterns, err = m.patternsForTarget(ctx, primary.jobID, primary.arrayJobID)
+			patterns, err = m.patternsForTarget(ctx, primary.jobID)
 			if err != nil {
 				if ctx.Err() != nil {
 					state.reportContextError()
@@ -128,9 +128,8 @@ func (m *Materializer) scanDirectories(
 func (m *Materializer) patternsForTarget(
 	ctx context.Context,
 	jobID string,
-	arrayJobID string,
 ) ([]*regexp.Regexp, error) {
-	compiled := make([]*regexp.Regexp, 0, len(m.patterns)*2)
+	compiled := make([]*regexp.Regexp, 0, len(m.patterns))
 	for _, pattern := range m.patterns {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -139,24 +138,15 @@ func (m *Materializer) patternsForTarget(
 			compiled = append(compiled, pattern.compiled)
 			continue
 		}
-		identifiers := []string{jobID}
-		if arrayJobID != "" && arrayJobID != jobID {
-			identifiers = append(identifiers, arrayJobID)
+		expanded := strings.ReplaceAll(pattern.raw, "{job_id}", regexp.QuoteMeta(jobID))
+		expression, err := regexp.Compile(expanded)
+		if err != nil {
+			return nil, errors.Wrap(err, "compile expanded application pattern")
 		}
-		for _, identifier := range identifiers {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			expanded := strings.ReplaceAll(pattern.raw, "{job_id}", regexp.QuoteMeta(identifier))
-			expression, err := regexp.Compile(expanded)
-			if err != nil {
-				return nil, errors.Wrap(err, "compile expanded application pattern")
-			}
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			compiled = append(compiled, expression)
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
+		compiled = append(compiled, expression)
 	}
 	return compiled, nil
 }
@@ -241,6 +231,8 @@ func matchingOwner(
 	name string,
 	owners []scanOwner,
 ) (Target, bool, error) {
+	var selected Target
+	found := false
 	for _, owner := range owners {
 		if err := ctx.Err(); err != nil {
 			return Target{}, false, err
@@ -254,9 +246,13 @@ func matchingOwner(
 				return Target{}, false, err
 			}
 			if matched {
-				return owner.target, true, nil
+				if found && (selected.JobID != owner.target.JobID || selected.AttemptIndex != owner.target.AttemptIndex || selected.ArrayJobID != owner.target.ArrayJobID) {
+					return Target{}, false, nil
+				}
+				selected, found = owner.target, true
+				break
 			}
 		}
 	}
-	return Target{}, false, nil
+	return selected, found, nil
 }

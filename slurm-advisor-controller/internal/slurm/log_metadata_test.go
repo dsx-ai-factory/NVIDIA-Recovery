@@ -232,6 +232,7 @@ func TestLogPathsFromSacctUsesExistingArrayAttemptIdentity(t *testing.T) {
 	discovered, err := logPathsFromSacct([]byte(`{
 		"jobs": [{
 			"job_id": 9002,
+			"restart_cnt": 0,
 			"array": {"job_id": 9000, "task_id": {"set": true, "number": 2}},
 			"time": {"submission": 10, "start": 20},
 			"stdout_expanded": "/logs/array-9000_2.out",
@@ -241,10 +242,25 @@ func TestLogPathsFromSacctUsesExistingArrayAttemptIdentity(t *testing.T) {
 					"stdout_expanded": "/logs/array-9000_2-step-0.out"
 				}
 			}]
+		}, {
+			"job_id": 9002,
+			"restart_cnt": 1,
+			"array": {"job_id": 9000, "task_id": {"set": true, "number": 2}},
+			"time": {"submission": 30, "start": 40},
+			"stdout_expanded": "/logs/array-9000_2-retry.out",
+			"steps": [{
+				"step": {
+					"id": {"job_id": 9002, "step_id": "0"},
+					"stdout_expanded": "/logs/array-9000_2-retry-step-0.out"
+				}
+			}]
 		}]
 	}`))
 	if err != nil {
 		t.Fatalf("logPathsFromSacct() failed: %v", err)
+	}
+	if len(discovered) != 2 {
+		t.Fatalf("attempt count = %d, want 2", len(discovered))
 	}
 
 	got := discovered[cluster.JobAttemptRef{JobID: "9000_2", AttemptIndex: 0}]
@@ -253,6 +269,13 @@ func TestLogPathsFromSacctUsesExistingArrayAttemptIdentity(t *testing.T) {
 	}
 	if want := []string{"/logs/array-9000_2-step-0.out"}; !slices.Equal(got.steps, want) {
 		t.Fatalf("steps = %#v, want %#v", got.steps, want)
+	}
+	retry := discovered[cluster.JobAttemptRef{JobID: "9000_2", AttemptIndex: 1}]
+	if want := []string{"/logs/array-9000_2-retry.out"}; !slices.Equal(retry.parent, want) {
+		t.Fatalf("retry parent = %#v, want %#v", retry.parent, want)
+	}
+	if want := []string{"/logs/array-9000_2-retry-step-0.out"}; !slices.Equal(retry.steps, want) {
+		t.Fatalf("retry steps = %#v, want %#v", retry.steps, want)
 	}
 }
 
@@ -900,9 +923,27 @@ func TestActiveLogMetadataDoesNotCrossAttemptBoundary(t *testing.T) {
 
 func TestActiveScontrolResultRequiresExactAttemptIdentity(t *testing.T) {
 	tests := []struct {
-		name   string
-		output string
+		name     string
+		output   string
+		jobID    string
+		wantPath string
+		attempt  int32
 	}{
+		{name: "array retry", jobID: "4200_0", attempt: 1, output: "JobId=4200 ArrayJobId=4200 ArrayTaskId=0 Restarts=1 StdOut=/logs/retry.out", wantPath: "/logs/retry.out"},
+		{name: "array retry count mismatch", jobID: "4200_0", attempt: 1, output: "JobId=4200 ArrayJobId=4200 ArrayTaskId=0 Restarts=0 StdOut=/logs/old.out"},
+		{name: "wrong standalone job", output: "JobId=54321 Restarts=0 StdOut=/logs/wrong.out"},
+		{name: "missing job identity", output: "Restarts=0 StdOut=/logs/wrong.out"},
+		{name: "task zero with parent raw ID", jobID: "4200_0", output: "JobId=4200 ArrayJobId=4200 ArrayTaskId=0 Restarts=0 StdOut=/logs/task.out", wantPath: "/logs/task.out"},
+		{name: "task with distinct raw ID", jobID: "4200_0", output: "JobId=4207 ArrayJobId=4200 ArrayTaskId=0 Restarts=0 StdOut=/logs/task.out", wantPath: "/logs/task.out"},
+		{name: "sibling at same attempt", jobID: "4200_0", output: "JobId=4201 ArrayJobId=4200 ArrayTaskId=1 Restarts=0 StdOut=/logs/sibling.out"},
+		{name: "bare parent is not task", jobID: "4200_0", output: "JobId=4200 Restarts=0 StdOut=/logs/parent.out"},
+		{name: "incomplete array identity", jobID: "4200_0", output: "JobId=4200 ArrayJobId=4200 Restarts=0 StdOut=/logs/wrong.out"},
+		{name: "conflicting array identity", jobID: "4200_0", output: "JobId=4200 ArrayJobId=4300 ArrayTaskId=0 Restarts=0 StdOut=/logs/wrong.out"},
+		{name: "synthetic task range", jobID: "4200_0", output: "JobId=4200 ArrayJobId=4200 ArrayTaskId=0-3 Restarts=0 StdOut=/logs/wrong.out"},
+		{name: "duplicate matching records", jobID: "4200_0", output: "JobId=4200 ArrayJobId=4200 ArrayTaskId=0 Restarts=0 StdOut=/logs/first.out\nJobId=4200 ArrayJobId=4200 ArrayTaskId=0 Restarts=0 StdOut=/logs/second.out"},
+		{name: "select matching record", jobID: "4200_0", output: "JobId=4200 ArrayJobId=4200 ArrayTaskId=0 Restarts=0 StdOut=/logs/task.out\nJobId=4201 ArrayJobId=4200 ArrayTaskId=1 Restarts=0 StdOut=/logs/sibling.out", wantPath: "/logs/task.out"},
+		{name: "do not combine records", jobID: "4200_0", output: "JobId=4200 ArrayJobId=4200 ArrayTaskId=0 StdOut=/logs/task.out\nJobId=4201 ArrayJobId=4200 ArrayTaskId=1 Restarts=0 StdOut=/logs/sibling.out"},
+		{name: "duplicate identity fields", jobID: "4200_0", output: "JobId=4200 ArrayJobId=4200 ArrayTaskId=1 ArrayTaskId=0 Restarts=0 StdOut=/logs/wrong.out"},
 		{
 			name:   "missing restart counter",
 			output: "JobId=12345 StdOut=/logs/wrong-attempt.out",
@@ -914,13 +955,16 @@ func TestActiveScontrolResultRequiresExactAttemptIdentity(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.jobID == "" {
+				test.jobID = "12345"
+			}
 			executor := newScriptedLogExecutor(map[string][]commandResult{
-				commandKey([]string{"scontrol", "show", "job", "-o", "12345"}): {{
+				commandKey([]string{"scontrol", "show", "job", "-o", test.jobID}): {{
 					output: []byte(test.output),
 				}},
 			})
 			slurmCluster := newTestLogMetadataCluster(t, executor, nil)
-			ref := cluster.JobAttemptRef{JobID: "12345", AttemptIndex: 0}
+			ref := cluster.JobAttemptRef{JobID: test.jobID, AttemptIndex: test.attempt}
 
 			slurmCluster.logMetadata.mu.Lock()
 			entry, _ := slurmCluster.logMetadata.observeLocked(ref, "RUNNING", time.Now())
@@ -933,14 +977,18 @@ func TestActiveScontrolResultRequiresExactAttemptIdentity(t *testing.T) {
 			slurmCluster.logMetadata.mu.Unlock()
 
 			failed, stale := slurmCluster.runActiveLogMetadataWork(context.Background(), work)
-			if failed || !stale {
-				t.Fatalf("runActiveLogMetadataWork() = failed %t, stale %t; want false, true", failed, stale)
+			if failed || stale != (test.wantPath == "") {
+				t.Fatalf("runActiveLogMetadataWork() = failed %t, stale %t; expected path %q", failed, stale, test.wantPath)
 			}
 			slurmCluster.logMetadata.mu.Lock()
 			got := slices.Clone(slurmCluster.logMetadata.attempts[ref].parent.paths)
 			initialized := slurmCluster.logMetadata.attempts[ref].parent.initialized
 			slurmCluster.logMetadata.mu.Unlock()
-			if len(got) != 0 || initialized {
+			if test.wantPath != "" {
+				if !initialized || !slices.Equal(got, []string{test.wantPath}) {
+					t.Fatalf("parent cache = %#v, initialized %t; want %q", got, initialized, test.wantPath)
+				}
+			} else if len(got) != 0 || initialized {
 				t.Fatalf("parent cache = paths %#v, initialized %t; want unresolved", got, initialized)
 			}
 		})

@@ -161,9 +161,11 @@ func (s *slurmCluster) EnrichActiveJobs(
 func (s *slurmCluster) FinalizedJobs(ctx context.Context, records []cluster.JobAttemptRef) ([]cluster.JobExecutionRecord, error) {
 	jobIDs := uniqueJobIDs(records)
 
-	seen := map[cluster.JobAttemptRef]struct{}{}
+	firstRequested := map[string]int32{}
 	for _, record := range records {
-		seen[record] = struct{}{}
+		if first, exists := firstRequested[record.JobID]; !exists || record.AttemptIndex < first {
+			firstRequested[record.JobID] = record.AttemptIndex
+		}
 	}
 
 	accountingCtx := ctx
@@ -225,7 +227,12 @@ func (s *slurmCluster) FinalizedJobs(ctx context.Context, records []cluster.JobA
 			nativePaths[ref] = paths
 		}
 		for _, job := range result.jobs {
-			if _, ok := seen[cluster.JobAttemptRef{JobID: job.JobID, AttemptIndex: job.AttemptIndex}]; ok {
+			if job.JobID != result.query.jobID {
+				continue
+			}
+			// A later retained attempt is fresh evidence against replaying old
+			// Advice, even when that successor was never observed in squeue.
+			if job.AttemptIndex >= firstRequested[job.JobID] {
 				jobs = append(jobs, job)
 			}
 		}
@@ -277,7 +284,7 @@ func (s *slurmCluster) queryFinalizedJob(
 		}
 		return nil, nil, err
 	}
-	jobs, err := observedJobsFromSacct(output.stdout)
+	jobs, err := observedJobsFromSacctForJob(output.stdout, jobID)
 	s.logSacctOutput(jobID, "sacct_status", args, output, err)
 	if err != nil {
 		return nil, nil, err
@@ -285,7 +292,7 @@ func (s *slurmCluster) queryFinalizedJob(
 	var paths map[cluster.JobAttemptRef]sacctAttemptLogPaths
 	if s.logMetadata != nil && s.logMetadata.legacyMode.Load() {
 		// Reuse expanded parent paths already returned by the status query.
-		paths, _ = logPathsFromSacct(output.stdout)
+		paths, _ = logPathsFromSacctForJob(output.stdout, jobID)
 	}
 	return jobs, paths, nil
 }

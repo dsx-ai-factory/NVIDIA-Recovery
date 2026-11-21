@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestScannerExpandsConcreteAndArrayParentJobIDs(t *testing.T) {
+func TestScannerExpandsOnlyConcreteJobIDs(t *testing.T) {
 	t.Parallel()
 
 	_, source, destination := testDirectories(t)
@@ -63,15 +63,15 @@ func TestScannerExpandsConcreteAndArrayParentJobIDs(t *testing.T) {
 
 	observation := materializer.Sync(context.Background(), now, []Target{target})
 	assertObservationCounts(t, observation, Observation{
-		Created:         4,
-		Owned:           4,
+		Created:         3,
+		Owned:           3,
 		Scans:           1,
 		ScanDirectories: 1,
 		ScanEntries:     6,
-		ScanMatches:     3,
+		ScanMatches:     2,
 	})
 	assertSymlink(t, filepath.Join(destination, filepath.Base(concrete)), concrete)
-	assertSymlink(t, filepath.Join(destination, filepath.Base(arrayParent)), arrayParent)
+	assertNotExist(t, filepath.Join(destination, filepath.Base(arrayParent)))
 	assertSymlink(t, filepath.Join(destination, filepath.Base(generic)), generic)
 	assertNotExist(t, filepath.Join(destination, filepath.Base(symlinkedApplicationLog)))
 	if got, err := filepath.Glob(filepath.Join(destination, "nested*")); err != nil || len(got) != 0 {
@@ -89,20 +89,60 @@ func TestScannerExpandsConcreteAndArrayParentJobIDs(t *testing.T) {
 
 	writeFile(t, later)
 	observation = materializer.Sync(context.Background(), now.Add(30*time.Second), []Target{target})
-	assertObservationCounts(t, observation, Observation{Existing: 1, Owned: 4})
+	assertObservationCounts(t, observation, Observation{Existing: 1, Owned: 3})
 	assertNotExist(t, filepath.Join(destination, filepath.Base(later)))
 
 	observation = materializer.Sync(context.Background(), now.Add(time.Minute), []Target{target})
 	assertObservationCounts(t, observation, Observation{
 		Created:         1,
-		Existing:        4,
-		Owned:           5,
+		Existing:        3,
+		Owned:           4,
 		Scans:           1,
 		ScanDirectories: 1,
 		ScanEntries:     7,
-		ScanMatches:     4,
+		ScanMatches:     3,
 	})
 	assertSymlink(t, filepath.Join(destination, filepath.Base(later)), later)
+}
+
+func TestScannerKeepsSiblingOwnershipUnambiguous(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		t.Run(map[bool]string{false: "forward", true: "reverse"}[reverse], func(t *testing.T) {
+			_, source, destination := testDirectories(t)
+			for _, name := range []string{"stdout-0.log", "stdout-1.log", "app-4200_0.log", "app-4200_1.log", "app-4200.log", "shared.log"} {
+				writeFile(t, filepath.Join(source, name))
+			}
+			config := testConfig(source, destination)
+			config.ApplicationPatterns = []string{`^app-{job_id}\.log$`, `^shared\.log$`}
+			targets := []Target{
+				{JobID: "4200_0", ArrayJobID: "4200", AttemptIndex: 2, Paths: []string{filepath.Join(source, "stdout-0.log")}},
+				{JobID: "4200_1", ArrayJobID: "4200", AttemptIndex: 1, Paths: []string{filepath.Join(source, "stdout-1.log")}},
+			}
+			if reverse {
+				targets[0], targets[1] = targets[1], targets[0]
+			}
+			materializer := mustNew(t, config)
+			materializer.Sync(context.Background(), time.Now(), targets)
+			assertNotExist(t, filepath.Join(destination, "app-4200.log"))
+			assertNotExist(t, filepath.Join(destination, "shared.log"))
+			for _, target := range targets {
+				name := "app-" + target.JobID + ".log"
+				assertSymlink(t, filepath.Join(destination, name), filepath.Join(source, name))
+				found := false
+				for _, record := range readManifest(t, destination) {
+					if record.Name == name {
+						found = true
+						if record.JobID != target.JobID || record.AttemptIndex != target.AttemptIndex {
+							t.Fatalf("wrong task owner: %+v", record)
+						}
+					}
+				}
+				if !found {
+					t.Fatalf("missing ownership for %s", name)
+				}
+			}
+		})
+	}
 }
 
 func TestScannerBoundsDirectoriesEntriesAndMatches(t *testing.T) {
@@ -209,7 +249,7 @@ func TestScanPreparationAndMatchingHonorCancellation(t *testing.T) {
 		t.Fatalf("scan preparation errors = %d, want 1", state.observation.Errors)
 	}
 
-	if _, err := materializer.patternsForTarget(cancelled, "42", "40"); err != context.Canceled {
+	if _, err := materializer.patternsForTarget(cancelled, "42"); err != context.Canceled {
 		t.Fatalf("patternsForTarget() error = %v, want context.Canceled", err)
 	}
 	_, matched, err := matchingOwner(cancelled, "application.log", []scanOwner{{

@@ -172,7 +172,7 @@ func TestFinalizedJobsReturnsStableJobAndErrorOrder(t *testing.T) {
 		for _, job := range jobs {
 			got = append(got, fmt.Sprintf("%s/%d", job.JobID, job.AttemptIndex))
 		}
-		if want := []string{"100/0", "100/1", "200/0", "300/0"}; !slices.Equal(got, want) {
+		if want := []string{"100/0", "100/1", "100/2", "200/0", "300/0"}; !slices.Equal(got, want) {
 			t.Fatalf("job order = %v, want %v", got, want)
 		}
 	})

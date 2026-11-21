@@ -29,24 +29,38 @@ func (s *slurmCluster) queryJSONLogPaths(
 	if err != nil {
 		return nil, err
 	}
-	discovered, err := logPathsFromSacct(output.stdout)
+	discovered, err := logPathsFromSacctForJob(output.stdout, jobID)
 	s.logSacctOutput(jobID, source, args, output, err)
 	return discovered, err
 }
 
-// logPathsFromSacct extracts expanded paths using the same allocation
-// ordering as status accounting, keeping parent and step completeness separate.
+// logPathsFromSacct extracts expanded paths using the same attempt identity
+// as status accounting, keeping parent and step completeness separate.
 func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPaths, error) {
+	return logPathsFromSacctForJob(data, "")
+}
+
+func logPathsFromSacctForJob(data []byte, requestedJobID string) (map[cluster.JobAttemptRef]sacctAttemptLogPaths, error) {
 	parsed, err := parseSacctOutput(data)
 	if err != nil {
 		return nil, err
 	}
 
-	grouped := sacctJobsByIdentity(parsed.Jobs)
+	grouped, err := sacctJobsByIdentity(parsed.Jobs)
+	if err != nil {
+		return nil, err
+	}
 	discovered := make(map[cluster.JobAttemptRef]sacctAttemptLogPaths)
 
 	for jobID, jobs := range grouped {
-		for attemptIndex, attempt := range groupSacctAttempts(jobs) {
+		if requestedJobID != "" && jobID != requestedJobID {
+			continue
+		}
+		attempts, err := resolveSacctAttempts(jobs)
+		if err != nil {
+			return nil, err
+		}
+		for attemptIndex, attempt := range attempts {
 			missingParent, missingSteps := false, false
 			var rawParent []string
 			var rawSteps []string
@@ -74,7 +88,7 @@ func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPa
 
 			discovered[cluster.JobAttemptRef{
 				JobID:        jobID,
-				AttemptIndex: int32(attemptIndex),
+				AttemptIndex: attemptIndex,
 			}] = sacctAttemptLogPaths{
 				parent:        parent,
 				steps:         steps,
@@ -88,17 +102,19 @@ func logPathsFromSacct(data []byte) (map[cluster.JobAttemptRef]sacctAttemptLogPa
 	return discovered, nil
 }
 
-// sacctJobsByIdentity preserves accounting row order within each canonical job
-// ID, which groupSacctAttempts uses to assign attempt indices.
-func sacctJobsByIdentity(jobs []SacctJob) map[string][]SacctJob {
+// sacctJobsByIdentity separates siblings before resolving their attempts.
+func sacctJobsByIdentity(jobs []SacctJob) (map[string][]SacctJob, error) {
 	grouped := make(map[string][]SacctJob)
 	for _, job := range jobs {
 		jobID, _, _, include, err := jobIdentityFromSacct(job)
-		if err == nil && include {
+		if err != nil {
+			return nil, err
+		}
+		if include {
 			grouped[jobID] = append(grouped[jobID], job)
 		}
 	}
-	return grouped
+	return grouped, nil
 }
 
 // UnmarshalJSON accepts both compound and structured Slurm step IDs.

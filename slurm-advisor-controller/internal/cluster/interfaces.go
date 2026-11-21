@@ -9,7 +9,8 @@ import "context"
 
 type JobReader interface {
 	ActiveJobs(ctx context.Context) ([]JobExecutionRecord, error)
-	// FinalizedJobs returns fresh records for the requested attempts. Successful
+	// FinalizedJobs returns fresh records for the requested attempts and any
+	// later retained attempts of those jobs, so stale Advice sees successors. Successful
 	// lookups remain usable when other lookups fail; the returned error joins
 	// those failures. Missing records with an error are not evidence of absence.
 	FinalizedJobs(ctx context.Context, records []JobAttemptRef) ([]JobExecutionRecord, error)

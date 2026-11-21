@@ -5,8 +5,9 @@ Status: accepted
 Date: 2026-11-03
 
 > **Implementation note (2026-11-17):** Task identity and recovery-reuse coverage
-> are implemented; generic recovery hardening, checkpoint association, and E2E
-> qualification remain separate work in the [delivery plan](../architecture/job-array-support-plan.md#task-recovery-implementation),
+> are implemented alongside separately scoped recovery hardening; accounting
+> limitations and outstanding checkpoint/E2E qualification are recorded in the
+> [delivery plan](../architecture/job-array-support-plan.md#generic-recovery-hardening-follow-up),
 > and the eager compatibility path below was removed under ADR 0045.
 > Evidence: [PR #62](https://github.com/dsx-ai-factory/NVIDIA-Recovery/pull/62).
 

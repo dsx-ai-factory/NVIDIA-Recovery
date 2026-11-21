@@ -4,10 +4,13 @@
 package slurm
 
 import (
+	"context"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/jobidentity"
 )
 
 func TestArrayIdentityAcrossSchedulerFormats(t *testing.T) {
@@ -45,7 +48,7 @@ func TestArrayIdentityAcrossSchedulerFormats(t *testing.T) {
 				parse        func([]byte) ([]cluster.JobExecutionRecord, error)
 			}{
 				{"squeue", `{"jobs":[{"job_id":4200,"array_job_id":%s,"array_task_id":%s}]}`, observedJobsFromSqueue},
-				{"sacct", `{"jobs":[{"job_id":4200,"array":{"job_id":%s,"task_id":%s}}]}`, observedJobsFromSacct},
+				{"sacct", `{"jobs":[{"job_id":4200,"restart_cnt":0,"array":{"job_id":%s,"task_id":%s}}]}`, observedJobsFromSacct},
 			} {
 				t.Run(source.name, func(t *testing.T) {
 					jobs, err := source.parse([]byte(fmt.Sprintf(source.format, test.array, test.task)))
@@ -73,6 +76,90 @@ func TestArrayIdentityAcrossSchedulerFormats(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestArrayAccountingPreservesRetainedAttemptIdentity(t *testing.T) {
+	response := []byte(`{"jobs":[
+		{"job_id":4200,"array":{"job_id":4200,"task_id":0},"restart_cnt":2,"stdout_expanded":"/logs/a2","state":{"current":"FAILED"}},
+		{"job_id":4201,"array":{"job_id":4200,"task_id":1},"restart_cnt":{"set":true,"number":0},"stdout_expanded":"/logs/b0","state":{"current":"COMPLETED"}},
+		{"job_id":4200,"array":{"job_id":4200,"task_id":0},"restart_cnt":1,"stdout_expanded":"/logs/a1","state":{"current":"FAILED"}},
+		{"job_id":4200,"array":{"job_id":4200,"task_id":0},"restart_cnt":2,"stdout_expanded":"/logs/a2","state":{"current":"FAILED"}}
+	]}`)
+	executor := &recordingExecutor{results: map[string][]byte{
+		"sacct\x00-Xj\x004200_0\x00--duplicates\x00--json": response,
+		"sacct\x00-Xj\x004200_1\x00--duplicates\x00--json": response,
+	}}
+	adapter := newSlurmCluster(Options{})
+	adapter.roCommands = executor
+	adapter.rwCommands = executor
+	want := []cluster.JobAttemptRef{{JobID: "4200_0", AttemptIndex: 1}, {JobID: "4200_0", AttemptIndex: 2}, {JobID: "4200_1"}}
+	jobs, err := adapter.FinalizedJobs(context.Background(), []cluster.JobAttemptRef{want[0], want[2]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []cluster.JobAttemptRef
+	for _, job := range jobs {
+		got = append(got, cluster.JobAttemptRef{JobID: job.JobID, AttemptIndex: job.AttemptIndex})
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("retained accounting = %v, want %v", got, want)
+	}
+	active, err := observedJobsFromSqueue([]byte(`{"jobs":[{"job_id":4200,"array_job_id":4200,"array_task_id":0,"restart_cnt":2}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jobidentity.HeimdallJobID(jobs[1].JobID, jobs[1].AttemptIndex) != jobidentity.HeimdallJobID(active[0].JobID, active[0].AttemptIndex) {
+		t.Fatal("active and retained accounting disagree on attempt UUID")
+	}
+	paths, err := logPathsFromSacct(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, ref := range want {
+		expected := []string{"/logs/a1", "/logs/a2", "/logs/b0"}[index]
+		if !reflect.DeepEqual(paths[ref].parent, []string{expected}) {
+			t.Fatalf("paths for %v = %v, want %s", ref, paths[ref].parent, expected)
+		}
+	}
+}
+
+func TestArrayAccountingDefersUnresolvedAttempts(t *testing.T) {
+	for _, count := range []string{``, `,"restart_cnt":null`, `,"restart_cnt":-1`, `,"restart_cnt":65534`, `,"restart_cnt":65535`, `,"restart_cnt":2147483648`, `,"restart_cnt":{"set":true,"number":65534}`, `,"restart_cnt":{"set":false,"number":2}`} {
+		data := []byte(`{"jobs":[{"job_id":4200,"array":{"job_id":4200,"task_id":0}` + count + `}]}`)
+		if jobs, err := observedJobsFromSacct(data); err == nil || len(jobs) != 0 {
+			t.Fatalf("unresolved accounting produced jobs: %v, %v", jobs, err)
+		}
+		if paths, err := logPathsFromSacct(data); err == nil || len(paths) != 0 {
+			t.Fatalf("unresolved accounting produced paths: %v, %v", paths, err)
+		}
+	}
+}
+
+func TestArrayAccountingKeepsResolvedSiblingWhenAnotherQueryFails(t *testing.T) {
+	response := []byte(`{"jobs":[
+		{"job_id":4200,"array":{"job_id":4200,"task_id":0},"restart_cnt":2,"stdout_expanded":"/logs/a2","state":{"current":"FAILED"}},
+		{"job_id":4201,"array":{"job_id":4200,"task_id":1},"state":{"current":"FAILED"}}
+	]}`)
+	executor := &recordingExecutor{results: map[string][]byte{
+		"sacct\x00-Xj\x004200_0\x00--duplicates\x00--json": response,
+		"sacct\x00-Xj\x004200_1\x00--duplicates\x00--json": response,
+	}}
+	adapter := newSlurmCluster(Options{})
+	adapter.roCommands = executor
+	jobs, err := adapter.FinalizedJobs(context.Background(), []cluster.JobAttemptRef{
+		{JobID: "4200_0", AttemptIndex: 2}, {JobID: "4200_1"},
+	})
+	if err == nil || len(jobs) != 1 || jobs[0].JobID != "4200_0" || jobs[0].AttemptIndex != 2 {
+		t.Fatalf("partial accounting = %v, %v; want resolved task and error", jobs, err)
+	}
+	paths, err := adapter.queryJSONLogPaths(context.Background(), "4200_0", "test",
+		func(context.Context, string, ...string) (commandOutput, error) {
+			return commandOutput{stdout: response}, nil
+		})
+	ref := cluster.JobAttemptRef{JobID: "4200_0", AttemptIndex: 2}
+	if err != nil || len(paths) != 1 || !reflect.DeepEqual(paths[ref].parent, []string{"/logs/a2"}) {
+		t.Fatalf("resolved task log paths = %v, %v", paths, err)
 	}
 }
 

@@ -58,8 +58,8 @@ func queryLegacyLogPaths(
 }
 
 // logPathsFromLegacySacct validates the entire response's allocation identities
-// before expanding requested sources. Allocation row order and timestamp
-// grouping match the existing JSON attempt algorithm; step rows join by DBIndex
+// before expanding requested sources. Standalone timestamp grouping matches
+// legacy status accounting; step rows join by DBIndex
 // even if they precede their allocation. Output errors remain source-local.
 func logPathsFromLegacySacct(
 	data []byte,
@@ -122,8 +122,13 @@ func logPathsFromLegacySacct(
 	}
 	var outputErrors []error
 	for jobID, jobs := range grouped {
-		for attemptIndex, attempt := range groupSacctAttempts(jobs) {
-			ref := cluster.JobAttemptRef{JobID: jobID, AttemptIndex: int32(attemptIndex)}
+		attempts, err := resolveSacctAttempts(jobs)
+		if err != nil {
+			outputErrors = append(outputErrors, err)
+			continue
+		}
+		for attemptIndex, attempt := range attempts {
+			ref := cluster.JobAttemptRef{JobID: jobID, AttemptIndex: attemptIndex}
 			candidate, wanted := requested[ref]
 			if !wanted {
 				continue
