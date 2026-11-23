@@ -1177,9 +1177,9 @@ class JobManager:
                     # Reconcile the cancellation guard before these writes so
                     # delayed redelivery cannot duplicate attribution data.
                     for job_execution_error, node_events in res.node_attributions.items():
-                        self.attribution_storage.store_attribution(job_execution_error, node_events)  # type: ignore[arg-type]
+                        self.attribution_storage.store_attribution(job_execution_error, node_events)
                     for job_execution_error, global_events in res.global_attributions.items():
-                        self.attribution_storage.store_attribution(job_execution_error, global_events)  # type: ignore[arg-type]
+                        self.attribution_storage.store_attribution(job_execution_error, global_events)
 
                     logger.info(
                         f"Successfully persisted the anomaly attribution for job {res.job_id} result in the database."
