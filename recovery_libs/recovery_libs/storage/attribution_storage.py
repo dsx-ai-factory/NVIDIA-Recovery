@@ -9,13 +9,17 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import joinedload
 
 from recovery_libs.schema.anomaly_isolator.exclusion_application import ExclusionApplicationStatus
 from recovery_libs.storage.base import RecoveryStorageException
+from recovery_libs.storage.dataclass import AdviceReconciliationStatusRecord, AdviceRecord
+from recovery_libs.storage.exclusion_application import confirm_exclusions
 from recovery_libs.storage.global_events import GlobalEvent
 from recovery_libs.storage.job_execution_errors import JobExecutionError
 from recovery_libs.storage.mysql_connection import MySQLConnection
+from recovery_libs.storage.mysql_storage import retry_on_conflict
 from recovery_libs.storage.node_events import ErrorAttributionType, ExclusionType, NodeEvent
 
 logger = logging.getLogger(__name__)
@@ -36,8 +40,15 @@ class AttributionStorage:
     def ready(self) -> bool:
         return self.connection.ready()
 
+    @retry_on_conflict(lambda error, events: "attribution result")
     def store_attribution(self, error: JobExecutionError, events: list[NodeEvent | GlobalEvent]) -> bool:
-        """Create a new record"""
+        """Persist attribution rows and confirm late results against durable convergence.
+
+        Lock Advice before inserting FAST results, matching the status writer's lock
+        order. Whichever transaction commits last observes both the attribution and
+        convergence; no background repair or audit delivery is required. Attempts are
+        locked in stable order when an input batch contains more than one attempt.
+        """
         try:
             existing_error = self.read_error(error)
             if not existing_error:
@@ -46,22 +57,59 @@ class AttributionStorage:
             else:
                 logger.debug("Found existing error with id: %s", existing_error.id)
                 error = existing_error
-            with self.connection.session() as session:
-                session.expire_on_commit = False
-                for event in events:
-                    event.job_execution_error_id = error.id
-                    if isinstance(event, NodeEvent):
-                        # ADI's effective type already incorporates allocation and safety limits.
-                        event.exclusion_applied = (
-                            ExclusionApplicationStatus.UNKNOWN
-                            if event.error_attribution_type == ErrorAttributionType.FAST
-                            and event.exclusion_type in (ExclusionType.TEMPORARY, ExclusionType.CONFIRMED)
-                            else ExclusionApplicationStatus.NOT_APPLICABLE
-                        )
-                    session.add(event)
-                session.commit()
-                logger.debug("Succesfully created error attribution: %s", events)
-                return True
+            with self.connection.write_session() as session:
+                if not self.connection.write_pool_enabled:
+                    session.connection(execution_options={"isolation_level": "READ COMMITTED"})
+                try:
+                    session.expire_on_commit = False
+                    attempts = sorted(
+                        {
+                            (event.job_id, event.job_attempt_index)
+                            for event in events
+                            if isinstance(event, NodeEvent)
+                            and event.error_attribution_type == ErrorAttributionType.FAST
+                        }
+                    )
+                    locked_advice = []
+                    for job_id, attempt_index in attempts:
+                        advice = session.scalars(
+                            select(AdviceRecord)
+                            .where(AdviceRecord.job_id == job_id, AdviceRecord.attempt_index == attempt_index)
+                            .with_for_update()
+                        ).first()
+                        if advice is not None:
+                            locked_advice.append(advice)
+                    for event in events:
+                        event.job_execution_error_id = error.id
+                        if isinstance(event, NodeEvent):
+                            # ADI's effective type already incorporates allocation and safety limits.
+                            event.exclusion_applied = (
+                                ExclusionApplicationStatus.UNKNOWN
+                                if event.error_attribution_type == ErrorAttributionType.FAST
+                                and event.exclusion_type in (ExclusionType.TEMPORARY, ExclusionType.CONFIRMED)
+                                else ExclusionApplicationStatus.NOT_APPLICABLE
+                            )
+                        session.add(event)
+                    session.flush()
+                    for advice in locked_advice:
+                        status = session.scalars(
+                            select(AdviceReconciliationStatusRecord).where(
+                                AdviceReconciliationStatusRecord.advice_id == advice.heimdall_id,
+                                AdviceReconciliationStatusRecord.observed_generation == advice.generation,
+                            )
+                        ).first()
+                        if status is not None:
+                            confirm_exclusions(session, advice, status)
+                    session.commit()
+                    logger.debug("Succesfully created error attribution: %s", events)
+                    return True
+                except Exception:
+                    # Explicit rollback also restores ORM insertion state for a retry.
+                    session.rollback()
+                    raise
+        except (OperationalError, IntegrityError):
+            # Closing the failed session rolls back inserts before bounded conflict retry.
+            raise
         except Exception as e:
             logger.exception("Failed to create error attribution", extra={"error": str(e)})
             raise RecoveryStorageException(f"Failed to create error attribution: {e}") from e

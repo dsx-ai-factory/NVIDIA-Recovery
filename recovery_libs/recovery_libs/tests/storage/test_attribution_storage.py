@@ -93,6 +93,8 @@ def connection(session):
     ret = MagicMock(spec=MySQLConnection)
     ret.session = MagicMock()
     ret.session.return_value.__enter__.return_value = session
+    ret.write_session = ret.session
+    ret.write_pool_enabled = True
     return ret
 
 
