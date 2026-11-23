@@ -126,6 +126,11 @@ type Config struct {
 	MilestoneReporting             MilestoneReportingConfig
 	LogLinks                       LogLinksConfig
 
+	// HeapProfilerEnabled enables the loopback-only Go heap profile endpoint.
+	HeapProfilerEnabled bool
+	// HeapProfilerPort is the TCP port for the heap profile endpoint.
+	HeapProfilerPort int
+
 	// UserAllowlist temporarily selects actions for named users without hiding other jobs.
 	// Explicit job mode wins. Empty uses Mode; removable without notice.
 	UserAllowlist []string
@@ -139,6 +144,7 @@ type Config struct {
 	accountingTimeoutEnvSet            bool
 	metricsEnabledEnvSet               bool
 	metricsAddrEnvSet                  bool
+	heapProfilerPortEnvSet             bool
 	auditTrailMaxBatchSizeEnvSet       bool
 	auditTrailBufferSizeEnvSet         bool
 	auditTrailFlushIntervalEnvSet      bool
@@ -174,6 +180,8 @@ type environmentConfig struct {
 	Environment                    string             `envconfig:"SLURM_ADVISOR_ENVIRONMENT"`
 	MetricsEnabled                 optionalBool       `envconfig:"SLURM_ADVISOR_METRICS_ENABLED"`
 	MetricsAddr                    optionalString     `envconfig:"SLURM_ADVISOR_METRICS_ADDR"`
+	HeapProfilerEnabled            bool               `envconfig:"SLURM_ADVISOR_HEAP_PROFILER_ENABLED"`
+	HeapProfilerPort               optionalInt        `envconfig:"SLURM_ADVISOR_HEAP_PROFILER_PORT"`
 	AuditTrailDestination          string             `envconfig:"SLURM_ADVISOR_AUDIT_TRAIL_DESTINATION"`
 	AuditTrailMaxBatchSize         optionalInt        `envconfig:"SLURM_ADVISOR_AUDIT_TRAIL_MAX_BATCH_SIZE"`
 	AuditTrailBufferSize           optionalInt        `envconfig:"SLURM_ADVISOR_AUDIT_TRAIL_BUFFER_SIZE"`
@@ -256,6 +264,8 @@ func FromEnv() (Config, error) {
 		Environment:                    settings.Environment,
 		MetricsEnabled:                 settings.MetricsEnabled.value,
 		MetricsAddr:                    settings.MetricsAddr.value,
+		HeapProfilerEnabled:            settings.HeapProfilerEnabled,
+		HeapProfilerPort:               settings.HeapProfilerPort.value,
 		UserAllowlist:                  []string(settings.UserAllowlist),
 		PartitionAllowlist:             []string(settings.PartitionAllowlist),
 		VersionedSqueueJSON:            settings.VersionedSqueueJSON,
@@ -311,6 +321,7 @@ func FromEnv() (Config, error) {
 		accountingTimeoutEnvSet:            settings.AccountingTimeout.set,
 		metricsEnabledEnvSet:               settings.MetricsEnabled.set,
 		metricsAddrEnvSet:                  settings.MetricsAddr.set,
+		heapProfilerPortEnvSet:             settings.HeapProfilerPort.set,
 		auditTrailMaxBatchSizeEnvSet:       settings.AuditTrailMaxBatchSize.set,
 		auditTrailBufferSizeEnvSet:         settings.AuditTrailBufferSize.set,
 		auditTrailFlushIntervalEnvSet:      settings.AuditTrailFlushInterval.set,
@@ -616,6 +627,9 @@ func WithDefaults(cfg Config) Config {
 	if cfg.MetricsAddr == "" && !cfg.metricsAddrEnvSet {
 		cfg.MetricsAddr = ":9090"
 	}
+	if cfg.HeapProfilerPort == 0 && !cfg.heapProfilerPortEnvSet {
+		cfg.HeapProfilerPort = 6060
+	}
 	if cfg.LogLinks.ScanInterval == 0 && !cfg.LogLinks.scanIntervalEnvSet {
 		cfg.LogLinks.ScanInterval = time.Minute
 	}
@@ -709,6 +723,9 @@ func (cfg Config) Validate() error {
 	}
 	if !validLogLevel(cfg.LogLevel) {
 		return errors.Newf("unsupported log level %q", cfg.LogLevel)
+	}
+	if cfg.HeapProfilerEnabled && (cfg.HeapProfilerPort < 1 || cfg.HeapProfilerPort > 65535) {
+		return errors.New("heap profiler port must be between 1 and 65535")
 	}
 	if cfg.MetricsEnabled && strings.TrimSpace(cfg.MetricsAddr) == "" {
 		return errors.New("metrics address is required when metrics are enabled")

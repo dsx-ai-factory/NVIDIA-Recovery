@@ -168,6 +168,11 @@ slurm:
     name: slurm-auth-key
     key: slurm.key
 
+# Go heap profiles are served on pod loopback when enabled.
+heapProfiler:
+  enabled: false
+  port: 6060
+
 metrics:
   controller:
     enabled: true
