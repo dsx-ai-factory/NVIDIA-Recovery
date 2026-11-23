@@ -463,13 +463,35 @@ func strSliceToPtr(values []string) []*string {
 	return result
 }
 
+// attributionRequestError retains the downstream cause while exposing only the
+// fixed public status through error formatting and the gRPC transport.
+type attributionRequestError struct {
+	cause        error
+	publicStatus *status.Status
+}
+
+// Error returns the fixed public status without downstream response details.
+func (e *attributionRequestError) Error() string {
+	return e.publicStatus.Err().Error()
+}
+
+// Unwrap preserves the downstream cause for standard causal inspection.
+func (e *attributionRequestError) Unwrap() error {
+	return e.cause
+}
+
+// GRPCStatus supplies the sanitized transport status.
+func (e *attributionRequestError) GRPCStatus() *status.Status {
+	return e.publicStatus
+}
+
 func mapAttributionRequestError(response *http.Response, err error) error {
 	if response != nil {
 		switch response.StatusCode {
 		case http.StatusBadRequest, http.StatusUnprocessableEntity:
-			return status.Error(codes.InvalidArgument, "job manager rejected attribution filters")
+			return &attributionRequestError{cause: err, publicStatus: status.New(codes.InvalidArgument, "job manager rejected attribution filters")}
 		case http.StatusNotFound:
-			return status.Error(codes.NotFound, "attribution results not found")
+			return &attributionRequestError{cause: err, publicStatus: status.New(codes.NotFound, "attribution results not found")}
 		}
 	}
 	return err

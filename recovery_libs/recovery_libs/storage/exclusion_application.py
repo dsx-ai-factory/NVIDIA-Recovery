@@ -3,7 +3,10 @@
 
 """Project observed recovery convergence onto existing attribution rows."""
 
+from typing import Any, cast
+
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from recovery_libs.schema.anomaly_isolator.exclusion_application import ExclusionApplicationStatus
@@ -54,4 +57,4 @@ def confirm_exclusions(session: Session, advice: AdviceRecord, status: AdviceRec
         )
         .values(exclusion_applied=ExclusionApplicationStatus.APPLIED)
     )
-    return result.rowcount
+    return cast(CursorResult[Any], result).rowcount

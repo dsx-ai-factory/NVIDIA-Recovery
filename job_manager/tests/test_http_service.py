@@ -1908,6 +1908,38 @@ class TestHttpService(unittest.TestCase):
             job_id=job_id, job_attempt_index=None, anomaly_uuid=None
         )
 
+    def test_get_error_attributions_accepts_anomaly_only_filter(self):
+        """An anomaly ID scopes both node and global reads without requiring another selector."""
+        anomaly_id = uuid.UUID("998d15d9-c907-4c53-bc69-b62b42777558")
+        with patch("job_manager.main.job_manager") as job_manager_mock:
+            job_manager_mock.attribution_storage.read_attributions.return_value = ([], 0)
+            job_manager_mock.attribution_storage.read_global_attributions.return_value = ([], 0)
+
+            response = self._client.get(
+                "/error_attributions", params={"anomaly_uuid": str(anomaly_id), "limit": 200, "offset": 0}
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["item_count"], 0)
+            node_query = job_manager_mock.attribution_storage.read_attributions.call_args.kwargs
+            global_query = job_manager_mock.attribution_storage.read_global_attributions.call_args.kwargs
+            self.assertEqual(node_query["anomaly_uuid"], anomaly_id)
+            self.assertEqual(global_query["anomaly_uuid"], anomaly_id)
+            self.assertIsNone(node_query["job_ids"])
+            self.assertIsNone(node_query["node_names"])
+            self.assertEqual(node_query["limit"], 200)
+            self.assertEqual(node_query["offset"], 0)
+
+    def test_get_error_attributions_rejects_missing_or_invalid_anomaly_only_filter(self):
+        """Empty selectors cannot enable a table scan, and malformed anomaly IDs cannot reach storage."""
+        for params in ({}, {"anomaly_uuid": ""}, {"anomaly_uuid": "not-a-uuid"}):
+            with self.subTest(params=params), patch("job_manager.main.job_manager") as job_manager_mock:
+                response = self._client.get("/error_attributions", params=params)
+
+                self.assertEqual(response.status_code, 400)
+                job_manager_mock.attribution_storage.read_attributions.assert_not_called()
+                job_manager_mock.attribution_storage.read_global_attributions.assert_not_called()
+
     def test_get_job_error_attributions_running_job(self):
         """Test that running jobs return Unknown for summary and insight."""
         # Setup test data

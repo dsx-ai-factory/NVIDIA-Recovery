@@ -395,8 +395,8 @@ func (s *heimdallServer) GetErrorAttributions(ctx context.Context, req *pb.GetEr
 	if err := validateJobIds(req.JobIds); err != nil {
 		return nil, err
 	}
-	if len(req.JobIds) == 0 && len(req.NodeNames) == 0 && req.GetStartTimestamp() == "" && req.GetEndTimestamp() == "" {
-		return nil, status.Error(codes.InvalidArgument, "at least one job, node, or timestamp filter is required")
+	if len(req.JobIds) == 0 && len(req.NodeNames) == 0 && req.GetStartTimestamp() == "" && req.GetEndTimestamp() == "" && req.GetAnomalyUuid() == "" {
+		return nil, status.Error(codes.InvalidArgument, "at least one job, node, anomaly, or timestamp filter is required")
 	}
 	if req.Limit == nil || req.GetLimit() <= 0 {
 		limit := defaultPageSize

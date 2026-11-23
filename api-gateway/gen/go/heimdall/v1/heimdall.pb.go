@@ -4078,6 +4078,7 @@ type JobDagDependency struct {
 	// Exactly one scheduler-neutral parent reference must be supplied.
 	//
 	// Types that are assignable to Target:
+	//
 	//	*JobDagDependency_JobId
 	//	*JobDagDependency_JobName
 	Target isJobDagDependency_Target `protobuf_oneof:"target"`

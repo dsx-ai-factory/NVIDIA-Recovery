@@ -24,6 +24,7 @@ func TestAttributionHTTPCompatibility(t *testing.T) {
 		expectedQuery           map[string][]string
 	}{
 		{"batch", "/v1/error-attributions?jobIds=42&jobIds=43&limit=200&offset=200", "/error_attributions", map[string][]string{"job_ids": {"42", "43"}, "limit": {"200"}, "offset": {"200"}}},
+		{"anomaly", "/v1/error-attributions?anomalyUuid=998d15d9-c907-4c53-bc69-b62b42777558", "/error_attributions", map[string][]string{"anomaly_uuid": {"998d15d9-c907-4c53-bc69-b62b42777558"}, "limit": {"100"}}},
 		{"latest", "/v1/job-error-attributions?jobId=42&jobAttemptIndex=-1", "/job_error_attributions", map[string][]string{"job_id": {"42"}, "job_attempt_index": {"-1"}}},
 		{"detail", "/v1/job-error-attributions?jobId=42&jobAttemptIndex=0&anomalyUuid=998d15d9-c907-4c53-bc69-b62b42777558", "/job_error_attributions", map[string][]string{"job_id": {"42"}, "job_attempt_index": {"0"}, "anomaly_uuid": {"998d15d9-c907-4c53-bc69-b62b42777558"}}},
 	} {

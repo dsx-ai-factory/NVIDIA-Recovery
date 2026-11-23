@@ -108,6 +108,8 @@ Node events preserve scheduler `jobId`, `jobAttemptIndex`, `node`, `timestamp`,
 
 Use repeatable `jobIds` for indexed batch queries, for example
 `/v1/error-attributions?jobIds=123&jobIds=456&limit=200&offset=0`.
+A nonempty `anomalyUuid` also scopes a batch query without another selector;
+requests with no job, node, anomaly, or timestamp selector are rejected.
 The batch endpoint uses limit/offset pagination; the single-job endpoint uses
 `jobId` with optional `jobAttemptIndex` and `anomalyUuid` filters. An exact
 matching event remains useful even when the base job index has expired.

@@ -1576,7 +1576,7 @@ def get_error_attributions(
             A structured collection containing both node-level and global/job-level error events matching
             the specified filters. The item_count field reflects the total count of both types of events.
     """
-    if not node_names and not job_ids and not start_timestamp and not end_timestamp:
+    if not node_names and not job_ids and not start_timestamp and not end_timestamp and not anomaly_uuid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one filtering criteria must be provided.",
