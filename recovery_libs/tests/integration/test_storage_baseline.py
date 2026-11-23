@@ -27,7 +27,6 @@ from sqlalchemy.exc import SQLAlchemyError
 BASELINE_REVISION = "000000000001"
 DAG_OBSERVABILITY_REVISION = "000000000002"
 ADVICE_LIFECYCLE_REVISION = "000000000004"
-HEAD_REVISION = "000000000006"
 ALEMBIC_DIRECTORY = Path(storage_dataclass.__file__).parent / "alembic"
 APPLICATION_TABLES = {
     "advice",
@@ -119,7 +118,6 @@ def test_storage_baseline_matches_metadata_and_round_trips(migration_connection:
     _upgrade(connection)
 
     assert set(inspect(connection).get_table_names()) == APPLICATION_TABLES | {"alembic_version"}
-    assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD_REVISION
     command.check(config)
     command.current(config, check_heads=True)
 
