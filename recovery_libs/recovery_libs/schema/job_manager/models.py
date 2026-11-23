@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, PositiveInt, model_validator
 
+from recovery_libs.schema.anomaly_isolator.exclusion_application import ExclusionApplicationStatus
 from recovery_libs.schema.aps_spec.spec import ApsSlurmJobSpec
 from recovery_libs.schema.event_type import EventType
 from recovery_libs.schema.workflow_identity import CanonicalWorkflowID
@@ -401,6 +402,8 @@ class NodeEvent(BaseModel):
     exclusion_type: str
     # The original type of exclusion before sanitization
     original_exclusion_type: str | None = None
+    # Whether the effective exclusion has been confirmed satisfied.
+    exclusion_applied: ExclusionApplicationStatus = ExclusionApplicationStatus.UNKNOWN
     # The status of the FACT service
     fact_status: str
 

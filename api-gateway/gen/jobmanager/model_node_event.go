@@ -21,21 +21,22 @@ var _ MappedNullable = &NodeEvent{}
 
 // NodeEvent Represents an event that occurred on a node during job execution.  This model captures details about node events including error attribution, timestamps, and relationships to jobs and errors.  Attributes:     job_id: ID of the job associated with this event     job_attempt_index: Index of the job attempt     node: Name of the node where the event occurred     timestamp: When the event occurred     attribution: Classification of the error (hardware/software/system/unknown)     attribution_type: Type of telemetry data used for attribution     attribution_origin: Origin of the attribution     attribution_sources: Sources of the attribution     actions: Actions taken by ADI     fact_status: Status of the FACT service     error: The associated error details
 type NodeEvent struct {
-	Node                    string            `json:"node"`
-	Timestamp               time.Time         `json:"timestamp"`
-	JobId                   string            `json:"job_id"`
-	JobAttemptIndex         int32             `json:"job_attempt_index"`
-	JobStartTime            NullableTime      `json:"job_start_time,omitempty"`
-	JobEndTime              NullableTime      `json:"job_end_time,omitempty"`
-	JobExecutionError       JobExecutionError `json:"job_execution_error"`
-	Cluster                 NullableString    `json:"cluster,omitempty"`
-	ErrorAttribution        string            `json:"error_attribution"`
-	ErrorAttributionType    string            `json:"error_attribution_type"`
-	ErrorAttributionOrigin  string            `json:"error_attribution_origin"`
-	ErrorAttributionSources []string          `json:"error_attribution_sources"`
-	ExclusionType           string            `json:"exclusion_type"`
-	OriginalExclusionType   NullableString    `json:"original_exclusion_type,omitempty"`
-	FactStatus              string            `json:"fact_status"`
+	Node                    string                      `json:"node"`
+	Timestamp               time.Time                   `json:"timestamp"`
+	JobId                   string                      `json:"job_id"`
+	JobAttemptIndex         int32                       `json:"job_attempt_index"`
+	JobStartTime            NullableTime                `json:"job_start_time,omitempty"`
+	JobEndTime              NullableTime                `json:"job_end_time,omitempty"`
+	JobExecutionError       JobExecutionError           `json:"job_execution_error"`
+	Cluster                 NullableString              `json:"cluster,omitempty"`
+	ErrorAttribution        string                      `json:"error_attribution"`
+	ErrorAttributionType    string                      `json:"error_attribution_type"`
+	ErrorAttributionOrigin  string                      `json:"error_attribution_origin"`
+	ErrorAttributionSources []string                    `json:"error_attribution_sources"`
+	ExclusionType           string                      `json:"exclusion_type"`
+	OriginalExclusionType   NullableString              `json:"original_exclusion_type,omitempty"`
+	ExclusionApplied        *ExclusionApplicationStatus `json:"exclusion_applied,omitempty"`
+	FactStatus              string                      `json:"fact_status"`
 	AdditionalProperties    map[string]interface{}
 }
 
@@ -481,6 +482,38 @@ func (o *NodeEvent) UnsetOriginalExclusionType() {
 	o.OriginalExclusionType.Unset()
 }
 
+// GetExclusionApplied returns the ExclusionApplied field value if set, zero value otherwise.
+func (o *NodeEvent) GetExclusionApplied() ExclusionApplicationStatus {
+	if o == nil || IsNil(o.ExclusionApplied) {
+		var ret ExclusionApplicationStatus
+		return ret
+	}
+	return *o.ExclusionApplied
+}
+
+// GetExclusionAppliedOk returns a tuple with the ExclusionApplied field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *NodeEvent) GetExclusionAppliedOk() (*ExclusionApplicationStatus, bool) {
+	if o == nil || IsNil(o.ExclusionApplied) {
+		return nil, false
+	}
+	return o.ExclusionApplied, true
+}
+
+// HasExclusionApplied returns a boolean if a field has been set.
+func (o *NodeEvent) HasExclusionApplied() bool {
+	if o != nil && !IsNil(o.ExclusionApplied) {
+		return true
+	}
+
+	return false
+}
+
+// SetExclusionApplied gets a reference to the given ExclusionApplicationStatus and assigns it to the ExclusionApplied field.
+func (o *NodeEvent) SetExclusionApplied(v ExclusionApplicationStatus) {
+	o.ExclusionApplied = &v
+}
+
 // GetFactStatus returns the FactStatus field value
 func (o *NodeEvent) GetFactStatus() string {
 	if o == nil {
@@ -536,6 +569,9 @@ func (o NodeEvent) ToMap() (map[string]interface{}, error) {
 	toSerialize["exclusion_type"] = o.ExclusionType
 	if o.OriginalExclusionType.IsSet() {
 		toSerialize["original_exclusion_type"] = o.OriginalExclusionType.Get()
+	}
+	if !IsNil(o.ExclusionApplied) {
+		toSerialize["exclusion_applied"] = o.ExclusionApplied
 	}
 	toSerialize["fact_status"] = o.FactStatus
 
@@ -605,6 +641,7 @@ func (o *NodeEvent) UnmarshalJSON(data []byte) (err error) {
 		delete(additionalProperties, "error_attribution_sources")
 		delete(additionalProperties, "exclusion_type")
 		delete(additionalProperties, "original_exclusion_type")
+		delete(additionalProperties, "exclusion_applied")
 		delete(additionalProperties, "fact_status")
 		o.AdditionalProperties = additionalProperties
 	}

@@ -4,6 +4,10 @@ Status: accepted
 
 Date: 2026-10-08
 
+Related: [ADR 0059](0059-restore-attribution-results-and-exclusion-outcomes.md)
+specifies dedicated Gateway attribution reads and persisted exclusion outcomes;
+embedded anomaly enrichment remains retired.
+
 ## Context
 
 Job Manager populated attribution records inside each public `JobAnomaly` by

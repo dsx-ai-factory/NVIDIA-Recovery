@@ -2253,6 +2253,16 @@ components:
       - completed
       title: DagTriggerConditionEnum
       type: string
+    ExclusionApplicationStatus:
+      description: Whether an attribution's exclusion is applicable and confirmed
+        satisfied.
+      enum:
+      - unknown
+      - not_applicable
+      - not_applied
+      - applied
+      title: ExclusionApplicationStatus
+      type: string
     GetRecoverySequenceResponse:
       description: Canonical context of an existing backend-owned recovery sequence.
       example:
@@ -3289,6 +3299,7 @@ components:
         exclusion_type: exclusion_type
         error_attribution_type: error_attribution_type
         timestamp: 2000-01-23T04:56:07.000+00:00
+        exclusion_applied: unknown
       properties:
         node:
           title: Node
@@ -3335,6 +3346,8 @@ components:
         original_exclusion_type:
           nullable: true
           type: string
+        exclusion_applied:
+          $ref: "#/components/schemas/ExclusionApplicationStatus"
         fact_status:
           title: Fact Status
           type: string
@@ -3418,6 +3431,7 @@ components:
           exclusion_type: exclusion_type
           error_attribution_type: error_attribution_type
           timestamp: 2000-01-23T04:56:07.000+00:00
+          exclusion_applied: unknown
         - cluster: cluster
           error_attribution_origin: error_attribution_origin
           job_end_time: 2000-01-23T04:56:07.000+00:00
@@ -3439,6 +3453,7 @@ components:
           exclusion_type: exclusion_type
           error_attribution_type: error_attribution_type
           timestamp: 2000-01-23T04:56:07.000+00:00
+          exclusion_applied: unknown
       properties:
         item_count:
           title: Item Count

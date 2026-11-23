@@ -19,6 +19,7 @@ import (
 )
 
 type JobsSyntheticSource struct {
+	NotImplementedJobSource
 }
 
 func NewJobsSyntheticSource() JobSource {

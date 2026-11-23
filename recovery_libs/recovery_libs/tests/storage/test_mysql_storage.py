@@ -2066,10 +2066,10 @@ def test_upsert_advice_increments_generation_only_for_action_affecting_changes(m
         heimdall_id=advice_id,
         visible=True,
         job_id=existing.job_id,
-        scheduler_metadata=incoming.scheduler_metadata,
+        scheduler_metadata={**incoming.scheduler_metadata, "environment": "new-environment"},
         attempt_index=0,
         advice_state=None,
-        node_inclusions=["node-b"],
+        node_inclusions=["node-a"],
         issues=incoming.issues,
         created_at=now,
         updated_at=now,
@@ -2452,3 +2452,48 @@ def test_read_dag_dependencies_requires_identifier_type(mysql_storage):
 
     with pytest.raises(RecoveryStorageInputValidationError):
         mysql_storage.read_dag_dependencies(dependency_job_identifier="parent_job")
+
+
+@pytest.mark.parametrize(
+    ("existing_nodes", "incoming_nodes", "incoming_state", "expected_nodes", "expected_generation"),
+    [
+        (None, ["node-a"], AdviceState.RESTARTED.value, ["node-a"], 4),
+        (["node-a"], ["node-a", "node-a"], AdviceState.RESTARTED.value, ["node-a", "node-a"], 3),
+        (["node-a"], ["node-b"], AdviceState.RESTARTED.value, ["node-a"], 3),
+        (["node-a"], None, AdviceState.TERMINATED.value, None, 4),
+    ],
+)
+def test_populated_constraints_are_stable_without_blocking_termination(
+    mysql_storage, session, caplog, existing_nodes, incoming_nodes, incoming_state, expected_nodes, expected_generation
+):
+    """Ignore unexpected replacements while allowing first publication, retries and cancellation."""
+    now = datetime.now(UTC)
+    advice_id = uuid.uuid4()
+    existing = AdviceRecord(
+        heimdall_id=advice_id,
+        visible=True,
+        job_id="constraint-job",
+        attempt_index=0,
+        advice_state=AdviceState.RESTARTED.value,
+        node_exclusions=existing_nodes,
+        generation=3,
+        created_at=now,
+        updated_at=now,
+    )
+    incoming = AdviceRecord(
+        heimdall_id=advice_id,
+        visible=True,
+        job_id=existing.job_id,
+        attempt_index=0,
+        advice_state=incoming_state,
+        node_exclusions=incoming_nodes,
+        created_at=now,
+        updated_at=now,
+    )
+    session.scalars.return_value.first.return_value = existing
+    updated = mysql_storage.upsert_advice(incoming).inserted_record
+    assert updated.node_exclusions == expected_nodes
+    assert updated.generation == expected_generation
+    assert updated.advice_state == incoming_state
+    if existing_nodes == ["node-a"] and incoming_nodes == ["node-b"]:
+        assert any(record.levelname == "WARNING" and record.job_id == existing.job_id for record in caplog.records)

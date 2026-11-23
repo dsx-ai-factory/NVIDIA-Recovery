@@ -345,3 +345,21 @@ def test_fact_status_enum():
     assert FactStatus.NONE.value == 1, "Cannot change the value of NONE if already used in a database table"
     assert FactStatus.OK.value == 2, "Cannot change the value of OK if already used in a database table"
     assert FactStatus.ERROR.value == 3, "Cannot change the value of ERROR if already used in a database table"
+
+
+def test_application_outcome_roundtrip_and_legacy_message_default():
+    """Application confirmation survives the bus format without inventing legacy outcomes."""
+    from recovery_libs.schema.anomaly_isolator.exclusion_application import ExclusionApplicationStatus
+
+    event = NodeEvent.create(
+        node="test-node",
+        job_id="123",
+        job_attempt_index=0,
+        timestamp=datetime.now(),
+        exclusion_applied=ExclusionApplicationStatus.APPLIED,
+    )
+    payload = event.to_json()
+    assert payload["exclusion_applied"] == "applied"
+    assert NodeEvent.from_json(payload).exclusion_applied == ExclusionApplicationStatus.APPLIED
+    del payload["exclusion_applied"]
+    assert NodeEvent.from_json(payload).exclusion_applied == ExclusionApplicationStatus.UNKNOWN

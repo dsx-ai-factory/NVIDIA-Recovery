@@ -389,3 +389,35 @@ func validRecoverySchedulerActionOutcome(outcome pb.RecoverySchedulerActionOutco
 		return false
 	}
 }
+
+// GetErrorAttributions returns a bounded page of filtered attribution results.
+func (s *heimdallServer) GetErrorAttributions(ctx context.Context, req *pb.GetErrorAttributionsRequest) (*pb.GetErrorAttributionsResponse, error) {
+	if err := validateJobIds(req.JobIds); err != nil {
+		return nil, err
+	}
+	if len(req.JobIds) == 0 && len(req.NodeNames) == 0 && req.GetStartTimestamp() == "" && req.GetEndTimestamp() == "" {
+		return nil, status.Error(codes.InvalidArgument, "at least one job, node, or timestamp filter is required")
+	}
+	if req.Limit == nil || req.GetLimit() <= 0 {
+		limit := defaultPageSize
+		req.Limit = &limit
+	}
+	if err := validateLimit(req.GetLimit()); err != nil {
+		return nil, err
+	}
+	if req.GetOffset() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "offset must be non-negative")
+	}
+	return s.jobSource.GetErrorAttributions(ctx, req)
+}
+
+// GetJobErrorAttributions returns attribution details for one scheduler job.
+func (s *heimdallServer) GetJobErrorAttributions(ctx context.Context, req *pb.GetJobErrorAttributionsRequest) (*pb.GetJobErrorAttributionsResponse, error) {
+	if err := validateJobId(req.JobId); err != nil {
+		return nil, err
+	}
+	if req.JobAttemptIndex != nil && req.GetJobAttemptIndex() < -1 {
+		return nil, status.Error(codes.InvalidArgument, "job_attempt_index must be -1 or non-negative")
+	}
+	return s.jobSource.GetJobErrorAttributions(ctx, req)
+}

@@ -28,6 +28,10 @@ type ListAdviceResponse = jobmanagerBindings.ListAdviceResponse
 type GetRecoverySequenceResponse = jobmanagerBindings.GetRecoverySequenceResponse
 type RecordRecoveryMilestoneRequest = jobmanagerBindings.RecordRecoveryMilestoneRequest
 type RecordRecoveryMilestoneResponse = jobmanagerBindings.RecordRecoveryMilestoneResponse
+
+// NodeEvents is the downstream persisted attribution result collection.
+type NodeEvents = jobmanagerBindings.NodeEvents
+
 type ApplicationIntention = jobmanagerBindings.ApplicationIntention
 type ApplicationIntentionInput = jobmanagerBindings.ApplicationIntentionInput
 
@@ -362,6 +366,110 @@ func mapRecoveryRequestError(response *http.Response, err error) error {
 			return status.Error(codes.InvalidArgument, "job manager rejected recovery input")
 		case http.StatusNotFound:
 			return status.Error(codes.NotFound, "recovery sequence not found")
+		}
+	}
+	return err
+}
+
+// ErrorAttributionsParams captures the filters for GetErrorAttributions.
+type ErrorAttributionsParams struct {
+	// NodeNames selects node-scoped results.
+	NodeNames []string
+	// JobIds selects scheduler jobs.
+	JobIds []string
+	// StartTimestamp is the inclusive lower event-time bound.
+	StartTimestamp *time.Time
+	// EndTimestamp is the inclusive upper event-time bound.
+	EndTimestamp *time.Time
+	// AnomalyUuid selects one anomaly.
+	AnomalyUuid *string
+	// Limit bounds the downstream page size.
+	Limit *int32
+	// Offset selects a zero-based page offset.
+	Offset *int32
+}
+
+// GetErrorAttributions retrieves error attributions from the job manager.
+func (c *JobManagerClient) GetErrorAttributions(ctx context.Context, p ErrorAttributionsParams) (*NodeEvents, error) {
+	ctx, span := tracer.Start(ctx, "jobmanager.GetErrorAttributions")
+	defer span.End()
+
+	request := c.jobManager.DefaultAPI.GetErrorAttributions(ctx)
+	if len(p.NodeNames) > 0 {
+		request = request.NodeNames(strSliceToPtr(p.NodeNames))
+	}
+	if len(p.JobIds) > 0 {
+		request = request.JobIds(strSliceToPtr(p.JobIds))
+	}
+	if p.StartTimestamp != nil {
+		request = request.StartTimestamp(*p.StartTimestamp)
+	}
+	if p.EndTimestamp != nil {
+		request = request.EndTimestamp(*p.EndTimestamp)
+	}
+	if p.AnomalyUuid != nil {
+		request = request.AnomalyUuid(*p.AnomalyUuid)
+	}
+	if p.Limit != nil {
+		request = request.Limit(*p.Limit)
+	}
+	if p.Offset != nil {
+		request = request.Offset(*p.Offset)
+	}
+
+	response, httpResponse, err := c.jobManager.DefaultAPI.GetErrorAttributionsExecute(request)
+	if err != nil {
+		return nil, mapAttributionRequestError(httpResponse, err)
+	}
+	return response, nil
+}
+
+// JobErrorAttributionsParams captures the filters for GetJobErrorAttributions.
+type JobErrorAttributionsParams struct {
+	// JobId is the scheduler job identifier.
+	JobId string
+	// JobAttemptIndex selects an attempt; -1 means latest.
+	JobAttemptIndex *int32
+	// AnomalyUuid selects one anomaly.
+	AnomalyUuid *string
+}
+
+// GetJobErrorAttributions retrieves error attributions for a single job.
+func (c *JobManagerClient) GetJobErrorAttributions(ctx context.Context, p JobErrorAttributionsParams) (*NodeEvents, error) {
+	ctx, span := tracer.Start(ctx, "jobmanager.GetJobErrorAttributions")
+	defer span.End()
+
+	request := c.jobManager.DefaultAPI.GetJobErrorAttributions(ctx).JobId(p.JobId)
+	if p.JobAttemptIndex != nil {
+		request = request.JobAttemptIndex(*p.JobAttemptIndex)
+	}
+	if p.AnomalyUuid != nil {
+		request = request.AnomalyUuid(*p.AnomalyUuid)
+	}
+
+	response, httpResponse, err := c.jobManager.DefaultAPI.GetJobErrorAttributionsExecute(request)
+	if err != nil {
+		return nil, mapAttributionRequestError(httpResponse, err)
+	}
+	return response, nil
+}
+
+// strSliceToPtr adapts repeated query values to the generated nullable element type.
+func strSliceToPtr(values []string) []*string {
+	result := make([]*string, len(values))
+	for i := range values {
+		result[i] = &values[i]
+	}
+	return result
+}
+
+func mapAttributionRequestError(response *http.Response, err error) error {
+	if response != nil {
+		switch response.StatusCode {
+		case http.StatusBadRequest, http.StatusUnprocessableEntity:
+			return status.Error(codes.InvalidArgument, "job manager rejected attribution filters")
+		case http.StatusNotFound:
+			return status.Error(codes.NotFound, "attribution results not found")
 		}
 	}
 	return err

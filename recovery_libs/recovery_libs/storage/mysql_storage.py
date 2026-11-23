@@ -46,6 +46,7 @@ from recovery_libs.storage.dataclass import (
     SlurmJobExecutionRecord,
     WorkflowRecord,
 )
+from recovery_libs.storage.exclusion_application import confirm_exclusions
 from recovery_libs.storage.mysql_connection import MySQLConnection
 from recovery_libs.storage.timestamps import normalize_mysql_timestamp
 
@@ -1775,6 +1776,22 @@ class MySQLStorage(BaseStorage):
                 if existing is not None:
                     old_record = deepcopy(existing)
                     make_transient(old_record)
+                    # Attribution should populate constraints once. Ignore unexpected replacements
+                    # without blocking legitimate state transitions such as cancellation.
+                    if (
+                        advice.advice_state != AdviceState.TERMINATED.value
+                        and (existing.node_exclusions or existing.node_inclusions)
+                        and (
+                            set(existing.node_exclusions or []) != set(advice.node_exclusions or [])
+                            or set(existing.node_inclusions or []) != set(advice.node_inclusions or [])
+                        )
+                    ):
+                        logger.warning(
+                            "Ignoring replacement of populated Advice node constraints",
+                            extra={"job_id": existing.job_id, "attempt_index": existing.attempt_index},
+                        )
+                        advice.node_exclusions = existing.node_exclusions
+                        advice.node_inclusions = existing.node_inclusions
                     desired_state_changed = self._advice_desired_state_changed(existing, advice)
                     # Canonicalize heimdall_id to the job record's UUID
                     if existing.heimdall_id != advice.heimdall_id:
@@ -1929,6 +1946,7 @@ class MySQLStorage(BaseStorage):
                     session.add(status_record)
                     persisted = status_record
 
+                confirm_exclusions(session, advice, persisted)
                 session.commit()
                 session.refresh(persisted)
                 session.expunge(persisted)

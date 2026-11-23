@@ -620,6 +620,139 @@ message RecordRecoveryMilestoneResponse {
   optional double end_to_end_duration_seconds = 3;
 }
 
+// Whether a computed node exclusion has been applied on the cluster.
+enum ExclusionApplicationStatus {
+  EXCLUSION_APPLICATION_STATUS_UNSPECIFIED = 0;
+  EXCLUSION_APPLICATION_STATUS_UNKNOWN = 1;
+  EXCLUSION_APPLICATION_STATUS_NOT_APPLICABLE = 2;
+  EXCLUSION_APPLICATION_STATUS_NOT_APPLIED = 3;
+  EXCLUSION_APPLICATION_STATUS_APPLIED = 4;
+}
+
+// JobExecutionError describes the error that terminated a job attempt.
+message JobExecutionError {
+  // Numeric error code.
+  int32 code = 1;
+  // Short error message.
+  string message = 2;
+  // Longer human-readable description.
+  string description = 3;
+  // Stable signature used to group similar errors.
+  string signature = 4;
+}
+
+// NodeEvent is an error attribution tied to a specific node.
+message NodeEvent {
+  // The node the event is attributed to.
+  string node = 1;
+  // When the event occurred.
+  google.protobuf.Timestamp timestamp = 2;
+  // The scheduler job id.
+  string job_id = 3;
+  // The job attempt index.
+  int32 job_attempt_index = 4;
+  // When the job attempt started.
+  optional google.protobuf.Timestamp job_start_time = 5;
+  // When the job attempt ended.
+  optional google.protobuf.Timestamp job_end_time = 6;
+  // The error that terminated the job attempt.
+  JobExecutionError job_execution_error = 7;
+  // The cluster the node belongs to.
+  optional string cluster = 8;
+  // The attributed root cause.
+  string error_attribution = 9;
+  // The category of the attribution.
+  string error_attribution_type = 10;
+  // The origin of the attribution.
+  string error_attribution_origin = 11;
+  // The evidence sources backing the attribution.
+  repeated string error_attribution_sources = 12;
+  // The exclusion type computed for the node.
+  string exclusion_type = 13;
+  // The exclusion type before any override.
+  optional string original_exclusion_type = 14;
+  // Whether the exclusion has been applied.
+  optional ExclusionApplicationStatus exclusion_applied = 15;
+  // The fact-check status of the attribution.
+  string fact_status = 16;
+}
+
+// GlobalEvent is an error attribution not tied to a specific node.
+message GlobalEvent {
+  // The scheduler job id.
+  string job_id = 1;
+  // The job attempt index.
+  int32 job_attempt_index = 2;
+  // When the event occurred.
+  google.protobuf.Timestamp timestamp = 3;
+  // The error that terminated the job attempt.
+  JobExecutionError job_execution_error = 4;
+  // The attributed root cause.
+  string error_attribution = 5;
+  // The category of the attribution.
+  string error_attribution_type = 6;
+  // The origin of the attribution.
+  string error_attribution_origin = 7;
+  // The evidence sources backing the attribution.
+  repeated string error_attribution_sources = 8;
+  // The fact-check status of the attribution.
+  string fact_status = 9;
+}
+
+// NodeEvents is the shared attribution payload for error attribution queries.
+message NodeEvents {
+  // The total count of node events returned.
+  int32 count = 1;
+  // A summary of the attribution results.
+  string attribution_summary = 2;
+  // Additional attribution insight.
+  string attribution_insight = 3;
+  // The node-scoped attribution events.
+  repeated NodeEvent events = 4;
+  // The global (non-node-scoped) attribution events.
+  repeated GlobalEvent global_events = 5;
+}
+
+// GetErrorAttributionsResponse is the response for GetErrorAttributions.
+message GetErrorAttributionsResponse {
+  // The attribution results.
+  NodeEvents attributions = 1;
+}
+
+// GetJobErrorAttributionsResponse is the response for GetJobErrorAttributions.
+message GetJobErrorAttributionsResponse {
+  // The attribution results.
+  NodeEvents attributions = 1;
+}
+
+// GetErrorAttributionsRequest queries error attributions by node/job/time.
+message GetErrorAttributionsRequest {
+  // Filter by node names.
+  repeated string node_names = 1;
+  // Filter by scheduler job ids.
+  repeated string job_ids = 2;
+  // Only include events at or after this ISO-8601 timestamp.
+  optional string start_timestamp = 3;
+  // Only include events at or before this ISO-8601 timestamp.
+  optional string end_timestamp = 4;
+  // Filter by anomaly uuid.
+  optional string anomaly_uuid = 5;
+  // The maximum number of events to return.
+  optional int32 limit = 6;
+  // The number of events to skip (offset pagination).
+  optional int32 offset = 7;
+}
+
+// GetJobErrorAttributionsRequest queries error attributions for one job.
+message GetJobErrorAttributionsRequest {
+  // The scheduler job id to query (required).
+  string job_id = 1;
+  // The job attempt index to filter by.
+  optional int32 job_attempt_index = 2;
+  // Filter by anomaly uuid.
+  optional string anomaly_uuid = 3;
+}
+
 // JobDagDependency identifies one parent gate for a DAG child.
 message JobDagDependency {
   // TriggerCondition defines the parent state that satisfies this dependency.
@@ -742,6 +875,24 @@ service HeimdallService {
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       summary: "Returns the workflow with the given ID."
       description: "Returns the workflow with the given ID."
+    };
+  }
+
+  // Returns error attributions matching the given filters.
+  rpc GetErrorAttributions(GetErrorAttributionsRequest) returns (GetErrorAttributionsResponse) {
+    option (google.api.http) = {get: "/v1/error-attributions"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List error attributions"
+      description: "Retrieve error attributions filtered by node names, job ids, time range, or anomaly uuid."
+    };
+  }
+
+  // Returns error attributions for a single job.
+  rpc GetJobErrorAttributions(GetJobErrorAttributionsRequest) returns (GetJobErrorAttributionsResponse) {
+    option (google.api.http) = {get: "/v1/job-error-attributions"};
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List error attributions for a job"
+      description: "Retrieve error attributions for a specific scheduler job id, optionally scoped to an attempt or anomaly."
     };
   }
 
