@@ -217,6 +217,46 @@ jobs:
       - name: Run Go lint
         run: make lint-go
 
+  workload-map:
+    name: Workload-Map Cluster-Free Qualification
+    runs-on:
+      group: nv-cpu-general
+      labels: [linux-amd64-cpu8]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go with cache
+        uses: ./.github/actions/setup-go-cache
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            tests/workload_map/go.mod
+            tests/workload_map/go.sum
+
+      - name: Set up uv with cache
+        uses: ./.github/actions/setup-uv-cache
+        with:
+          cache-role: workload-map
+
+      - name: Install pinned Go tools
+        run: make install-go-tools
+
+      - name: Install ShellCheck
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends shellcheck
+          fi
+
+      - name: Verify Workload-Map without a cluster
+        run: make verify-workload-map
+
+      - name: Prune uv cache
+        if: always()
+        run: uv cache prune --ci
+
   go-buf-lint:
     name: Go Buf Lint
     runs-on:

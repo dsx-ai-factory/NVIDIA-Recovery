@@ -4,6 +4,14 @@ Status: accepted
 
 Date: 2026-11-16
 
+> **Implementation note (2026-11-17):** The [qualification suite](../../tests/workload_map/README.md)
+> records passing admission-time label and exclusion-affinity propagation followed
+> by same-object suspend/drain/resume without template edits across all four
+> workload/scheduler combinations.
+> Generic SDK serialization validation and Pod classification are outside scope;
+> independent selector qualification, Node-label changes, actual excluded-node
+> avoidance, and full recovery remain separate work.
+
 ## Context
 
 Direct Kubernetes recovery depends on Workload-Map interpreting workload
@@ -25,10 +33,12 @@ Start with JobSet and PyTorchJob under default and KAI scheduling. Qualify exact
 library, definition, controller, scheduler, and Kubernetes versions and relevant
 settings; an API version alone is not a tested controller release.
 
-Compare extracted identity, components, replicas, templates, state, and Pod
-associations with independently specified expectations and Kubernetes evidence.
-Exercise correlation-label and placement-constraint instrumentation while
-preserving user metadata and constraints. Persist suspend/resume mutations via
+Compare input identity, extracted components, replicas, templates, state, and Pod
+selector definitions with independently specified expectations and Kubernetes evidence.
+Exercise correlation-label and per-job exclusion-affinity instrumentation before
+workload creation, preserving user metadata and placement constraints. Recovery
+activates the preinstalled exclusion rule by labeling Nodes; it does not rely on
+editing Pod templates after creation. Persist suspend/resume mutations via
 the Kubernetes API, then verify complete Pod drain, replacement execution, and
 unchanged parent name and UID. Record native restart behavior, terminal-state
 boundaries, and gaps in attempt and restart-budget information without inventing
