@@ -595,6 +595,7 @@ func TestFromEnvLoadsLogLinksConfiguration(t *testing.T) {
 	values := map[string]string{
 		"HEIMDALL_ENDPOINT":                                 "127.0.0.1:8080",
 		"SLURM_ADVISOR_LOG_LINKS_ENABLED":                   "true",
+		"SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED":            "true",
 		"SLURM_ADVISOR_LOG_LINKS_DESTINATION":               "/var/log/heimdall/links",
 		"SLURM_ADVISOR_LOG_LINKS_SOURCE_ROOTS_JSON":         `["/work/a","/work/b,with-comma"]`,
 		"SLURM_ADVISOR_LOG_LINKS_APPLICATION_PATTERNS_JSON": `["^app-{job_id}\\\\.log$","^worker-[0-9]+\\\\.log$"]`,
@@ -619,6 +620,7 @@ func TestFromEnvLoadsLogLinksConfiguration(t *testing.T) {
 
 	want := LogLinksConfig{
 		Enabled:                      true,
+		RenameEnabled:                true,
 		Destination:                  "/var/log/heimdall/links",
 		SourceRoots:                  []string{"/work/a", "/work/b,with-comma"},
 		ApplicationPatterns:          []string{`^app-{job_id}\\.log$`, `^worker-[0-9]+\\.log$`},
@@ -650,6 +652,56 @@ func TestFromEnvLoadsLogLinksConfiguration(t *testing.T) {
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() failed: %v", err)
+	}
+}
+
+// TestFromEnvLogLinkRenameOptIn proves that filename changes require an explicit
+// opt-in and cannot be configured without the filesystem materializer.
+func TestFromEnvLogLinkRenameOptIn(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		value string
+		// omit leaves the variable unset, which differs from setting it to "".
+		omit    bool
+		enabled bool
+		want    bool
+		wantErr bool
+	}{
+		{name: "absent", omit: true, enabled: true},
+		{name: "explicit false", value: "false", enabled: true},
+		{name: "explicit true", value: "true", enabled: true, want: true},
+		{name: "requires materialization", value: "true", wantErr: true},
+		{name: "invalid boolean", value: "sometimes", enabled: true, wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			env := map[string]string{
+				"HEIMDALL_ENDPOINT":                         "127.0.0.1:8080",
+				"SLURM_ADVISOR_LOG_LINKS_ENABLED":           strconv.FormatBool(test.enabled),
+				"SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED":    test.value,
+				"SLURM_ADVISOR_LOG_LINKS_DESTINATION":       "/var/log/heimdall/links",
+				"SLURM_ADVISOR_LOG_LINKS_SOURCE_ROOTS_JSON": `["/work"]`,
+			}
+			if test.omit {
+				delete(env, "SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED")
+			}
+			setConfigEnv(t, env)
+			cfg, err := FromEnv()
+			if err == nil {
+				err = cfg.Validate()
+			}
+			if test.wantErr {
+				if err == nil {
+					t.Fatal("configuration accepted, want rejection")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("configuration rejected: %v", err)
+			}
+			if cfg.LogLinks.RenameEnabled != test.want {
+				t.Fatalf("RenameEnabled = %v, want %v", cfg.LogLinks.RenameEnabled, test.want)
+			}
+		})
 	}
 }
 
@@ -801,6 +853,7 @@ func TestValidateDisabledLogLinksDoesNotInspectFilesystemSettings(t *testing.T) 
 func TestEnvironmentConfigLogLinksTags(t *testing.T) {
 	want := map[string]string{
 		"LogLinksEnabled":                "SLURM_ADVISOR_LOG_LINKS_ENABLED",
+		"LogLinksRenameEnabled":          "SLURM_ADVISOR_LOG_LINKS_RENAME_ENABLED",
 		"LogLinksDestination":            "SLURM_ADVISOR_LOG_LINKS_DESTINATION",
 		"LogLinksSourceRoots":            "SLURM_ADVISOR_LOG_LINKS_SOURCE_ROOTS_JSON",
 		"LogLinksApplicationPatterns":    "SLURM_ADVISOR_LOG_LINKS_APPLICATION_PATTERNS_JSON",

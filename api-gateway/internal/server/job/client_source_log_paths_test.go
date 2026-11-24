@@ -34,6 +34,9 @@ func TestConvertCreateOrUpdateRequestToJobManagerInputPassesSchedulerMetadataOpa
 		"adapter_extension": map[string]any{
 			"nested": []any{"value", float64(7)},
 		},
+		"app_log_link_targets": map[string]any{
+			"/collector/output-a0_12345_date_26-11-17_time_12-00-00.log": "/jobs/output.txt",
+		},
 	})
 
 	input, err := convertCreateOrUpdateRequestToJobManagerInput(&v1.CreateOrUpdateJobRequest{

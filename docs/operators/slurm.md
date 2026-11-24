@@ -288,6 +288,12 @@ publication through the gateway.
 
 ## Log-path discovery
 
+Optional collector-compatible link naming is configured separately from
+discovery; see the [log-link configuration](../../deploy/helm/slurm-advisor-controller/README.md#optional-log-link-materialization).
+When enabled, SAC publishes planned link paths and their source mapping without
+waiting for filesystem work. Source discovery remains scheduler-owned and
+unchanged; final accounting uses the same publication plan as active polling.
+
 SAC discovers the parent allocation's stdout and numeric custom-step stdout
 paths for each exact job attempt. It excludes synthetic `.batch` and `.extern`
 steps, deduplicates paths, and publishes them as

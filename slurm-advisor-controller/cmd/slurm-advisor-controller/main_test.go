@@ -5,9 +5,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -203,6 +205,51 @@ func TestNewLogLinkMaterializerBuildsEnabledMaterializer(t *testing.T) {
 	}
 	if recovery != (loglinks.RecoveryReport{}) {
 		t.Fatalf("recovery = %#v, want empty initial recovery", recovery)
+	}
+}
+
+// TestNewLogLinkMaterializerHonorsRenameOptIn proves that startup wiring
+// changes the collector-visible filename only when explicitly requested.
+func TestNewLogLinkMaterializerHonorsRenameOptIn(t *testing.T) {
+	for _, renameEnabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("rename=%t", renameEnabled), func(t *testing.T) {
+			sourceRoot := canonicalTempDir(t)
+			destination := canonicalTempDir(t)
+			cfg := config.WithDefaults(config.Config{
+				LogLinks: config.LogLinksConfig{
+					Enabled: true, RenameEnabled: renameEnabled,
+					Destination: destination, SourceRoots: []string{sourceRoot},
+				},
+			})
+			materializer, _, err := newLogLinkMaterializer(cfg, zap.NewNop())
+			if err != nil {
+				t.Fatalf("newLogLinkMaterializer() failed: %v", err)
+			}
+			source := filepath.Join(sourceRoot, "output.log")
+			observedAt := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+			result := materializer.Sync(context.Background(), observedAt, []loglinks.Target{{
+				JobID: "42", SubmitTime: observedAt, Paths: []string{source},
+			}})
+			if result.Created != 1 {
+				t.Fatalf("created links = %d, want 1: %+v", result.Created, result)
+			}
+			entries, err := os.ReadDir(destination)
+			if err != nil {
+				t.Fatalf("read destination: %v", err)
+			}
+			for _, entry := range entries {
+				if entry.Type()&os.ModeSymlink == 0 {
+					continue
+				}
+				if (entry.Name() != "output.log") != renameEnabled {
+					t.Fatalf("link name = %q, rename enabled = %t", entry.Name(), renameEnabled)
+				}
+				target, err := os.Readlink(filepath.Join(destination, entry.Name()))
+				if err != nil || target != source {
+					t.Fatalf("link target = %q, %v; want %q", target, err, source)
+				}
+			}
+		})
 	}
 }
 

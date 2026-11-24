@@ -11,6 +11,7 @@ import (
 	pb "github.com/dsx-ai-factory/nvidia-recovery/api-gateway/gen/go/heimdall/v1"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/cluster"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/heimdall"
+	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/loglinks"
 	"github.com/dsx-ai-factory/nvidia-recovery/slurm-advisor-controller/internal/state"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -39,10 +40,13 @@ type Controller struct {
 	SeenJobs            state.SeenJobStore
 	ActionExecutor      cluster.JobMutator
 	LogLinkMaterializer LogLinkMaterializer
-	Environment         string
-	Options             ControllerOptions
-	Observer            Observer
-	AuditObserver       AuditObserver
+	// LogLinkNaming plans collector-visible paths without waiting for filesystem work.
+	// Nil or disabled retains scheduler-reported source paths.
+	LogLinkNaming *loglinks.Config
+	Environment   string
+	Options       ControllerOptions
+	Observer      Observer
+	AuditObserver AuditObserver
 	// MilestoneReporter accepts immutable command results without delaying reconciliation.
 	MilestoneReporter MilestoneReporter
 	RecoveryTelemetry RecoveryTelemetry

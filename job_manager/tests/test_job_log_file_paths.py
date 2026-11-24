@@ -213,6 +213,27 @@ def _return_upserted_record(record, *, populate_heimdall_id_log_path=False):
     return record, True, None
 
 
+def test_post_jobs_projects_collector_paths_and_preserves_source_mapping():
+    """Filename correlation uses collector names while original paths remain available as metadata."""
+    link = "/collector/output-a0_42_date_26-11-17_time_12-00-00.log"
+    metadata = {
+        "scheduler": "slurm",
+        "slurm_log_file_paths": [link],
+        "app_log_link_targets": {link: "/jobs/output.txt"},
+    }
+    payload = _job_payload(scheduler_metadata=metadata)
+
+    with patch("job_manager.main.job_manager") as job_manager_mock:
+        job_manager_mock.upsert_job_record.side_effect = _return_upserted_record
+        response = TestClient(app).post("/jobs", json=payload)
+
+        assert response.status_code == 200
+        record = job_manager_mock.upsert_job_record.call_args.args[0]
+        assert record.log_file_paths == [link]
+        assert record.scheduler_metadata["app_log_link_targets"] == metadata["app_log_link_targets"]
+        assert response.json()["log_file_paths"] == [link]
+
+
 def test_post_jobs_projects_deduplicated_sorted_slurm_paths():
     payload = _job_payload(
         scheduler_metadata={

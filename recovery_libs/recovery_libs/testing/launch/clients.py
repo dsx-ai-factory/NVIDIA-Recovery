@@ -117,6 +117,11 @@ class _SlurmCommandClient:
         options = (
             f"--job-name={description['name']}",
             f"--chdir={description['current_working_directory']}",
+            *(
+                (f"--output={description['standard_output']}",)
+                if description.get("standard_output") is not None
+                else ()
+            ),
             *((f"--time={time_limit['number']}",) if time_limit else ()),
             *(("--hold",) if description.get("hold") else ()),
             *((f"--comment={description['comment']}",) if description.get("comment") else ()),
