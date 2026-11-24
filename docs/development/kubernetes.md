@@ -72,5 +72,15 @@ running, then removes only its own resources. No Slurm attempts, Recovery
 services, GPU drivers, or alternative scheduler are required. Component work
 can add ordinary Tilt builds and resources as dependencies arrive. Set
 `KUBERNETES_DEV_KIND_CONFIG` to a Kind config with additional worker nodes
-before creating a new cluster for placement experiments; PyTorchJob and KAI
-installation and qualification remain subsequent work.
+before creating a new cluster for placement experiments. The optional
+[Workload-Map qualification profile](../../tests/workload_map/README.md) installs
+PyTorchJob and KAI controllers and exercises the Recovery-relevant CRD lifecycle.
+
+## Workload-Map qualification
+
+The [Workload-Map experiment](../../tests/workload_map/README.md) uses this
+foundation to qualify upstream definition interpretation and JobSet lifecycle
+behavior without Recovery services. `make verify-workload-map` runs the
+cluster-free checks; `make test-workload-map-live` uses an explicitly selected
+existing test cluster. Its test entry point is independent of Advice Operator
+fixtures and environment provisioning.

@@ -242,3 +242,57 @@ e2e-rerun-failed:
 e2e-trace-view:
 	npm ci --prefix scripts/trace-viewer --ignore-scripts --no-audit --no-fund
 	scripts/trace-viewer/node_modules/.bin/speedscope "$(E2E_TRACE)"
+
+# Exploratory Workload-Map qualification is independent of production Go modules.
+WORKLOAD_MAP_PROBE ?= $(CURDIR)/.cache/workload-map-probe
+WORKLOAD_MAP_UNIT_TESTS := tests/e2e_harness/tests/test_workload_map*.py \
+	recovery_libs/recovery_libs/tests/testing/launch/test_kubernetes.py \
+	recovery_libs/recovery_libs/tests/testing/launch/test_pytorch.py
+WORKLOAD_MAP_PYTHON_FILES := tests/e2e_harness/workload_map*.py tests/workload_map_live \
+	recovery_libs/recovery_libs/testing/launch/kubernetes.py \
+	recovery_libs/recovery_libs/testing/launch/pytorch.py \
+	recovery_libs/recovery_libs/testing/launch/launcher.py $(WORKLOAD_MAP_UNIT_TESTS)
+.PHONY: build-workload-map-probe verify-workload-map test-workload-map-live inspect-workload-map
+build-workload-map-probe:
+	mkdir -p "$(dir $(WORKLOAD_MAP_PROBE))"
+	go -C tests/workload_map build -o "$(abspath $(WORKLOAD_MAP_PROBE))" .
+
+verify-workload-map:
+	test -z "$$(gofmt -l tests/workload_map)"
+	uv run --locked ruff check $(WORKLOAD_MAP_PYTHON_FILES)
+	uv run --locked ruff format --check $(WORKLOAD_MAP_PYTHON_FILES)
+	shellcheck tests/workload_map_live/run.sh deploy/tilt/kubernetes/qualify.sh
+	uv run --locked --group e2e pytest -q $(WORKLOAD_MAP_UNIT_TESTS)
+	go -C tests/workload_map mod tidy -diff
+	$(MAKE) GO_PACKAGES=workload-map lint-go
+	go -C tests/workload_map vet ./...
+	go -C tests/workload_map test -race ./...
+
+# This target uses an explicitly selected existing test cluster and never provisions one.
+test-workload-map-live: build-workload-map-probe
+	bash tests/workload_map_live/run.sh "$(WORKLOAD_MAP_PROBE)" $(K8S_TEST_ARGS)
+
+# Inspect a selected existing workload without modifying cluster resources.
+inspect-workload-map: build-workload-map-probe
+	PYTHONPATH=tests uv run --locked --group e2e python -m e2e_harness.workload_map_inspect --probe "$(WORKLOAD_MAP_PROBE)" $(WORKLOAD_MAP_INSPECT_ARGS)
+
+.PHONY: dev-k8s-qualification
+dev-k8s-qualification:
+	bash deploy/tilt/kubernetes/qualify.sh
+
+# Explicit active qualification on an already provisioned test cluster.
+.PHONY: test-workload-map-matrix
+test-workload-map-matrix: build-workload-map-probe
+	@test -n "$(WORKLOAD_MAP_QUEUE)" || { echo "Set WORKLOAD_MAP_QUEUE for KAI qualification" >&2; exit 2; }
+	WORKLOAD_MAP_LAUNCHER=kubernetes-jobset WORKLOAD_MAP_SCHEDULER=default-scheduler WORKLOAD_MAP_QUEUE= \
+	  WORKLOAD_MAP_CONTROLLER_NAMESPACE=jobset-system WORKLOAD_MAP_CONTROLLER_DEPLOYMENT=jobset-controller-manager \
+	  bash tests/workload_map_live/run.sh "$(WORKLOAD_MAP_PROBE)" $(K8S_TEST_ARGS)
+	WORKLOAD_MAP_LAUNCHER=kubernetes-pytorch WORKLOAD_MAP_SCHEDULER=default-scheduler WORKLOAD_MAP_QUEUE= \
+	  WORKLOAD_MAP_CONTROLLER_NAMESPACE=kubeflow WORKLOAD_MAP_CONTROLLER_DEPLOYMENT=training-operator \
+	  bash tests/workload_map_live/run.sh "$(WORKLOAD_MAP_PROBE)" $(K8S_TEST_ARGS)
+	WORKLOAD_MAP_LAUNCHER=kubernetes-jobset WORKLOAD_MAP_SCHEDULER=kai-scheduler WORKLOAD_MAP_QUEUE="$(WORKLOAD_MAP_QUEUE)" \
+	  WORKLOAD_MAP_CONTROLLER_NAMESPACE=jobset-system WORKLOAD_MAP_CONTROLLER_DEPLOYMENT=jobset-controller-manager \
+	  bash tests/workload_map_live/run.sh "$(WORKLOAD_MAP_PROBE)" $(K8S_TEST_ARGS)
+	WORKLOAD_MAP_LAUNCHER=kubernetes-pytorch WORKLOAD_MAP_SCHEDULER=kai-scheduler WORKLOAD_MAP_QUEUE="$(WORKLOAD_MAP_QUEUE)" \
+	  WORKLOAD_MAP_CONTROLLER_NAMESPACE=kubeflow WORKLOAD_MAP_CONTROLLER_DEPLOYMENT=training-operator \
+	  bash tests/workload_map_live/run.sh "$(WORKLOAD_MAP_PROBE)" $(K8S_TEST_ARGS)
