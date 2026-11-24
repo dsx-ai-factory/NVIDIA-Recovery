@@ -135,7 +135,7 @@ func runGrpcServer(ctx context.Context, heimdallServer pb.HeimdallServiceServer,
 	}
 	defer lis.Close() //nolint:errcheck
 
-	grpcInterceptors := []grpc.UnaryServerInterceptor{}
+	grpcInterceptors := []grpc.UnaryServerInterceptor{auth.HeaderIdentityUnaryInterceptor(endpoint.trustHeaderBasedIdentity)}
 	grpcInterceptors = append(grpcInterceptors, requestIDInterceptor)
 	grpcInterceptors = append(grpcInterceptors, grpcLogInterceptor)
 	if authenticator := endpointAuthenticator(config, endpoint); authenticator != nil {
@@ -144,6 +144,7 @@ func runGrpcServer(ctx context.Context, heimdallServer pb.HeimdallServiceServer,
 
 	grpcOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(grpcInterceptors...),
+		grpc.ChainStreamInterceptor(auth.HeaderIdentityStreamInterceptor(endpoint.trustHeaderBasedIdentity, endpointAuthenticator(config, endpoint))),
 	}
 	if config.otelProvider != nil && (config.otelProvider.IsTracingEnabled() || config.otelProvider.IsMetricsEnabled()) {
 		grpcOpts = append(grpcOpts, observability.GrpcServerStatsHandler())
@@ -218,13 +219,7 @@ func runGatewayServer(ctx context.Context, config *gatewayConfig, endpoint *endp
 
 	// Create the gRPC-Gateway mux with header forwarding for request IDs.
 	gwmux := newGatewayMux(
-		runtime.WithIncomingHeaderMatcher(func(key string) (string, bool) {
-			// Match all case variations of util.RequestIDHeader
-			if strings.EqualFold(key, util.RequestIDHeader) {
-				return util.RequestIDHeader, true
-			}
-			return runtime.DefaultHeaderMatcher(key)
-		}),
+		runtime.WithIncomingHeaderMatcher(gatewayHeaderMatcher(endpoint.trustHeaderBasedIdentity)),
 		runtime.WithHealthzEndpoint(health.NewHealthClient(conn)),
 	)
 	if err := registerGatewayHandlers(ctx, gwmux, conn); err != nil {
@@ -318,7 +313,7 @@ func runGatewayServer(ctx context.Context, config *gatewayConfig, endpoint *endp
 	registerGatewayHealthRoute(rootMux)
 
 	if !endpoint.insecure {
-		var publicHandler http.Handler = loginMux
+		publicHandler := auth.HeaderIdentityBoundary(false, loginMux)
 
 		rootMux.Handle(auth.LoginPath, publicHandler)
 		rootMux.Handle(auth.CallbackPath, publicHandler)
@@ -369,7 +364,7 @@ func runGatewayServer(ctx context.Context, config *gatewayConfig, endpoint *endp
 		finalHandler = observability.HttpServerMiddleware(config.otelServiceName)(finalHandler)
 	}
 	finalHandler = requestIDMiddleware(finalHandler)
-	finalHandler = stripUrlPrefixMiddleware(finalHandler)
+	finalHandler = auth.HeaderIdentityBoundary(endpoint.trustHeaderBasedIdentity, stripUrlPrefixMiddleware(finalHandler))
 	if config.corsAllowOrigin != nil {
 		finalHandler = corsMiddleware(finalHandler)
 	}
@@ -399,11 +394,12 @@ func runGatewayServer(ctx context.Context, config *gatewayConfig, endpoint *endp
 }
 
 type endpointConfig struct {
-	insecure           bool
-	authenticate       bool
-	grpcServerEndpoint string
-	httpServerEndpoint string
-	urlPrefix          string
+	trustHeaderBasedIdentity bool
+	insecure                 bool
+	authenticate             bool
+	grpcServerEndpoint       string
+	httpServerEndpoint       string
+	urlPrefix                string
 }
 
 type gatewayConfig struct {
@@ -637,6 +633,9 @@ func main() {
 		authenticators = nil
 	} else {
 		authenticators = auth.NewAuth()
+		if cfg.Auth.TrustHeaderBasedIdentity {
+			authenticators.AddAuthenticator(auth.HeaderBasedIdentityAuth{})
+		}
 
 		if cfg.Auth.OidcEnabled {
 			oidcConfig = auth.OidcAuthConfig{
@@ -717,10 +716,11 @@ func main() {
 	if err := run(&gatewayConfig{
 		enableExternalEndpoints: cfg.Server.EnableExternalEndpoints,
 		publicEndpoint: endpointConfig{
-			insecure:           cfg.Auth.Insecure,
-			grpcServerEndpoint: cfg.Server.GRPCServerEndpoint,
-			httpServerEndpoint: cfg.Server.HTTPServerEndpoint,
-			urlPrefix:          cfg.Server.URLPrefix,
+			trustHeaderBasedIdentity: cfg.Auth.TrustHeaderBasedIdentity,
+			insecure:                 cfg.Auth.Insecure,
+			grpcServerEndpoint:       cfg.Server.GRPCServerEndpoint,
+			httpServerEndpoint:       cfg.Server.HTTPServerEndpoint,
+			urlPrefix:                cfg.Server.URLPrefix,
 		},
 		internalEndpoint: endpointConfig{
 			insecure:           true,
@@ -748,4 +748,21 @@ func main() {
 
 func setDefaultSlogLogger(logger *zap.Logger) {
 	slog.SetDefault(slog.New(slogzap.Option{Level: slog.LevelWarn, Logger: logger}.NewZapHandler()))
+}
+
+// gatewayHeaderMatcher forwards only supported assertions on the trusted path.
+func gatewayHeaderMatcher(trustHeaderBasedIdentity bool) func(string) (string, bool) {
+	return func(key string) (string, bool) {
+		if strings.HasPrefix(strings.ToLower(key), "grpc-metadata-x-nvr-") {
+			return "", false
+		}
+		if strings.HasPrefix(strings.ToLower(key), "x-nvr-") {
+			return strings.ToLower(key), trustHeaderBasedIdentity && auth.IsIdentityHeader(key)
+		}
+		// Match all case variations of util.RequestIDHeader
+		if strings.EqualFold(key, util.RequestIDHeader) {
+			return util.RequestIDHeader, true
+		}
+		return runtime.DefaultHeaderMatcher(key)
+	}
 }
