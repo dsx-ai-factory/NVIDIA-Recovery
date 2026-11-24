@@ -30,8 +30,15 @@ class JobLifecycleTimes(NamedTuple):
     end_time: datetime | None
 
 
-def normalize_slurm_lifecycle_time(raw_time: object, *, metadata_key: str) -> datetime:
-    """Validate and parse one Slurm-owned ISO 8601 lifecycle timestamp."""
+def normalize_lifecycle_time(raw_time: object, *, metadata_key: str) -> datetime:
+    """Validate and parse one scheduler-reported ISO 8601 lifecycle timestamp.
+
+    Raises:
+        SlurmLifecycleTimesValidationError: If the value is not a nonempty,
+            UTC-offset ISO 8601 string within the storage TIMESTAMP range.
+            Non-Slurm callers translate this ``ValueError`` into their own
+            ingress error.
+    """
     if type(raw_time) is not str or not raw_time:
         raise SlurmLifecycleTimesValidationError(f"{metadata_key} must be a nonempty string")
 
@@ -82,7 +89,7 @@ def project_job_lifecycle_times(
             projected.append(current_value)
             continue
         projected.append(
-            normalize_slurm_lifecycle_time(
+            normalize_lifecycle_time(
                 scheduler_metadata[metadata_key],
                 metadata_key=metadata_key,
             )

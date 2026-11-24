@@ -70,6 +70,14 @@ class TestEmitAttributionRequest(unittest.TestCase):
         storage.claim_attribution_request_emission.assert_called_once()
         publisher.publish_message.assert_called_once()
 
+    def test_direct_kubernetes_observation_is_skipped_before_the_claim(self):
+        record = _terminal_record()
+        record.scheduler_metadata = {"scheduler": "kubernetes", "workload_uid": "workload"}
+        result, storage, publisher = _emit(record)
+        self.assertFalse(result)
+        storage.claim_attribution_request_emission.assert_not_called()
+        publisher.publish_message.assert_not_called()
+
     def test_no_anomaly_is_noop(self):
         result, storage, _ = _emit(_terminal_record(anomalies=[]))
         self.assertFalse(result)

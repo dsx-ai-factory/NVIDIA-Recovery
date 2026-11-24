@@ -19,6 +19,12 @@ from sqlalchemy.orm import aliased, contains_eager, joinedload, make_transient, 
 from sqlalchemy.sql import Select
 
 from recovery_libs.schema.job_manager.job_identity import generate_heimdall_job_id
+from recovery_libs.schema.job_manager.kubernetes_identity import (
+    KUBERNETES_LOOKUP_KEYS,
+    is_direct_kubernetes_observation,
+    missing_kubernetes_lookup_keys,
+    validate_kubernetes_lookup,
+)
 from recovery_libs.schema.job_manager.models import (
     AdviceReconciliationDisposition,
     AdviceReconciliationReason,
@@ -207,6 +213,83 @@ def _normalize_job_upsert_timestamps(job_record: SlurmJobExecutionRecord) -> Non
             setattr(job_record, field, normalize_mysql_timestamp(value, field_name=field))
         except (TypeError, ValueError) as error:
             raise RecoveryStorageInputValidationError(str(error)) from error
+
+
+_KUBERNETES_OUTCOME_FIELDS = ("state", "state_reason", "end_time", "allocated_node_list", "scheduler_metadata")
+"""Fields a direct Kubernetes observation may not rewrite after a final outcome."""
+
+
+_KUBERNETES_FINAL_STATES = frozenset({"STOPPED", "COMPLETED", "FAILED", "CANCELLED", "DELETED"})
+"""Final states positively recognized for direct Kubernetes observations.
+
+These are the terminal Gateway job states the discovery controller writes and
+acknowledges. Any other state, including an unrecognized one, is not a final
+outcome on this path, so a verified terminal observation can still replace it.
+"""
+
+
+def _preserve_kubernetes_lookup(
+    incoming: dict[str, Any], existing_job: SlurmJobExecutionRecord | None
+) -> dict[str, Any]:
+    """Fence the lookup identity of a discovered workload under the upsert row lock.
+
+    Restart inventory and Advice job references locate the workload from these
+    scheduler metadata keys, and an update replaces scheduler metadata as a
+    whole. A new attempt must therefore carry every key. For an existing
+    attempt, a present key must match its stored value and an omitted key keeps
+    it, so one workload UID cannot be retargeted or lose its lookup by omission.
+    A stored row created without some keys may have them filled in once.
+
+    Returns:
+        Lookup values the update adds to a stored row that lacked them.
+
+    Raises:
+        RecoveryStorageInputValidationError: If a lookup value is malformed,
+            missing from a new attempt, or conflicts with the stored value.
+    """
+    try:
+        validate_kubernetes_lookup(incoming)
+    except ValueError as error:
+        raise RecoveryStorageInputValidationError(str(error)) from error
+    if existing_job is None:
+        if missing := missing_kubernetes_lookup_keys(incoming):
+            raise RecoveryStorageInputValidationError(f"Kubernetes discovery requires {', '.join(missing)}")
+        return {}
+    stored = existing_job.scheduler_metadata or {}
+    stored_missing = set(missing_kubernetes_lookup_keys(stored))
+    added = {}
+    for key in KUBERNETES_LOOKUP_KEYS:
+        if key in stored_missing:
+            if key in incoming:
+                added[key] = incoming[key]
+        elif key not in incoming:
+            incoming[key] = stored[key]
+        elif incoming[key] != stored[key]:
+            raise RecoveryStorageInputValidationError("conflicting stored Kubernetes workload lookup identity")
+    return added
+
+
+def _guard_kubernetes_observation(job_record: SlurmJobExecutionRecord, existing_job: SlurmJobExecutionRecord) -> None:
+    """Keep confirmed Kubernetes outcomes and node evidence under the upsert row lock.
+
+    Discovery retries ambiguous writes, so an older observation can commit after
+    a newer one. A stored final outcome therefore wins over any later
+    observation, which also prevents reopening. Workers are often removed after
+    or while a workload ends, so a final observation retains nodes from the
+    last open snapshot alongside newly observed nodes. Open attempts accept node
+    removals as observed. Fields set to None are left unchanged by the update.
+
+    Only recognized final states are sticky. A stored unrecognized state is
+    neither open evidence nor an outcome, so a later final observation replaces
+    it, and only discovery's verified UID loss writes DELETED.
+    """
+    if existing_job.state in _KUBERNETES_FINAL_STATES:
+        for field in _KUBERNETES_OUTCOME_FIELDS:
+            setattr(job_record, field, None)
+    elif job_record.state in _KUBERNETES_FINAL_STATES:
+        job_record.allocated_node_list = sorted(
+            set(existing_job.allocated_node_list or ()) | set(job_record.allocated_node_list or ())
+        )
 
 
 def _commit_validated_record(session, record: DataClassBase) -> None:
@@ -471,7 +554,28 @@ class MySQLStorage(BaseStorage):
             ).first()
 
             now = datetime.now(UTC)
+            incoming = job_record.scheduler_metadata or {}
 
+            if existing_job:
+                stored = existing_job.scheduler_metadata or {}
+                stored_identity = (stored.get("scheduler"), stored.get("workload_uid"))
+                incoming_identity = (incoming.get("scheduler"), incoming.get("workload_uid"))
+                has_kubernetes_uid = any(
+                    scheduler == "kubernetes" and uid for scheduler, uid in (stored_identity, incoming_identity)
+                )
+                if has_kubernetes_uid and stored_identity != incoming_identity:
+                    raise RecoveryStorageInputValidationError("conflicting stored Kubernetes workload identity")
+                if is_direct_kubernetes_observation(incoming):
+                    # Conflicts are checked before the final-outcome guard,
+                    # which would otherwise discard the incoming metadata.
+                    repaired = _preserve_kubernetes_lookup(incoming, existing_job)
+                    _guard_kubernetes_observation(job_record, existing_job)
+                    if repaired and job_record.scheduler_metadata is None:
+                        # A final row keeps its outcome metadata and gains only
+                        # the lookup keys it never had.
+                        job_record.scheduler_metadata = {**(existing_job.scheduler_metadata or {}), **repaired}
+            elif is_direct_kubernetes_observation(incoming):
+                _preserve_kubernetes_lookup(incoming, None)
             _preserve_slurm_identity(job_record, existing_job)
 
             if existing_job:
