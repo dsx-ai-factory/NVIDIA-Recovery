@@ -3,7 +3,7 @@
 
 
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -58,6 +58,7 @@ from job_manager.audit.job_changes import (
     audit_job_update,
     audit_job_upsert,
 )
+from job_manager.job_log_file_paths import APP_LOG_LINK_TARGETS_KEY
 from job_manager.job_mapping import storage_to_http_job_status
 from job_manager.logger import logger
 from job_manager.recovery import RecoveryService
@@ -344,11 +345,28 @@ def storage_attribution_to_summary(
     return summary, insight
 
 
+def _app_log_link_targets(job_record: SlurmJobExecutionRecord) -> Mapping[str, object]:
+    """Return the record's published-path-to-source mapping, or an empty mapping when absent or malformed."""
+    targets = (job_record.scheduler_metadata or {}).get(APP_LOG_LINK_TARGETS_KEY)
+    return targets if isinstance(targets, Mapping) else {}
+
+
+def _log_file_source(path: str, link_targets: Mapping[str, object]) -> str:
+    """Return the source file behind a published path; a path without a valid mapping is its own source."""
+    source = link_targets.get(path)
+    return source if isinstance(source, str) and source else path
+
+
 def sanitize_log_file_paths_for_retry(job_record: SlurmJobExecutionRecord, storage: MySQLStorage) -> None:
     """
     Determine whether to persist log file paths for the job record. By default, only persist paths that are not already
     associated with the previous attempt. This prevents a requeue race where Slurm returns paths from the prior run.
     Preserve reused paths when the workload explicitly declares that its attempts share log files.
+
+    When the controller renames log paths, each attempt publishes a different collector-visible name for the same
+    file, so names alone cannot detect a carried-over path. A path is therefore also treated as carried over when
+    its source file, resolved through the record's ``app_log_link_targets`` mapping, belongs to the previous attempt.
+    Paths without a mapping are their own source, so records published without renaming behave as before.
 
     Args:
         job_record: The current job record to be updated.
@@ -378,13 +396,23 @@ def sanitize_log_file_paths_for_retry(job_record: SlurmJobExecutionRecord, stora
         return
 
     # Drop only paths shared with the previous attempt (e.g. the stable batch
-    # StdOut slurm-<jobid>.out), keeping unique per-attempt paths.
+    # StdOut slurm-<jobid>.out), keeping unique per-attempt paths. Compare both
+    # the published names and the source files behind them: a renamed path
+    # carries the attempt in its name, so only its source reveals a carried-over
+    # file. Matching on names as well means no path that matched before is kept.
     previous_paths = set(previous_job_attempt.log_file_paths or [])
+    previous_targets = _app_log_link_targets(previous_job_attempt)
+    previous_sources = {_log_file_source(path, previous_targets) for path in previous_paths}
+    current_targets = _app_log_link_targets(job_record)
     current_paths = job_record.log_file_paths or []
-    deduped = [path for path in current_paths if path not in previous_paths]
+
+    def carried_over(path: str) -> bool:
+        return path in previous_paths or _log_file_source(path, current_targets) in previous_sources
+
+    deduped = [path for path in current_paths if not carried_over(path)]
 
     if len(deduped) != len(current_paths):
-        dropped = [path for path in current_paths if path in previous_paths]
+        dropped = [path for path in current_paths if carried_over(path)]
         logger.warning(
             f"Dropping log file path(s) {dropped} carried over from previous job attempt "
             f"({previous_attempt_index}) for job {job_record.job_id} ({job_record.job_attempt_index}) "
