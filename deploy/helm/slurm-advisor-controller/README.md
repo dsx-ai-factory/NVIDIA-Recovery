@@ -226,6 +226,27 @@ MR revision that used one shared Pod must be uninstalled and reinstalled before
 testing this two-Deployment topology. This migration note applies only to the
 unreleased Draft chart; there is no supported released upgrade path yet.
 
+## Go heap profiling
+
+Set `heapProfiler.enabled=true` to enable SAC heap profiling. The controller
+listens on Pod loopback (`127.0.0.1`). Set `heapProfiler.port` to override the
+default port of `6060`. Profiling is disabled by default and works independently
+of Prometheus metrics. With the `nvidia-recovery` umbrella chart, prefix these
+values with `slurm-advisor-controller.`.
+
+For the example release above, forward the port to the controller Deployment:
+
+```bash
+kubectl -n slurm port-forward deployment/slurm-advisor-controller 6060:6060
+```
+
+From another terminal, save and inspect a heap profile:
+
+```bash
+curl --fail --output sac-heap.pprof http://127.0.0.1:6060/debug/pprof/heap
+go tool pprof sac-heap.pprof
+```
+
 ## Command timeout monitoring
 
 With controller metrics enabled, SAC exposes

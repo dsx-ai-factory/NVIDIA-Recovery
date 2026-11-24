@@ -188,6 +188,7 @@
     "watchdog",
     "sackd",
     "slurm",
+    "heapProfiler",
     "metrics",
     "service",
     "serviceMonitor",
@@ -455,6 +456,15 @@
             "key": { "type": "string", "minLength": 1 }
           }
         }
+      }
+    },
+    "heapProfiler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "port"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
       }
     },
     "metrics": {

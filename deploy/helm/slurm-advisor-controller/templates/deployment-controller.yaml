@@ -153,6 +153,10 @@ spec:
             - name: SLURM_ADVISOR_SERVICE_ACCOUNT_TOKEN_PATH
               value: "/var/run/secrets/heimdall/service-account-token"
             {{- end }}
+            - name: SLURM_ADVISOR_HEAP_PROFILER_ENABLED
+              value: {{ .Values.heapProfiler.enabled | quote }}
+            - name: SLURM_ADVISOR_HEAP_PROFILER_PORT
+              value: {{ .Values.heapProfiler.port | quote }}
             - name: SLURM_ADVISOR_METRICS_ENABLED
               value: {{ .Values.metrics.controller.enabled | quote }}
             - name: SLURM_ADVISOR_METRICS_ADDR

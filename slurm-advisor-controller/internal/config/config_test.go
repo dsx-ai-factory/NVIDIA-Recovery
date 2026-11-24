@@ -184,6 +184,27 @@ func TestFromEnvReadsProcessEnvironment(t *testing.T) {
 	if cfg.MetricsAddr != ":9090" {
 		t.Fatalf("MetricsAddr = %q, want :9090 when env is unset", cfg.MetricsAddr)
 	}
+	if cfg.HeapProfilerEnabled || cfg.HeapProfilerPort != 6060 {
+		t.Fatalf("heap profiler enabled = %t, port = %d, want disabled on port 6060", cfg.HeapProfilerEnabled, cfg.HeapProfilerPort)
+	}
+}
+
+func TestFromEnvLoadsHeapProfilerConfiguration(t *testing.T) {
+	setConfigEnv(t, map[string]string{
+		"HEIMDALL_ENDPOINT":                   "127.0.0.1:8080",
+		"SLURM_ADVISOR_HEAP_PROFILER_ENABLED": "true",
+		"SLURM_ADVISOR_HEAP_PROFILER_PORT":    "6061",
+	})
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.HeapProfilerEnabled || cfg.HeapProfilerPort != 6061 {
+		t.Fatalf("heap profiler enabled = %t, port = %d, want enabled on port 6061", cfg.HeapProfilerEnabled, cfg.HeapProfilerPort)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFromEnvLoadsAuditTrailConfiguration(t *testing.T) {

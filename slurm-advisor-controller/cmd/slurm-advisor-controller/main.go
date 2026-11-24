@@ -72,6 +72,19 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if cfg.HeapProfilerEnabled {
+		server, err := startHeapProfiler(cfg.HeapProfilerPort, logger)
+		if err != nil {
+			logger.Error("start heap profiler", zap.Int("port", cfg.HeapProfilerPort), zap.Error(err))
+			return 1
+		}
+		defer func() {
+			if err := server.Close(); err != nil {
+				logger.Warn("close heap profiler", zap.Error(err))
+			}
+		}()
+	}
+
 	tracing, err := telemetry.NewTracingProvider(ctx, cfg.Tracing, logger)
 	if err != nil {
 		logger.Error("initialize tracing", zap.Error(err))
