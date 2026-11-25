@@ -4,9 +4,10 @@ Status: accepted
 
 Date: 2026-11-11
 
-> **Implementation note (2026-11-11):** Release packaging and Go module
-> publication remain pending, including published sibling dependencies;
-> operator build/CI qualification also remains pending. Evidence:
+> **Implementation note (2026-11-11):** Advice Operator build/CI wiring and
+> source archive inclusion are implemented in the
+> [component workflow](../../advice-operator/README.md#development). Go module
+> publication and published sibling dependencies remain pending. Evidence:
 > [PR #53](https://github.com/dsx-ai-factory/NVIDIA-Recovery/pull/53) and the
 > [root-tag release workflow](../../.github/workflows/tag-release.yml) at
 > `9e1a0e259f1ed0afac694679098d41c6812b37a4`.
