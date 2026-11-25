@@ -41,7 +41,7 @@ onward. Earlier decisions are not included.
 | [0031](0031-expose-notifications-http-api-through-authenticated-gateway.md) | accepted | Expose Audit Trail ingestion through the shared generated HTTP/gRPC facade; ADR 0049 extends this boundary to authenticated reads. |
 | [0032](0032-unify-slurm-controller-observability-behind-scoped-lifecycles.md) | superseded | Proposed controller-wide typed scopes for metrics, tracing, and audit; superseded by ADR 0048's narrower recovery lifecycle, with the broader proposal retired. |
 | [0033](0033-deliver-watchdog-audit-events-through-gateway.md) | accepted | Deliver optional watchdog audits through gateway gRPC while keeping scheduler decisions independent of remote services. |
-| [0034](0034-publish-source-and-charts-with-external-contributions.md) | accepted | Publish source and Helm charts with external contributions and GitHub authority; Attribution defaults are partially superseded by ADR 0048. |
+| [0034](0034-publish-source-and-charts-with-external-contributions.md) | accepted | Publish source and Helm charts with external contributions and GitHub authority; Attribution defaults are superseded by ADR 0049; ADR 0060 removes the Advice Operator distribution exclusion and extends the public API scope to exported Go packages. |
 | [0035](0035-enrich-active-slurm-log-metadata-asynchronously.md) | accepted | Move supplemental active Slurm log-path discovery off the serialized reconciliation tick into a bounded, exact-attempt background cache. |
 | [0036](0036-always-produce-and-expose-audit-events.md) | accepted | Always produce and expose audit events while retaining configurable destinations; supersedes the feature gates in ADRs 0031 and 0033. |
 | [0037](0037-filter-sac-bootstrap-by-aps-environment.md) | accepted | Filter SAC backend bootstrap candidates by stored APS environment before retaining seen keys or querying accounting, refining ADR 0022. |
@@ -67,6 +67,7 @@ onward. Earlier decisions are not included.
 | [0057](0057-persist-application-requested-job-termination.md) | accepted | Persist application-requested cancellation by scheduler job ID and translate it into sticky exact-attempt terminal Advice. |
 | [0058](0058-qualify-workload-map-independently.md) | accepted | Qualify Workload-Map through independent object and lifecycle evidence, with reusable local, CI, and cluster checks that do not require Recovery services. |
 | [0059](0059-support-loopback-header-identity.md) | accepted | Add default-off trusted header identity on loopback API listeners while retaining normal authentication fallback. |
+| [0060](0060-publish-all-go-modules.md) | accepted | Independently version and publish all Go modules using directory-prefixed SemVer tags, and include Advice Operator source and its standalone chart in release source archives; partially supersedes ADR 0034. |
 
 ADR numbers 0018, 0019, 0023, and 0024 are retired; their external-service
 decisions were removed with maintainer approval. Do not reuse these numbers.
