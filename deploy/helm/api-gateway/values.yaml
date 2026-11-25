@@ -90,6 +90,7 @@ publicBaseUrl: "http://localhost:8080"
 
 auth:
   insecure: false
+  trustHeaderBasedIdentity: false
   secureCookie: true
   cookieSecretName: "heimdall-cookie-secret"
   cookieSecretKey: "HEIMDALL_OIDC_COOKIE_KEY"
@@ -98,6 +99,9 @@ auth:
     enabled: false
     providerUrl: ""
     clientId: ""
+    # Optional Secret reference in place of the literal clientId.
+    clientIdSecretName: ""
+    clientIdSecretKey: "HEIMDALL_OIDC_CLIENT_ID"
     clientSecretName: "oidc-client-secret"
     clientSecretKey: "HEIMDALL_OIDC_CLIENT_SECRET"
     scopes: "openid,profile,email"

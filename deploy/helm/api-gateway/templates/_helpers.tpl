@@ -48,6 +48,9 @@ Create the name of the service account to use
 {{- end }}
 
 {{- define "api-gateway.validate" -}}
+{{- if and .Values.auth.oidc.enabled .Values.auth.oidc.clientIdSecretName .Values.auth.oidc.clientId }}
+{{- fail "auth.oidc.clientId and auth.oidc.clientIdSecretName are mutually exclusive" }}
+{{- end }}
 {{- if .Values.auth.kubernetes.enabled }}
 {{- if eq (.Values.auth.kubernetes.audience | trim) "" }}
 {{- fail "auth.kubernetes.audience is required when auth.kubernetes.enabled=true" }}
