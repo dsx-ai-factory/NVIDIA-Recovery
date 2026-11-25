@@ -48,10 +48,7 @@ Create the name of the service account to use
 {{- end }}
 
 {{- define "api-gateway.validate" -}}
-{{- if .Values.auth.trustHeaderBasedIdentity }}
-{{- if or .Values.auth.insecure (not .Values.externalService.enabled) }}
-{{- fail "auth.trustHeaderBasedIdentity requires auth.insecure=false and externalService.enabled=true" }}
-{{- end }}
+{{- if and .Values.auth.trustHeaderBasedIdentity .Values.externalService.enabled }}
 {{- /* Keep the public Service from reaching any of the gateway's own listeners. */ -}}
 {{- $gatewayTargets := list "rest" "grpc" "rest-internal" "grpc-internal" "metrics"
     (toString .Values.ports.rest) (toString .Values.ports.grpc)
