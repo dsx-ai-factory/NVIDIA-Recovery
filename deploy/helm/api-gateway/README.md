@@ -16,6 +16,21 @@ both Services and restrict access to the intended private networks. See
 for a values-file example and verification commands. With the umbrella chart,
 place these settings under `api-gateway`.
 
+## Gateway behind a trusted authentication proxy
+
+Set `auth.trustHeaderBasedIdentity: true` to accept identity headers from a
+trusted proxy in the gateway Pod. This binds the public gateway listeners to
+`127.0.0.1` at `ports.rest` and `ports.grpc`. Configure the proxy with
+`initContainers` as a restartable sidecar and point `externalService.targetPorts`
+at its HTTP and gRPC ports. The proxy must remove incoming identity headers
+and set them only after authenticating the caller. Keep the internal Service
+restricted to its intended callers; it uses separate listeners.
+
+Gateway OIDC can remain enabled for requests the proxy delegates. The redirect
+URI is `publicBaseUrl` followed by `/v1/auth/callback`. To load the OIDC client ID
+from a Kubernetes Secret, set `auth.oidc.clientIdSecretName` and, if needed,
+`auth.oidc.clientIdSecretKey`; leave `auth.oidc.clientId` empty.
+
 ## Audit Trail API and event ingestion
 
 The public gRPC Service exposes `heimdall.v1.AuditService/CreateAuditEvents`,

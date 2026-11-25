@@ -250,6 +250,7 @@
       ],
       "properties": {
         "insecure": { "type": "boolean" },
+        "trustHeaderBasedIdentity": { "type": "boolean" },
         "secureCookie": { "type": "boolean" },
         "cookieSecretName": { "type": "string", "minLength": 1 },
         "cookieSecretKey": { "type": "string", "minLength": 1 },
@@ -271,6 +272,8 @@
             "enabled": { "type": "boolean" },
             "providerUrl": { "type": "string" },
             "clientId": { "type": "string" },
+            "clientIdSecretName": { "type": "string" },
+            "clientIdSecretKey": { "type": "string", "minLength": 1 },
             "clientSecretName": { "type": "string", "minLength": 1 },
             "clientSecretKey": { "type": "string", "minLength": 1 },
             "scopes": { "type": "string" },

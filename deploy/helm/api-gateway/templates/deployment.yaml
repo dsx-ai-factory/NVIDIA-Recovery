@@ -97,6 +97,14 @@ spec:
               value: {{ .Values.urlPrefix | quote }}
             - name: HEIMDALL_INTERNAL_URL_PREFIX
               value: {{ .Values.internalUrlPrefix | quote }}
+          {{- if .Values.auth.trustHeaderBasedIdentity }}
+            - name: HEIMDALL_TRUST_HEADER_BASED_IDENTITY
+              value: "true"
+            - name: HEIMDALL_HTTP_SERVER_ENDPOINT
+              value: {{ printf "127.0.0.1:%v" .Values.ports.rest | quote }}
+            - name: HEIMDALL_GRPC_SERVER_ENDPOINT
+              value: {{ printf "127.0.0.1:%v" .Values.ports.grpc | quote }}
+          {{- end }}
             - name: HEIMDALL_JOB_SOURCE
               value: {{ .Values.jobs.source | quote }}
             - name: HEIMDALL_JOB_MANAGER_ENDPOINT
@@ -113,7 +121,14 @@ spec:
             - name: HEIMDALL_OIDC_PROVIDER_URL
               value: {{ .Values.auth.oidc.providerUrl | quote }}
             - name: HEIMDALL_OIDC_CLIENT_ID
+              {{- if .Values.auth.oidc.clientIdSecretName }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.oidc.clientIdSecretName | quote }}
+                  key: {{ required "auth.oidc.clientIdSecretKey is required with auth.oidc.clientIdSecretName" .Values.auth.oidc.clientIdSecretKey | quote }}
+              {{- else }}
               value: {{ .Values.auth.oidc.clientId | quote }}
+              {{- end }}
             - name: HEIMDALL_OIDC_SCOPES
               value: {{ .Values.auth.oidc.scopes | quote }}
             - name: HEIMDALL_OIDC_SUBJECT_CLAIM
