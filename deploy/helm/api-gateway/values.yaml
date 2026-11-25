@@ -90,7 +90,6 @@ publicBaseUrl: "http://localhost:8080"
 
 auth:
   insecure: false
-  # Trust identity headers on loopback public listeners behind a trusted proxy.
   trustHeaderBasedIdentity: false
   secureCookie: true
   cookieSecretName: "heimdall-cookie-secret"

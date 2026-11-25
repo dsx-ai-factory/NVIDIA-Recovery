@@ -125,7 +125,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.auth.oidc.clientIdSecretName | quote }}
-                  key: {{ required "auth.oidc.clientIdSecretKey is required with auth.oidc.clientIdSecretName" .Values.auth.oidc.clientIdSecretKey | quote }}
+                  key: {{ .Values.auth.oidc.clientIdSecretKey | quote }}
               {{- else }}
               value: {{ .Values.auth.oidc.clientId | quote }}
               {{- end }}

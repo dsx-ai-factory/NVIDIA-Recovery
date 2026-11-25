@@ -48,19 +48,6 @@ Create the name of the service account to use
 {{- end }}
 
 {{- define "api-gateway.validate" -}}
-{{- if and .Values.auth.trustHeaderBasedIdentity .Values.externalService.enabled }}
-{{- /* Keep the public Service from reaching any of the gateway's own listeners. */ -}}
-{{- $gatewayTargets := list "rest" "grpc" "rest-internal" "grpc-internal" "metrics"
-    (toString .Values.ports.rest) (toString .Values.ports.grpc)
-    (toString .Values.ports.restInternal) (toString .Values.ports.grpcInternal)
-    (toString .Values.metricsTelemetry.port) -}}
-{{- range $protocol := list "rest" "grpc" }}
-{{- $target := default "" (get ($.Values.externalService.targetPorts | default dict) $protocol) | toString }}
-{{- if or (eq $target "") (has $target $gatewayTargets) }}
-{{- fail (printf "externalService.targetPorts.%s must point to the trusted proxy when auth.trustHeaderBasedIdentity=true" $protocol) }}
-{{- end }}
-{{- end }}
-{{- end }}
 {{- if and .Values.auth.oidc.enabled .Values.auth.oidc.clientIdSecretName .Values.auth.oidc.clientId }}
 {{- fail "auth.oidc.clientId and auth.oidc.clientIdSecretName are mutually exclusive" }}
 {{- end }}

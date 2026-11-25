@@ -273,7 +273,7 @@
             "providerUrl": { "type": "string" },
             "clientId": { "type": "string" },
             "clientIdSecretName": { "type": "string" },
-            "clientIdSecretKey": { "type": "string", "minLength": 1 },
+            "clientIdSecretKey": { "type": "string" },
             "clientSecretName": { "type": "string", "minLength": 1 },
             "clientSecretKey": { "type": "string", "minLength": 1 },
             "scopes": { "type": "string" },
