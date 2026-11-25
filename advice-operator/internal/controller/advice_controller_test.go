@@ -13,6 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	heimdallv1alpha1 "github.com/dsx-ai-factory/nvidia-recovery/advice-operator/api/v1alpha1"
@@ -253,7 +254,7 @@ var _ = Describe("AdviceReconciler", func() {
 				owner := &corev1.ConfigMap{}
 				ownerKey := types.NamespacedName{Name: ownerName, Namespace: adviceNamespace}
 				if err := k8sClient.Get(ctx, ownerKey, owner); err == nil {
-					Expect(k8sClient.Delete(ctx, owner)).To(Succeed())
+					Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, owner))).To(Succeed())
 				}
 
 				advice := &heimdallv1alpha1.Advice{}
@@ -292,6 +293,69 @@ var _ = Describe("AdviceReconciler", func() {
 					return apierrors.IsNotFound(err)
 				}, timeout, interval).Should(BeTrue())
 			})
+
+			DescribeTable("rejects Advice for a terminating owner", func(existingAdvice bool) {
+				owner := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       ownerName,
+						Namespace:  adviceNamespace,
+						Finalizers: []string{"test.nvidia.com/hold-owner"},
+					},
+				}
+				Expect(k8sClient.Create(ctx, owner)).To(Succeed())
+				ownerKey := types.NamespacedName{Name: ownerName, Namespace: adviceNamespace}
+				DeferCleanup(func() {
+					latest := &corev1.ConfigMap{}
+					if err := mgr.GetAPIReader().Get(ctx, ownerKey, latest); apierrors.IsNotFound(err) {
+						return
+					} else {
+						Expect(err).NotTo(HaveOccurred())
+					}
+					latest.Finalizers = nil
+					Expect(k8sClient.Update(ctx, latest)).To(Succeed())
+				})
+
+				state := restartState
+				adviceCache.Update([]heimdallclient.APIAdvice{{
+					HeimdallID:   adviceName,
+					JobID:        jobID,
+					AttemptIndex: 1,
+					SchedulerMetadata: map[string]interface{}{
+						"namespace":         adviceNamespace,
+						"owner_api_version": "v1",
+						"owner_kind":        "ConfigMap",
+						"owner_name":        ownerName,
+						"owner_uid":         string(owner.UID),
+					},
+					Advice: heimdallclient.APIAdviceRecommendation{State: &state},
+				}})
+				request := reconcile.Request{NamespacedName: typeNamespacedName}
+				if existingAdvice {
+					_, err := reconciler.Reconcile(ctx, request)
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(func() error {
+						return k8sClient.Get(ctx, typeNamespacedName, &heimdallv1alpha1.Advice{})
+					}, timeout, interval).Should(Succeed())
+				}
+
+				Expect(k8sClient.Delete(ctx, owner)).To(Succeed())
+				terminatingOwner := &corev1.ConfigMap{}
+				Expect(mgr.GetAPIReader().Get(ctx, ownerKey, terminatingOwner)).To(Succeed())
+				Expect(terminatingOwner.DeletionTimestamp.IsZero()).To(BeFalse())
+				Expect(terminatingOwner.UID).To(Equal(owner.UID))
+
+				for range 2 {
+					_, err := reconciler.Reconcile(ctx, request)
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(func() bool {
+						err := mgr.GetAPIReader().Get(ctx, typeNamespacedName, &heimdallv1alpha1.Advice{})
+						return apierrors.IsNotFound(err)
+					}, timeout, interval).Should(BeTrue())
+				}
+			},
+				Entry("does not create new Advice", false),
+				Entry("removes existing Advice and does not recreate it", true),
+			)
 
 			It("deletes Advice CRD and does not recreate it after the owner is removed", func() {
 				owner := &corev1.ConfigMap{

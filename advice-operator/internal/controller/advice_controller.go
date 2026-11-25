@@ -49,6 +49,7 @@ const (
 // +kubebuilder:rbac:groups=heimdall.nvidia.com,resources=advices/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=heimdall.nvidia.com,resources=advices/finalizers,verbs=update
 // +kubebuilder:rbac:groups=run.ai,resources=distributedworkloads,verbs=get
+// +kubebuilder:rbac:groups=jobset.x-k8s.io,resources=jobsets,verbs=get
 
 // Reconcile ensures the Advice CRD matches the desired state from the Heimdall API.
 // It handles create, update, and delete operations based on the API cache state.
@@ -115,7 +116,7 @@ func (r *AdviceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 
 		if !ownerExists {
-			logger.Info("deleting advice for missing owner",
+			logger.Info("deleting advice for unavailable owner",
 				zap.String("ownerAPIVersion", ownerRef.APIVersion),
 				zap.String("ownerKind", ownerRef.Kind),
 				zap.String("ownerName", ownerRef.Name),
@@ -196,7 +197,9 @@ func (r *AdviceReconciler) ownerExists(ctx context.Context, namespace string, ow
 		return false, err
 	}
 
-	return owner.GetUID() == ownerRef.UID, nil
+	// A terminating owner can remain readable while foreground deletion waits for
+	// dependents. Do not recreate Advice while garbage collection is removing it.
+	return owner.GetUID() == ownerRef.UID && owner.GetDeletionTimestamp().IsZero(), nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
