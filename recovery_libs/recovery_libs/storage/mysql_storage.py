@@ -1876,6 +1876,7 @@ class MySQLStorage(BaseStorage):
             or routing_scope(existing.scheduler_metadata) != routing_scope(incoming.scheduler_metadata)
         )
 
+    @retry_on_conflict(lambda status_record: f"advice {status_record.advice_id}")
     def upsert_advice_reconciliation_status(
         self,
         status_record: AdviceReconciliationStatusRecord,
@@ -1899,59 +1900,71 @@ class MySQLStorage(BaseStorage):
             raise RecoveryStorageInputValidationError("diagnostic_message cannot exceed 1024 characters")
 
         try:
-            with self.connection.session() as session:
-                advice = session.scalars(
-                    select(AdviceRecord).where(AdviceRecord.heimdall_id == status_record.advice_id).with_for_update()
-                ).first()
-                if advice is None:
-                    raise RecoveryStorageInputValidationError(f"Advice {status_record.advice_id} does not exist.")
-                if status_record.observed_generation > advice.generation:
-                    raise RecoveryStorageInputValidationError(
-                        f"Observed Advice generation {status_record.observed_generation} exceeds current generation "
-                        f"{advice.generation}."
-                    )
-
-                existing = session.scalars(
-                    select(AdviceReconciliationStatusRecord)
-                    .where(
-                        AdviceReconciliationStatusRecord.advice_id == status_record.advice_id,
-                        AdviceReconciliationStatusRecord.observed_generation == status_record.observed_generation,
-                    )
-                    .with_for_update()
-                ).first()
-
-                if existing is not None:
-                    if existing.disposition in terminal_dispositions and (
-                        status_record.disposition != existing.disposition or status_record.reason != existing.reason
-                    ):
+            with self.connection.write_session() as session:
+                if not self.connection.write_pool_enabled:
+                    session.connection(execution_options={"isolation_level": "READ COMMITTED"})
+                try:
+                    advice = session.scalars(
+                        select(AdviceRecord)
+                        .where(AdviceRecord.heimdall_id == status_record.advice_id)
+                        .with_for_update()
+                    ).first()
+                    if advice is None:
+                        raise RecoveryStorageInputValidationError(f"Advice {status_record.advice_id} does not exist.")
+                    if status_record.observed_generation > advice.generation:
                         raise RecoveryStorageInputValidationError(
-                            "A terminal reconciliation status cannot be replaced for the same Advice generation."
-                        )
-                    if (
-                        existing.disposition in terminal_dispositions
-                        and status_record.disposition not in terminal_dispositions
-                    ):
-                        raise RecoveryStorageInputValidationError(
-                            "A terminal reconciliation status cannot return to pending."
+                            f"Observed Advice generation {status_record.observed_generation} exceeds current generation "
+                            f"{advice.generation}."
                         )
 
-                    if existing.disposition != status_record.disposition or existing.reason != status_record.reason:
-                        existing.transitioned_at = status_record.transitioned_at
-                    existing.disposition = status_record.disposition
-                    existing.reason = status_record.reason
-                    existing.observed_at = status_record.observed_at
-                    existing.diagnostic_message = status_record.diagnostic_message
-                    persisted = existing
-                else:
-                    session.add(status_record)
-                    persisted = status_record
+                    existing = session.scalars(
+                        select(AdviceReconciliationStatusRecord)
+                        .where(
+                            AdviceReconciliationStatusRecord.advice_id == status_record.advice_id,
+                            AdviceReconciliationStatusRecord.observed_generation == status_record.observed_generation,
+                        )
+                        .with_for_update()
+                    ).first()
 
-                confirm_exclusions(session, advice, persisted)
-                session.commit()
-                session.refresh(persisted)
-                session.expunge(persisted)
-                return persisted
+                    if existing is not None:
+                        if existing.disposition in terminal_dispositions and (
+                            status_record.disposition != existing.disposition or status_record.reason != existing.reason
+                        ):
+                            raise RecoveryStorageInputValidationError(
+                                "A terminal reconciliation status cannot be replaced for the same Advice generation."
+                            )
+                        if (
+                            existing.disposition in terminal_dispositions
+                            and status_record.disposition not in terminal_dispositions
+                        ):
+                            raise RecoveryStorageInputValidationError(
+                                "A terminal reconciliation status cannot return to pending."
+                            )
+
+                        if existing.disposition != status_record.disposition or existing.reason != status_record.reason:
+                            existing.transitioned_at = status_record.transitioned_at
+                        existing.disposition = status_record.disposition
+                        existing.reason = status_record.reason
+                        existing.observed_at = status_record.observed_at
+                        existing.diagnostic_message = status_record.diagnostic_message
+                        persisted = existing
+                    else:
+                        session.add(status_record)
+                        persisted = status_record
+
+                    confirm_exclusions(session, advice, persisted)
+                    session.commit()
+                    session.refresh(persisted)
+                    session.expunge(persisted)
+                    return persisted
+                except Exception:
+                    # Explicit rollback also restores ORM insertion state for a retry.
+                    session.rollback()
+                    raise
         except RecoveryStorageInputValidationError:
+            raise
+        except (OperationalError, IntegrityError):
+            # The session is closed and rolled back before retrying the entire projection.
             raise
         except Exception as e:
             logger.exception("Failed to upsert advice reconciliation status", extra={"error": str(e)})

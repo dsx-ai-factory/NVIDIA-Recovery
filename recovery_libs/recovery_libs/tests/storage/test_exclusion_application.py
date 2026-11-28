@@ -35,7 +35,7 @@ def connection():
     for model in (JobExecutionError, NodeEvent, AdviceRecord, AdviceReconciliationStatusRecord):
         model.__table__.create(engine)
     factory = sessionmaker(engine, expire_on_commit=False)
-    yield SimpleNamespace(session=factory)
+    yield SimpleNamespace(session=factory, write_session=factory, write_pool_enabled=True)
     engine.dispose()
 
 
@@ -209,3 +209,107 @@ def test_latest_report_is_selected_even_when_its_observation_time_is_older(conne
         session.commit()
     MySQLStorage(connection).upsert_advice_reconciliation_status(status_record(advice))
     assert outcomes(connection) == [ExclusionApplicationStatus.UNKNOWN, ExclusionApplicationStatus.APPLIED]
+
+
+def test_late_attribution_observes_already_persisted_convergence(connection):
+    """Results arriving after status confirmation must not remain UNKNOWN forever."""
+    advice = advice_record()
+    with connection.session() as session:
+        session.add(advice)
+        session.commit()
+    MySQLStorage(connection).upsert_advice_reconciliation_status(status_record(advice))
+    store_events(connection, [attribution(job_anomaly_id=uuid.uuid4())])
+    assert outcomes(connection) == [ExclusionApplicationStatus.APPLIED]
+
+
+def test_projection_failure_rolls_back_status_and_outcomes_together(connection, monkeypatch):
+    """A failed projection cannot terminally close Advice without confirming its rows."""
+    from recovery_libs.storage import mysql_storage
+    from recovery_libs.storage.base import RecoveryStorageException
+
+    store_events(connection, [attribution()])
+    advice = advice_record()
+    with connection.session() as session:
+        session.add(advice)
+        session.commit()
+    original_confirm = mysql_storage.confirm_exclusions
+
+    def fail_after_projection(session, advice, status):
+        original_confirm(session, advice, status)
+        raise RuntimeError("interrupted before commit")
+
+    monkeypatch.setattr(mysql_storage, "confirm_exclusions", fail_after_projection)
+    with pytest.raises(RecoveryStorageException):
+        MySQLStorage(connection).upsert_advice_reconciliation_status(status_record(advice))
+    assert outcomes(connection) == [ExclusionApplicationStatus.UNKNOWN]
+    with connection.session() as session:
+        assert session.scalars(select(AdviceReconciliationStatusRecord)).all() == []
+    monkeypatch.setattr(mysql_storage, "confirm_exclusions", original_confirm)
+    MySQLStorage(connection).upsert_advice_reconciliation_status(status_record(advice))
+    assert outcomes(connection) == [ExclusionApplicationStatus.APPLIED]
+
+
+def test_late_attribution_projection_failure_rolls_back_insert(connection, monkeypatch):
+    """Retrying interrupted late ingestion restores both evidence and its confirmed outcome."""
+    from recovery_libs.storage import attribution_storage
+    from recovery_libs.storage.base import RecoveryStorageException
+
+    advice = advice_record()
+    with connection.session() as session:
+        session.add(advice)
+        session.commit()
+    MySQLStorage(connection).upsert_advice_reconciliation_status(status_record(advice))
+    original_confirm = attribution_storage.confirm_exclusions
+
+    def fail_after_projection(session, advice, status):
+        original_confirm(session, advice, status)
+        raise RuntimeError("interrupted before commit")
+
+    monkeypatch.setattr(attribution_storage, "confirm_exclusions", fail_after_projection)
+    events = [attribution()]
+    with pytest.raises(RecoveryStorageException):
+        store_events(connection, events)
+    assert outcomes(connection) == []
+    monkeypatch.setattr(attribution_storage, "confirm_exclusions", original_confirm)
+    store_events(connection, events)
+    assert outcomes(connection) == [ExclusionApplicationStatus.APPLIED]
+
+
+@pytest.mark.parametrize("late_ingestion", [False, True])
+def test_transient_conflict_retries_entire_outcome_transaction(connection, monkeypatch, late_ingestion):
+    """A deadlock after projection is rolled back and retried without losing confirmation."""
+    from recovery_libs.storage import attribution_storage, mysql_storage
+    from sqlalchemy.exc import OperationalError
+
+    advice = advice_record()
+    with connection.session() as session:
+        session.add(advice)
+        session.commit()
+    storage = MySQLStorage(connection)
+    if late_ingestion:
+        storage.upsert_advice_reconciliation_status(status_record(advice))
+        module = attribution_storage
+    else:
+        store_events(connection, [attribution()])
+        module = mysql_storage
+    original_confirm = module.confirm_exclusions
+    calls = 0
+
+    def deadlock_once(session, advice, status):
+        nonlocal calls
+        original_confirm(session, advice, status)
+        calls += 1
+        if calls == 1:
+            raise OperationalError("UPDATE", {}, Exception(1213, "deadlock victim"))
+        return 1
+
+    monkeypatch.setattr(module, "confirm_exclusions", deadlock_once)
+    monkeypatch.setattr(mysql_storage, "_conflict_retry_delay", lambda attempt: 0)
+    if late_ingestion:
+        store_events(connection, [attribution()])
+    else:
+        storage.upsert_advice_reconciliation_status(status_record(advice))
+    assert calls == 2
+    assert outcomes(connection) == [ExclusionApplicationStatus.APPLIED]
+    with connection.session() as session:
+        assert len(session.scalars(select(AdviceReconciliationStatusRecord)).all()) == 1

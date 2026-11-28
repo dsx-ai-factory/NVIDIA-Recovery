@@ -134,6 +134,13 @@ projects applicable SAC convergence reports into eligible FAST attribution
 rows; SLOW diagnosis never causes exclusions. An empty read or an unknown
 historical outcome is not proof that an exclusion was applied.
 
+Outcome confirmation is atomic with reconciliation-status persistence. FAST
+result ingestion also checks persisted convergence under the same Advice lock,
+so eligible results delivered after convergence can be confirmed without
+replaying scheduler actions. Transient database conflicts use bounded retries.
+Historical rows are not automatically backfilled. Consumers should recheck
+pending `UNKNOWN` outcomes rather than treating HTTP 200 as a final negative.
+
 Attribution results are a persisted diagnosis/outcome contract; audit events
 remain a separate timeline API. See
 [ADR 0061](../decisions/0061-restore-attribution-results-and-exclusion-outcomes.md).
