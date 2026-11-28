@@ -110,6 +110,10 @@ Use repeatable `jobIds` for indexed batch queries, for example
 `/v1/error-attributions?jobIds=123&jobIds=456&limit=200&offset=0`.
 A nonempty `anomalyUuid` also scopes a batch query without another selector;
 requests with no job, node, anomaly, or timestamp selector are rejected.
+Node-only queries return matching node events and an empty `globalEvents` list.
+Global events have no node identity; a job, anomaly, or timestamp selector is
+required to include them. In mixed queries, those selectors scope global events
+independently of the node filter.
 The batch endpoint uses limit/offset pagination; the single-job endpoint uses
 `jobId` with optional `jobAttemptIndex` and `anomalyUuid` filters. An exact
 matching event remains useful even when the base job index has expired.
