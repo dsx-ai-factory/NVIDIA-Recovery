@@ -155,13 +155,33 @@ def test_invalid_service_is_rejected_before_any_docker_command(build_environment
     assert _commands(build_environment) == []
 
 
-def test_list_keeps_optional_attribution_services_discoverable(build_environment: dict[str, str]) -> None:
+def test_list_keeps_explicit_services_discoverable(build_environment: dict[str, str]) -> None:
     """Listing the supported selection requires neither Docker nor source access."""
     result = _build(build_environment, "--list")
 
     assert result.returncode == 0, result.stderr
-    assert PUBLIC_SERVICES | {"attribution-adapter", "attribution-service"} == set(result.stdout.splitlines())
+    assert PUBLIC_SERVICES | {"advice-operator", "attribution-adapter", "attribution-service"} == set(
+        result.stdout.splitlines()
+    )
     assert _commands(build_environment) == []
+
+
+@pytest.mark.parametrize("mode", ("--load", "--publish"))
+def test_explicit_operator_build_uses_sibling_module_context(build_environment: dict[str, str], mode: str) -> None:
+    """Operator builds include sibling API sources without selecting other services."""
+    result = _build(build_environment, mode, "advice-operator")
+
+    assert result.returncode == 0, result.stderr
+    commands = _commands(build_environment)
+    builds = [command for command in commands if command[:3] == ["docker", "buildx", "build"]]
+    assert len(builds) == 1
+    build = builds[0]
+    assert build[build.index("--file") + 1] == str(REPO_ROOT / "advice-operator/Dockerfile")
+    assert build[-1] == str(REPO_ROOT)
+    assert build[build.index("--tag") + 1] == f"{build_environment['IMAGE_PREFIX']}/advice-operator:public-test"
+    assert all(command[0] == "docker" for command in commands)
+    assert ("--load" in build) == (mode == "--load")
+    assert ("--push" in build) == (mode == "--publish")
 
 
 @pytest.mark.parametrize("service", ["api-gateway", "slurm-advisor-controller", "slurm-watchdog"])

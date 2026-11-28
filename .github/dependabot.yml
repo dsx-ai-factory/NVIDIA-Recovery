@@ -11,7 +11,7 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
   - package-ecosystem: gomod
-    directories: [/api-gateway, /slurm-advisor-controller]
+    directories: [/api-gateway, /advice-operator, /slurm-advisor-controller]
     schedule:
       interval: weekly
     open-pull-requests-limit: 2

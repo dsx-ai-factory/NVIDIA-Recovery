@@ -136,7 +136,7 @@ historical outcome is not proof that an exclusion was applied.
 
 Attribution results are a persisted diagnosis/outcome contract; audit events
 remain a separate timeline API. See
-[ADR 0059](../decisions/0059-restore-attribution-results-and-exclusion-outcomes.md).
+[ADR 0061](../decisions/0061-restore-attribution-results-and-exclusion-outcomes.md).
 
 ## Audit ingestion
 

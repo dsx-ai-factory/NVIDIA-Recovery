@@ -6,12 +6,15 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
+from e2e_harness.advice_operator import AdviceOperatorServices
 from recovery_libs.testing.launch.jobs import Job, JobSpec
+from recovery_libs.testing.launch.kubernetes import KubectlJobSetClient
 from recovery_libs.testing.launch.launcher import Launcher, launcher_named
 
 pytest_plugins = [
@@ -76,5 +79,26 @@ def launcher(pytestconfig: pytest.Config, tmp_path: Path) -> Iterator[Launcher]:
 
 
 @pytest.fixture
-def scenario_services() -> None:
-    """The foundation needs no Recovery services."""
+def scenario_services(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[AdviceOperatorServices | None]:
+    """Bind operator scenarios to an externally deployed fixture; foundation stays standalone."""
+    if request.node.path.name != "test_advice_operator.py":
+        yield None
+        return
+    endpoint = os.environ.get("ADVICE_FIXTURE_URL")
+    if not endpoint:
+        raise pytest.UsageError("ADVICE_FIXTURE_URL is required; use deploy/tilt/kubernetes/dev.sh test")
+    context = os.environ.get("LAUNCHER_KUBERNETES_JOBSET_CONTEXT")
+    if not context:
+        raise pytest.UsageError("LAUNCHER_KUBERNETES_JOBSET_CONTEXT must name the owned development cluster")
+    services = AdviceOperatorServices(
+        KubectlJobSetClient(
+            context=context,
+            namespace=os.environ.get("LAUNCHER_KUBERNETES_JOBSET_NAMESPACE", "recovery-dev"),
+        ),
+        endpoint,
+        tmp_path,
+    )
+    try:
+        yield services
+    finally:
+        services.close()

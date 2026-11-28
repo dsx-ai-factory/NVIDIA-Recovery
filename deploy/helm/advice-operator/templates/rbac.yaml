@@ -129,39 +129,7 @@ metadata:
   name: {{ include "advice-operator.fullname" . }}-manager
   labels:
     {{- include "advice-operator.labels" . | nindent 4 }}
-rules:
-- apiGroups:
-  - heimdall.nvidia.com
-  resources:
-  - advices
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - heimdall.nvidia.com
-  resources:
-  - advices/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - heimdall.nvidia.com
-  resources:
-  - advices/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - run.ai
-  resources:
-  - distributedworkloads
-  verbs:
-  - get
+rules:{{ include "advice-operator.managerRules" . | nindent 0 }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
