@@ -21,6 +21,7 @@ import golden_fixtures
 import pytest
 from anomaly_detection_isolator.anomaly_processor import AnomalyProcessor
 from anomaly_detection_isolator.result_builder import build_attribution_result
+from recovery_libs.schema.event_type import EventType
 from recovery_libs.storage.node_events import ErrorAttributionType, ExclusionType
 
 from attribution_adapter import response_builder
@@ -55,21 +56,69 @@ _FACT_RESPONSE = golden_fixtures._v2_case(
 )
 
 
-def _run_pipeline(settings) -> dict[str, ExclusionType]:
+# A running job with no node-bound symptom. Its straggler digest flags a rank on "node2".
+_STRAGGLER_SYMPTOM = "Straggler (Megatron Pattern)"
+_STRAGGLER_FACT_RESPONSE = golden_fixtures._v2_case(
+    "Pass",
+    "Not Applicable",
+    {
+        "running without error": [
+            {
+                "type": "ResourcelessSource",
+                "status": "bad",
+                "source": {
+                    "observation_id": 1,
+                    "source": "slurm_info",
+                    "pos": None,
+                    "line": "",
+                    "rule": "r",
+                    "time": None,
+                },
+            }
+        ]
+    },
+)
+_STRAGGLER_FACT_RESPONSE.collectors = {
+    "megatron_straggler": {
+        "node2": {
+            "pattern": "Megatron Pattern",
+            "rank_scores": [{"rank": 5, "score": 213.46}],
+            "sources": [
+                {
+                    "observation_id": 1,
+                    "source": "applog",
+                    "pos": 1,
+                    "line": "^^^^ Bottom 2 Ranks with lowest  Etpt(TF): 213.46/5/node2, 287.92/1/node1,",
+                    "rule": "r",
+                    "time": "2026-01-01T00:30:00Z",
+                }
+            ],
+        }
+    }
+}
+
+
+def _run_pipeline(
+    settings,
+    fact_response=_FACT_RESPONSE,
+    anomaly_type: str = golden_fixtures.ANOMALY_TYPE,
+) -> dict[str, ExclusionType]:
     """Drive the full golden pipeline and return {node: exclusion_type} for every NodeEvent.
 
     Mirrors the pipeline in ``test_golden_message.py`` exactly, using the provided settings
     object (which controls exclusion-list matching) instead of the empty-list capture config.
+    ``anomaly_type`` is the detection signal of the request and the anomaly type of the result.
     """
     request = golden_fixtures.make_request()
+    request.failure_context.detection_signal = anomaly_type
     job_status = golden_fixtures.make_job_status()
 
-    resp = response_builder.build_response(_FACT_RESPONSE, request, attribution_session_id="sess")
+    resp = response_builder.build_response(fact_response, request, attribution_session_id="sess")
 
     result = build_attribution_result(
         resp,
         job_status,
-        golden_fixtures.ANOMALY_TYPE,
+        anomaly_type,
         golden_fixtures.ANOMALY_UUID,
         ErrorAttributionType.FAST,
         settings,
@@ -136,3 +185,29 @@ def test_exclusion_discrimination_parametrized(isolated, non_isolated, expected)
     assert exclusions["node1"] == expected, (
         f"Expected {expected!r} but got {exclusions['node1']!r} (isolated={isolated}, non_isolated={non_isolated})"
     )
+
+
+@pytest.mark.parametrize(
+    "isolated, non_isolated, expected",
+    [
+        # No list names the straggler symptom -> default TEMPORARY, as for any unlisted symptom.
+        ([], [], ExclusionType.TEMPORARY),
+        # An operator turns straggler exclusion off, or makes it CONFIRMED, with the same lists.
+        ([], ["Straggler ("], ExclusionType.NONE),
+        ([_STRAGGLER_SYMPTOM], [], ExclusionType.CONFIRMED),
+    ],
+)
+def test_straggler_node_exclusion_follows_the_symptom_lists(isolated, non_isolated, expected):
+    """A straggler node from FACT's collector digest is excluded by the same symptom-driven policy."""
+    settings = golden_fixtures.capture_settings_with(isolated=isolated, non_isolated=non_isolated)
+
+    exclusions = _run_pipeline(settings, _STRAGGLER_FACT_RESPONSE, EventType.STRAGGLER.value)
+
+    assert exclusions == {"node2": expected}
+
+
+def test_straggler_digest_excludes_no_node_for_a_crash():
+    """The straggler digest names a node only for a STRAGGLER anomaly."""
+    exclusions = _run_pipeline(golden_fixtures.capture_settings(), _STRAGGLER_FACT_RESPONSE)
+
+    assert exclusions == {}
