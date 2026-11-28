@@ -60,6 +60,8 @@ All RPCs are unary. HTTP uses protobuf JSON field names (for example,
 | `GetWorkflow` | `GET /v1/workflows:lookup` or `GET /v1/workflows/{workflow_id}` | Workflow lookup; prefer the query route for IDs containing reserved characters |
 | `ListAdvice` | `GET /v1/advice` | Desired state and exclusions, optionally only active advice |
 | `UpdateAdviceReconciliationStatus` | `PUT /v1/advice/{heimdall_job_id}/reconciliation-status` | Idempotent observation for one advice generation; HTTP body is `status` |
+| `GetErrorAttributions` | `GET /v1/error-attributions` | Filtered node/global attribution results with limit/offset pagination |
+| `GetJobErrorAttributions` | `GET /v1/job-error-attributions` | Attribution results, summary, and insight for a scheduler job |
 | `AuditService.GetAuditEvents` | `GET /v1/audit/events` | Query persisted events by job, attempt, event filters, and opaque cursors |
 | `AuditService.CreateAuditEvents` | `POST /v1/audit/events` | Submit a batch of producer audit events; the body contains `items` |
 
@@ -95,6 +97,46 @@ bind the query filters. Set `onlyActive=true` for controller reconciliation;
 historical listings remain available when that filter is omitted. The server's
 active filter does not replace controller ownership, exact-attempt, expiration,
 or scheduler-state checks. Status applies only to its matching generation.
+
+## Attribution results and exclusion outcomes
+
+Dedicated attribution reads return an `attributions` object containing `count`,
+`events`, `globalEvents`, `attributionSummary`, and `attributionInsight`.
+Node events preserve scheduler `jobId`, `jobAttemptIndex`, `node`, `timestamp`,
+`jobExecutionError`, attribution classification/source fields, `exclusionType`,
+`originalExclusionType`, `factStatus`, and `exclusionApplied`.
+
+Use repeatable `jobIds` for indexed batch queries, for example
+`/v1/error-attributions?jobIds=123&jobIds=456&limit=200&offset=0`.
+A nonempty `anomalyUuid` also scopes a batch query without another selector;
+requests with no job, node, anomaly, or timestamp selector are rejected.
+Node-only queries return matching node events and an empty `globalEvents` list.
+Global events have no node identity; a job, anomaly, or timestamp selector is
+required to include them. In mixed queries, those selectors scope global events
+independently of the node filter.
+The batch endpoint uses limit/offset pagination; the single-job endpoint uses
+`jobId` with optional `jobAttemptIndex` and `anomalyUuid` filters. An exact
+matching event remains useful even when the base job index has expired.
+
+`exclusionType` is the effective classification after ADI's allocation and
+isolation-safety filtering. `originalExclusionType` records the earlier
+classification and does not authorize an exclusion. Eligible exclusion types
+are `TEMPORARY` and `CONFIRMED`; a filtered `NONE` is not applied.
+
+`exclusionApplied` uses the inherited enum strings
+`EXCLUSION_APPLICATION_STATUS_UNKNOWN`,
+`EXCLUSION_APPLICATION_STATUS_NOT_APPLICABLE`,
+`EXCLUSION_APPLICATION_STATUS_NOT_APPLIED`, and
+`EXCLUSION_APPLICATION_STATUS_APPLIED` (with `UNSPECIFIED` reserved for an
+unspecified value). `APPLIED` means the requested constraints were confirmed
+satisfied, regardless of which actor executed the mutation. Job Manager
+projects applicable SAC convergence reports into eligible FAST attribution
+rows; SLOW diagnosis never causes exclusions. An empty read or an unknown
+historical outcome is not proof that an exclusion was applied.
+
+Attribution results are a persisted diagnosis/outcome contract; audit events
+remain a separate timeline API. See
+[ADR 0061](../decisions/0061-restore-attribution-results-and-exclusion-outcomes.md).
 
 ## Audit ingestion
 

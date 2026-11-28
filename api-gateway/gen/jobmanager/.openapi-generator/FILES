@@ -22,6 +22,7 @@ model_dag_dependency_reason_code_enum.go
 model_dag_dependency_response.go
 model_dag_dependency_step.go
 model_dag_trigger_condition_enum.go
+model_exclusion_application_status.go
 model_get_recovery_sequence_response.go
 model_get_workflows_response.go
 model_global_event.go

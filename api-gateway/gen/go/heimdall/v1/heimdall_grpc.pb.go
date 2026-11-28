@@ -29,6 +29,8 @@ const (
 	HeimdallService_CreateApplicationIntention_FullMethodName       = "/heimdall.v1.HeimdallService/CreateApplicationIntention"
 	HeimdallService_GetWorkflows_FullMethodName                     = "/heimdall.v1.HeimdallService/GetWorkflows"
 	HeimdallService_GetWorkflow_FullMethodName                      = "/heimdall.v1.HeimdallService/GetWorkflow"
+	HeimdallService_GetErrorAttributions_FullMethodName             = "/heimdall.v1.HeimdallService/GetErrorAttributions"
+	HeimdallService_GetJobErrorAttributions_FullMethodName          = "/heimdall.v1.HeimdallService/GetJobErrorAttributions"
 	HeimdallService_ListAdvice_FullMethodName                       = "/heimdall.v1.HeimdallService/ListAdvice"
 	HeimdallService_UpdateAdviceReconciliationStatus_FullMethodName = "/heimdall.v1.HeimdallService/UpdateAdviceReconciliationStatus"
 	HeimdallService_GetRecoverySequence_FullMethodName              = "/heimdall.v1.HeimdallService/GetRecoverySequence"
@@ -53,6 +55,10 @@ type HeimdallServiceClient interface {
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
 	// Returns the workflow with the given ID.
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*GetWorkflowResponse, error)
+	// Returns error attributions matching the given filters.
+	GetErrorAttributions(ctx context.Context, in *GetErrorAttributionsRequest, opts ...grpc.CallOption) (*GetErrorAttributionsResponse, error)
+	// Returns error attributions for a single job.
+	GetJobErrorAttributions(ctx context.Context, in *GetJobErrorAttributionsRequest, opts ...grpc.CallOption) (*GetJobErrorAttributionsResponse, error)
 	// Returns advice for jobs.
 	ListAdvice(ctx context.Context, in *ListAdviceRequest, opts ...grpc.CallOption) (*ListAdviceResponse, error)
 	// Records one generation-scoped Advice reconciliation observation.
@@ -134,6 +140,24 @@ func (c *heimdallServiceClient) GetWorkflow(ctx context.Context, in *GetWorkflow
 	return out, nil
 }
 
+func (c *heimdallServiceClient) GetErrorAttributions(ctx context.Context, in *GetErrorAttributionsRequest, opts ...grpc.CallOption) (*GetErrorAttributionsResponse, error) {
+	out := new(GetErrorAttributionsResponse)
+	err := c.cc.Invoke(ctx, HeimdallService_GetErrorAttributions_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *heimdallServiceClient) GetJobErrorAttributions(ctx context.Context, in *GetJobErrorAttributionsRequest, opts ...grpc.CallOption) (*GetJobErrorAttributionsResponse, error) {
+	out := new(GetJobErrorAttributionsResponse)
+	err := c.cc.Invoke(ctx, HeimdallService_GetJobErrorAttributions_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *heimdallServiceClient) ListAdvice(ctx context.Context, in *ListAdviceRequest, opts ...grpc.CallOption) (*ListAdviceResponse, error) {
 	out := new(ListAdviceResponse)
 	err := c.cc.Invoke(ctx, HeimdallService_ListAdvice_FullMethodName, in, out, opts...)
@@ -188,6 +212,10 @@ type HeimdallServiceServer interface {
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
 	// Returns the workflow with the given ID.
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*GetWorkflowResponse, error)
+	// Returns error attributions matching the given filters.
+	GetErrorAttributions(context.Context, *GetErrorAttributionsRequest) (*GetErrorAttributionsResponse, error)
+	// Returns error attributions for a single job.
+	GetJobErrorAttributions(context.Context, *GetJobErrorAttributionsRequest) (*GetJobErrorAttributionsResponse, error)
 	// Returns advice for jobs.
 	ListAdvice(context.Context, *ListAdviceRequest) (*ListAdviceResponse, error)
 	// Records one generation-scoped Advice reconciliation observation.
@@ -223,6 +251,12 @@ func (UnimplementedHeimdallServiceServer) GetWorkflows(context.Context, *GetWork
 }
 func (UnimplementedHeimdallServiceServer) GetWorkflow(context.Context, *GetWorkflowRequest) (*GetWorkflowResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflow not implemented")
+}
+func (UnimplementedHeimdallServiceServer) GetErrorAttributions(context.Context, *GetErrorAttributionsRequest) (*GetErrorAttributionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetErrorAttributions not implemented")
+}
+func (UnimplementedHeimdallServiceServer) GetJobErrorAttributions(context.Context, *GetJobErrorAttributionsRequest) (*GetJobErrorAttributionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetJobErrorAttributions not implemented")
 }
 func (UnimplementedHeimdallServiceServer) ListAdvice(context.Context, *ListAdviceRequest) (*ListAdviceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListAdvice not implemented")
@@ -375,6 +409,42 @@ func _HeimdallService_GetWorkflow_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HeimdallService_GetErrorAttributions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetErrorAttributionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HeimdallServiceServer).GetErrorAttributions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HeimdallService_GetErrorAttributions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HeimdallServiceServer).GetErrorAttributions(ctx, req.(*GetErrorAttributionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HeimdallService_GetJobErrorAttributions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetJobErrorAttributionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HeimdallServiceServer).GetJobErrorAttributions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HeimdallService_GetJobErrorAttributions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HeimdallServiceServer).GetJobErrorAttributions(ctx, req.(*GetJobErrorAttributionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _HeimdallService_ListAdvice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAdviceRequest)
 	if err := dec(in); err != nil {
@@ -481,6 +551,14 @@ var HeimdallService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetWorkflow",
 			Handler:    _HeimdallService_GetWorkflow_Handler,
+		},
+		{
+			MethodName: "GetErrorAttributions",
+			Handler:    _HeimdallService_GetErrorAttributions_Handler,
+		},
+		{
+			MethodName: "GetJobErrorAttributions",
+			Handler:    _HeimdallService_GetJobErrorAttributions_Handler,
 		},
 		{
 			MethodName: "ListAdvice",

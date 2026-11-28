@@ -11,11 +11,12 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
+from recovery_libs.schema.anomaly_isolator.exclusion_application import ExclusionApplicationStatus
 from recovery_libs.storage.base import RecoveryStorageException
 from recovery_libs.storage.global_events import GlobalEvent
 from recovery_libs.storage.job_execution_errors import JobExecutionError
 from recovery_libs.storage.mysql_connection import MySQLConnection
-from recovery_libs.storage.node_events import NodeEvent
+from recovery_libs.storage.node_events import ErrorAttributionType, ExclusionType, NodeEvent
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,14 @@ class AttributionStorage:
                 session.expire_on_commit = False
                 for event in events:
                     event.job_execution_error_id = error.id
+                    if isinstance(event, NodeEvent):
+                        # ADI's effective type already incorporates allocation and safety limits.
+                        event.exclusion_applied = (
+                            ExclusionApplicationStatus.UNKNOWN
+                            if event.error_attribution_type == ErrorAttributionType.FAST
+                            and event.exclusion_type in (ExclusionType.TEMPORARY, ExclusionType.CONFIRMED)
+                            else ExclusionApplicationStatus.NOT_APPLICABLE
+                        )
                     session.add(event)
                 session.commit()
                 logger.debug("Succesfully created error attribution: %s", events)

@@ -1576,7 +1576,7 @@ def get_error_attributions(
             A structured collection containing both node-level and global/job-level error events matching
             the specified filters. The item_count field reflects the total count of both types of events.
     """
-    if not node_names and not job_ids and not start_timestamp and not end_timestamp:
+    if not node_names and not job_ids and not start_timestamp and not end_timestamp and not anomaly_uuid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one filtering criteria must be provided.",
@@ -1596,15 +1596,19 @@ def get_error_attributions(
             limit=limit,  # type: ignore[arg-type]
             offset=offset,  # type: ignore[arg-type]
         )
-        # Also fetch global events with same filters (except node_names since global events don't have nodes)
-        global_events, global_item_count = job_manager.attribution_storage.read_global_attributions(  # type: ignore[union-attr]
-            job_ids=job_ids,
-            start_timestamp=start_timestamp,
-            end_timestamp=end_timestamp,
-            anomaly_uuid=uuid.UUID(anomaly_uuid) if anomaly_uuid else None,
-            limit=limit,  # type: ignore[arg-type]
-            offset=offset,  # type: ignore[arg-type]
-        )
+        # Global events have no node identity. A node-only request cannot scope
+        # that query, so omit global events rather than making an unfiltered read.
+        if job_ids or start_timestamp or end_timestamp or anomaly_uuid:
+            global_events, global_item_count = job_manager.attribution_storage.read_global_attributions(  # type: ignore[union-attr]
+                job_ids=job_ids,
+                start_timestamp=start_timestamp,
+                end_timestamp=end_timestamp,
+                anomaly_uuid=uuid.UUID(anomaly_uuid) if anomaly_uuid else None,
+                limit=limit,  # type: ignore[arg-type]
+                offset=offset,  # type: ignore[arg-type]
+            )
+        else:
+            global_events, global_item_count = [], 0
         node_events_http, global_events_http = storage_to_http_attributions(node_events, global_events)
         return NodeEvents(
             item_count=item_count + global_item_count,

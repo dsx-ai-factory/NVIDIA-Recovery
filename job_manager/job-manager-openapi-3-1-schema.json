@@ -2700,6 +2700,17 @@
                 "title": "DagTriggerConditionEnum",
                 "description": "The condition under which a DAG step should be triggered.\n\nCOMPLETED: Trigger when the current job finishes successfully (Slurm COMPLETED state)."
             },
+            "ExclusionApplicationStatus": {
+                "type": "string",
+                "enum": [
+                    "unknown",
+                    "not_applicable",
+                    "not_applied",
+                    "applied"
+                ],
+                "title": "ExclusionApplicationStatus",
+                "description": "Whether an attribution's exclusion is applicable and confirmed satisfied."
+            },
             "GetRecoverySequenceResponse": {
                 "properties": {
                     "recoveryContext": {
@@ -3437,6 +3448,10 @@
                             }
                         ],
                         "title": "Original Exclusion Type"
+                    },
+                    "exclusion_applied": {
+                        "$ref": "#/components/schemas/ExclusionApplicationStatus",
+                        "default": "unknown"
                     },
                     "fact_status": {
                         "type": "string",

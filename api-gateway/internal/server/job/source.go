@@ -12,6 +12,8 @@ import (
 )
 
 type JobSource interface {
+	GetJobErrorAttributions(ctx context.Context, req *pb.GetJobErrorAttributionsRequest) (*pb.GetJobErrorAttributionsResponse, error)
+	GetErrorAttributions(ctx context.Context, req *pb.GetErrorAttributionsRequest) (*pb.GetErrorAttributionsResponse, error)
 	CreateApplicationIntention(ctx context.Context, req *pb.CreateApplicationIntentionRequest) (*pb.CreateApplicationIntentionResponse, error)
 	CreateOrUpdateJob(ctx context.Context, req *pb.CreateOrUpdateJobRequest) (*pb.CreateOrUpdateJobResponse, error)
 	GetJob(ctx context.Context, req *pb.GetJobRequest) (*pb.GetJobResponse, error)
@@ -73,4 +75,14 @@ func (s *NotImplementedJobSource) GetRecoverySequence(ctx context.Context, req *
 
 func (s *NotImplementedJobSource) RecordRecoveryMilestone(ctx context.Context, req *pb.RecordRecoveryMilestoneRequest) (*pb.RecordRecoveryMilestoneResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RecordRecoveryMilestone not implemented")
+}
+
+// GetErrorAttributions reports that attribution reads are unavailable from this source.
+func (s *NotImplementedJobSource) GetErrorAttributions(ctx context.Context, req *pb.GetErrorAttributionsRequest) (*pb.GetErrorAttributionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "attribution reads are not available from this source")
+}
+
+// GetJobErrorAttributions reports that attribution reads are unavailable from this source.
+func (s *NotImplementedJobSource) GetJobErrorAttributions(ctx context.Context, req *pb.GetJobErrorAttributionsRequest) (*pb.GetJobErrorAttributionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "attribution reads are not available from this source")
 }

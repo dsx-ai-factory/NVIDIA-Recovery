@@ -126,6 +126,7 @@ Class | Method | HTTP request | Description
  - [DagDependencyResponse](docs/DagDependencyResponse.md)
  - [DagDependencyStep](docs/DagDependencyStep.md)
  - [DagTriggerConditionEnum](docs/DagTriggerConditionEnum.md)
+ - [ExclusionApplicationStatus](docs/ExclusionApplicationStatus.md)
  - [GetRecoverySequenceResponse](docs/GetRecoverySequenceResponse.md)
  - [GetWorkflowsResponse](docs/GetWorkflowsResponse.md)
  - [GlobalEvent](docs/GlobalEvent.md)

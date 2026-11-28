@@ -283,6 +283,99 @@ paths:
           type: string
       tags:
         - HeimdallService
+  /v1/error-attributions:
+    get:
+      summary: List error attributions
+      description: Retrieve error attributions filtered by node names, job ids, time range, or anomaly uuid.
+      operationId: HeimdallService_GetErrorAttributions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetErrorAttributionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: nodeNames
+          description: Filter by node names.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: jobIds
+          description: Filter by scheduler job ids.
+          in: query
+          required: false
+          type: array
+          items:
+            type: string
+          collectionFormat: multi
+        - name: startTimestamp
+          description: Only include events at or after this ISO-8601 timestamp.
+          in: query
+          required: false
+          type: string
+        - name: endTimestamp
+          description: Only include events at or before this ISO-8601 timestamp.
+          in: query
+          required: false
+          type: string
+        - name: anomalyUuid
+          description: Filter by anomaly uuid.
+          in: query
+          required: false
+          type: string
+        - name: limit
+          description: The maximum number of events to return.
+          in: query
+          required: false
+          type: integer
+          format: int32
+        - name: offset
+          description: The number of events to skip (offset pagination).
+          in: query
+          required: false
+          type: integer
+          format: int32
+      tags:
+        - HeimdallService
+  /v1/job-error-attributions:
+    get:
+      summary: List error attributions for a job
+      description: Retrieve error attributions for a specific scheduler job id, optionally scoped to an attempt or anomaly.
+      operationId: HeimdallService_GetJobErrorAttributions
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetJobErrorAttributionsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: jobId
+          description: The scheduler job id to query (required).
+          in: query
+          required: false
+          type: string
+        - name: jobAttemptIndex
+          description: The job attempt index to filter by.
+          in: query
+          required: false
+          type: integer
+          format: int32
+        - name: anomalyUuid
+          description: Filter by anomaly uuid.
+          in: query
+          required: false
+          type: string
+      tags:
+        - HeimdallService
   /v1/advice:
     get:
       summary: List advice
@@ -1108,6 +1201,16 @@ definitions:
     description: CreateOrUpdateJobResponse is the response for creating or updating a job.
   v1DeleteApiKeyResponse:
     type: object
+  v1ExclusionApplicationStatus:
+    type: string
+    enum:
+      - EXCLUSION_APPLICATION_STATUS_UNSPECIFIED
+      - EXCLUSION_APPLICATION_STATUS_UNKNOWN
+      - EXCLUSION_APPLICATION_STATUS_NOT_APPLICABLE
+      - EXCLUSION_APPLICATION_STATUS_NOT_APPLIED
+      - EXCLUSION_APPLICATION_STATUS_APPLIED
+    default: EXCLUSION_APPLICATION_STATUS_UNSPECIFIED
+    description: Whether a computed node exclusion has been applied on the cluster.
   v1GetAuditEventsResponse:
     type: object
     properties:
@@ -1121,6 +1224,20 @@ definitions:
           $ref: '#/definitions/v1AuditEvent'
         description: Events matching the requested filters and ordering.
     description: GetAuditEventsResponse returns one page of persisted public audit events.
+  v1GetErrorAttributionsResponse:
+    type: object
+    properties:
+      attributions:
+        $ref: '#/definitions/v1NodeEvents'
+        description: The attribution results.
+    description: GetErrorAttributionsResponse is the response for GetErrorAttributions.
+  v1GetJobErrorAttributionsResponse:
+    type: object
+    properties:
+      attributions:
+        $ref: '#/definitions/v1NodeEvents'
+        description: The attribution results.
+    description: GetJobErrorAttributionsResponse is the response for GetJobErrorAttributions.
   v1GetJobResponse:
     type: object
     example:
@@ -1213,6 +1330,41 @@ definitions:
         type: string
         description: The decimal zero-based offset to use for the next page of results.
     description: GetWorkflowsResponse is the response for the GetWorkflows method.
+  v1GlobalEvent:
+    type: object
+    properties:
+      jobId:
+        type: string
+        description: The scheduler job id.
+      jobAttemptIndex:
+        type: integer
+        format: int32
+        description: The job attempt index.
+      timestamp:
+        type: string
+        format: date-time
+        description: When the event occurred.
+      jobExecutionError:
+        $ref: '#/definitions/v1JobExecutionError'
+        description: The error that terminated the job attempt.
+      errorAttribution:
+        type: string
+        description: The attributed root cause.
+      errorAttributionType:
+        type: string
+        description: The category of the attribution.
+      errorAttributionOrigin:
+        type: string
+        description: The origin of the attribution.
+      errorAttributionSources:
+        type: array
+        items:
+          type: string
+        description: The evidence sources backing the attribution.
+      factStatus:
+        type: string
+        description: The fact-check status of the attribution.
+    description: GlobalEvent is an error attribution not tied to a specific node.
   v1Issue:
     type: object
     properties:
@@ -1345,6 +1497,23 @@ definitions:
         $ref: '#/definitions/JobDagDependencyTriggerCondition'
         description: Condition that satisfies this dependency.
     description: JobDagDependency identifies one parent gate for a DAG child.
+  v1JobExecutionError:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+        description: Numeric error code.
+      message:
+        type: string
+        description: Short error message.
+      description:
+        type: string
+        description: Longer human-readable description.
+      signature:
+        type: string
+        description: Stable signature used to group similar errors.
+    description: JobExecutionError describes the error that terminated a job attempt.
   v1JobRecoveryConfig:
     type: object
     properties:
@@ -1441,6 +1610,90 @@ definitions:
           type: string
         description: List of nodes to explicitly include for job scheduling.
     description: NodeConstraints defines node scheduling constraints for jobs.
+  v1NodeEvent:
+    type: object
+    properties:
+      node:
+        type: string
+        description: The node the event is attributed to.
+      timestamp:
+        type: string
+        format: date-time
+        description: When the event occurred.
+      jobId:
+        type: string
+        description: The scheduler job id.
+      jobAttemptIndex:
+        type: integer
+        format: int32
+        description: The job attempt index.
+      jobStartTime:
+        type: string
+        format: date-time
+        description: When the job attempt started.
+      jobEndTime:
+        type: string
+        format: date-time
+        description: When the job attempt ended.
+      jobExecutionError:
+        $ref: '#/definitions/v1JobExecutionError'
+        description: The error that terminated the job attempt.
+      cluster:
+        type: string
+        description: The cluster the node belongs to.
+      errorAttribution:
+        type: string
+        description: The attributed root cause.
+      errorAttributionType:
+        type: string
+        description: The category of the attribution.
+      errorAttributionOrigin:
+        type: string
+        description: The origin of the attribution.
+      errorAttributionSources:
+        type: array
+        items:
+          type: string
+        description: The evidence sources backing the attribution.
+      exclusionType:
+        type: string
+        description: The exclusion type computed for the node.
+      originalExclusionType:
+        type: string
+        description: The exclusion type before any override.
+      exclusionApplied:
+        $ref: '#/definitions/v1ExclusionApplicationStatus'
+        description: Whether the exclusion has been applied.
+      factStatus:
+        type: string
+        description: The fact-check status of the attribution.
+    description: NodeEvent is an error attribution tied to a specific node.
+  v1NodeEvents:
+    type: object
+    properties:
+      count:
+        type: integer
+        format: int32
+        description: The total count of node events returned.
+      attributionSummary:
+        type: string
+        description: A summary of the attribution results.
+      attributionInsight:
+        type: string
+        description: Additional attribution insight.
+      events:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1NodeEvent'
+        description: The node-scoped attribution events.
+      globalEvents:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1GlobalEvent'
+        description: The global (non-node-scoped) attribution events.
+    description: NodeEvents is the shared attribution payload for error attribution queries.
   v1ProducerAuditEvent:
     type: object
     properties:

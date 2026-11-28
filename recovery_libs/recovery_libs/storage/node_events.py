@@ -7,9 +7,11 @@ from datetime import datetime
 from enum import IntEnum
 from typing import TYPE_CHECKING
 
+from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import ForeignKey, Index, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from recovery_libs.schema.anomaly_isolator.exclusion_application import ExclusionApplicationStatus
 from recovery_libs.storage.dataclass import DataClassBase
 from recovery_libs.storage.type_decorators import (
     IntEnumListType,
@@ -192,6 +194,13 @@ class NodeEvent(DataClassBase):
     original_exclusion_type: Mapped[ExclusionType] = mapped_column(
         IntEnumType(ExclusionType), default=ExclusionType.UNDEFINED, kw_only=True
     )
+    # UNKNOWN preserves uncertainty for historical events and pending reconciliation.
+    exclusion_applied: Mapped[ExclusionApplicationStatus] = mapped_column(
+        SqlEnum(ExclusionApplicationStatus, native_enum=False, length=32),
+        default=ExclusionApplicationStatus.UNKNOWN,
+        server_default="UNKNOWN",
+        kw_only=True,
+    )
     fact_status: Mapped[FactStatus] = mapped_column(IntEnumType(FactStatus), default=FactStatus.UNDEFINED, kw_only=True)
 
     # SQL table additional configurations
@@ -220,6 +229,7 @@ class NodeEvent(DataClassBase):
         error_attribution_sources: list[ErrorAttributionSource] | None = None,
         exclusion_type: ExclusionType = ExclusionType.UNDEFINED,
         original_exclusion_type: ExclusionType = ExclusionType.UNDEFINED,
+        exclusion_applied: ExclusionApplicationStatus = ExclusionApplicationStatus.UNKNOWN,
         fact_status: FactStatus = FactStatus.UNDEFINED,
     ) -> "NodeEvent":
         """
@@ -240,6 +250,7 @@ class NodeEvent(DataClassBase):
             error_attribution_sources: The sources of the error attribution, refer to the enum for more details
             exclusion_type: The type of exclusion, refer to the enum for more details
             original_exclusion_type: The original type of exclusion before sanitization, refer to the enum for more details
+            exclusion_applied: Whether the effective exclusion has been confirmed satisfied.
             fact_status: The status of the fact, refer to the enum for more details
 
         Returns:
@@ -260,6 +271,7 @@ class NodeEvent(DataClassBase):
             error_attribution_sources=error_attribution_sources or [],
             exclusion_type=exclusion_type,
             original_exclusion_type=original_exclusion_type,
+            exclusion_applied=exclusion_applied,
             fact_status=fact_status,
         )
 
@@ -282,6 +294,7 @@ class NodeEvent(DataClassBase):
             "error_attribution_sources": [source.value for source in self.error_attribution_sources],
             "exclusion_type": self.exclusion_type.value,
             "original_exclusion_type": self.original_exclusion_type.value,
+            "exclusion_applied": self.exclusion_applied.value,
             "fact_status": self.fact_status.value,
         }
 
@@ -305,5 +318,8 @@ class NodeEvent(DataClassBase):
             error_attribution_sources=[ErrorAttributionSource(source) for source in data["error_attribution_sources"]],
             exclusion_type=ExclusionType(data["exclusion_type"]),
             original_exclusion_type=ExclusionType(data.get("original_exclusion_type", ExclusionType.UNDEFINED.value)),
+            exclusion_applied=ExclusionApplicationStatus(
+                data.get("exclusion_applied", ExclusionApplicationStatus.UNKNOWN.value)
+            ),
             fact_status=FactStatus(data["fact_status"]),
         )

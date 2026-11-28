@@ -243,6 +243,7 @@ def storage_to_http_attributions(
             node=event.node,
             exclusion_type=event.exclusion_type.name,
             original_exclusion_type=event.original_exclusion_type.name,
+            exclusion_applied=event.exclusion_applied,
             error_attribution=event.error_attribution.name,
             error_attribution_type=event.error_attribution_type.name,
             error_attribution_origin=event.error_attribution_origin.name,

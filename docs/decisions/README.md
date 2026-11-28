@@ -68,6 +68,7 @@ onward. Earlier decisions are not included.
 | [0058](0058-qualify-workload-map-independently.md) | accepted | Qualify Workload-Map through independent object and lifecycle evidence, with reusable local, CI, and cluster checks that do not require Recovery services. |
 | [0059](0059-support-loopback-header-identity.md) | accepted | Add default-off trusted header identity on loopback API listeners while retaining normal authentication fallback. |
 | [0060](0060-publish-all-go-modules.md) | accepted | Independently version and publish all Go modules using directory-prefixed SemVer tags, and include Advice Operator source and its standalone chart in release source archives; partially supersedes ADR 0034. |
+| [0061](0061-restore-attribution-results-and-exclusion-outcomes.md) | accepted | Restore dedicated attribution reads and persisted exclusion outcomes from confirmed recovery constraints while keeping populated constraints stable. |
 
 ADR numbers 0018, 0019, 0023, and 0024 are retired; their external-service
 decisions were removed with maintainer approval. Do not reuse these numbers.
