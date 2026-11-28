@@ -246,7 +246,7 @@ def test_post_jobs_preserves_retry_paths_reused_from_previous_attempt():
         state="COMPLETED",
         aps_spec={"log_file_paths_shared_across_attempts": True},
     )
-    previous_record = SimpleNamespace(log_file_paths=[reused_path])
+    previous_record = SimpleNamespace(log_file_paths=[reused_path], scheduler_metadata=None)
 
     def read_attempt(*, job_id, job_attempt_index):
         assert job_id == "job-log-paths"
@@ -280,7 +280,7 @@ def test_post_jobs_drops_reused_retry_paths_by_default():
         job_attempt_index=1,
         state="COMPLETED",
     )
-    previous_record = SimpleNamespace(log_file_paths=[reused_path])
+    previous_record = SimpleNamespace(log_file_paths=[reused_path], scheduler_metadata=None)
 
     def read_attempt(*, job_id, job_attempt_index):
         assert job_id == "job-log-paths"
@@ -299,6 +299,45 @@ def test_post_jobs_drops_reused_retry_paths_by_default():
         assert upserted_record.log_file_paths is None
         assert response.json()["log_file_paths"] is None
         assert job_manager_mock.storage.read_job_record.call_count == 2
+
+
+def test_post_jobs_drops_renamed_path_to_previous_attempts_file():
+    # With log-link renaming, attempt 1 publishes a new collector name for a
+    # file. When that file is the one attempt 0 used, the path is carried over
+    # from the requeue race and must be dropped like an unrenamed reused path.
+    previous_link = "/collector/slurm-123-a0_123.log"
+    current_link = "/collector/slurm-123-a1_123.log"
+    source = "/logs/slurm-123.out"
+    payload = _job_payload(
+        scheduler_metadata={
+            "scheduler": "slurm",
+            "slurm_log_file_paths": [current_link],
+            "app_log_link_targets": {current_link: source},
+        },
+        job_attempt_index=1,
+        state="COMPLETED",
+    )
+    previous_record = SimpleNamespace(
+        log_file_paths=[previous_link],
+        scheduler_metadata={"scheduler": "slurm", "app_log_link_targets": {previous_link: source}},
+    )
+
+    def read_attempt(*, job_id, job_attempt_index):
+        assert job_id == "job-log-paths"
+        if job_attempt_index == 0:
+            return previous_record
+        return None
+
+    with patch("job_manager.main.job_manager") as job_manager_mock:
+        job_manager_mock.storage.read_job_record.side_effect = read_attempt
+        job_manager_mock.upsert_job_record.side_effect = _return_upserted_record
+
+        response = TestClient(app).post("/jobs", json=payload)
+
+        assert response.status_code == 200
+        upserted_record = job_manager_mock.upsert_job_record.call_args.args[0]
+        assert upserted_record.log_file_paths is None
+        assert response.json()["log_file_paths"] is None
 
 
 def test_post_jobs_does_not_sanitize_non_slurm_retry_paths():

@@ -6,6 +6,9 @@ from collections.abc import Mapping
 SLURM_SCHEDULER = "slurm"
 SCHEDULER_KEY = "scheduler"
 SLURM_LOG_FILE_PATHS_KEY = "slurm_log_file_paths"
+# Maps each collector-visible path the controller published to the source file
+# it links to. Present only when the controller renames log paths.
+APP_LOG_LINK_TARGETS_KEY = "app_log_link_targets"
 
 MAX_SLURM_LOG_FILE_PATHS = 256
 MAX_SLURM_LOG_FILE_PATH_BYTES = 4096

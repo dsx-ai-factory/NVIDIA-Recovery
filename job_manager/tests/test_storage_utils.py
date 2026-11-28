@@ -50,6 +50,7 @@ from recovery_libs.storage.base import RecoveryStorageException
 from recovery_libs.storage.dataclass import (
     AdviceReconciliationStatusRecord,
     AdviceRecord,
+    SlurmJobExecutionRecord,
     SlurmJobFinalStates,
     SlurmJobNonFinalStates,
 )
@@ -835,6 +836,103 @@ def test_sanitize_log_file_paths_none_current_with_previous_attempt():
 
     assert job_record.log_file_paths is None
     storage_mock.read_job_record.assert_called_once_with(job_id="12345", job_attempt_index=0)
+
+
+def _renamed_attempts(
+    previous_paths: list[str],
+    previous_targets: object,
+    current_paths: list[str],
+    current_targets: object,
+) -> tuple[MagicMock, SlurmJobExecutionRecord]:
+    """Build a previous and current attempt whose metadata carries the given published-path-to-source mappings."""
+    storage_mock = MagicMock()
+    previous = create_example_slurm_job_record(job_id="42", attempt_index=0, state="FAILED")
+    previous.log_file_paths = previous_paths
+    previous.scheduler_metadata = {"scheduler": "slurm", "app_log_link_targets": previous_targets}
+    storage_mock.read_job_record.return_value = previous
+
+    current = create_example_slurm_job_record(job_id="42", attempt_index=1, state="PENDING")
+    current.log_file_paths = current_paths
+    current.scheduler_metadata = {"scheduler": "slurm", "app_log_link_targets": current_targets}
+    return storage_mock, current
+
+
+def test_sanitize_log_file_paths_drops_renamed_path_to_previous_attempts_file():
+    # With renaming, each attempt publishes its own name for a file. Right after a
+    # requeue Slurm can still report attempt 0's stdout for attempt 1; it arrives
+    # under a new "-a1_" name, so only the source file shows it is carried over.
+    # A renamed path to a file attempt 0 never used is attempt 1's own log.
+    storage_mock, job_record = _renamed_attempts(
+        previous_paths=["/collector/out-a0_42.log"],
+        previous_targets={"/collector/out-a0_42.log": "/logs/out.txt"},
+        current_paths=["/collector/new-a1_42.log", "/collector/out-a1_42.log"],
+        current_targets={
+            "/collector/new-a1_42.log": "/logs/new.txt",
+            "/collector/out-a1_42.log": "/logs/out.txt",
+        },
+    )
+
+    sanitize_log_file_paths_for_retry(job_record, storage_mock)
+
+    assert job_record.log_file_paths == ["/collector/new-a1_42.log"]
+
+
+@pytest.mark.parametrize(
+    ("previous_paths", "previous_targets", "current_paths", "current_targets"),
+    [
+        pytest.param(
+            ["/logs/out.txt"],
+            {},
+            ["/collector/out-a1_42.log"],
+            {"/collector/out-a1_42.log": "/logs/out.txt"},
+            id="renaming-enabled",
+        ),
+        pytest.param(
+            ["/collector/out-a0_42.log"],
+            {"/collector/out-a0_42.log": "/logs/out.txt"},
+            ["/logs/out.txt"],
+            {},
+            id="renaming-disabled",
+        ),
+    ],
+)
+def test_sanitize_log_file_paths_drops_carried_over_file_when_renaming_changes_between_attempts(
+    previous_paths: list[str],
+    previous_targets: dict[str, str],
+    current_paths: list[str],
+    current_targets: dict[str, str],
+):
+    # Operators can toggle renaming while a job is requeued; the same stale file
+    # must still be recognized when only one attempt published a renamed path.
+    storage_mock, job_record = _renamed_attempts(previous_paths, previous_targets, current_paths, current_targets)
+
+    sanitize_log_file_paths_for_retry(job_record, storage_mock)
+
+    assert job_record.log_file_paths is None
+
+
+@pytest.mark.parametrize(
+    "malformed_targets",
+    [
+        pytest.param(None, id="missing"),
+        pytest.param(["/logs/out.txt"], id="not-a-mapping"),
+        pytest.param({"/collector/out-a1_42.log": 7}, id="non-string-source"),
+        pytest.param({"/collector/out-a1_42.log": ""}, id="empty-source"),
+    ],
+)
+def test_sanitize_log_file_paths_compares_names_when_mapping_is_unusable(malformed_targets: object):
+    # Scheduler metadata is free-form JSON. An unusable mapping must not raise or
+    # widen what is dropped: the path is compared by its own name, as before.
+    storage_mock, job_record = _renamed_attempts(
+        previous_paths=["/logs/out.txt"],
+        previous_targets=malformed_targets,
+        current_paths=["/collector/out-a1_42.log", "/logs/out.txt"],
+        current_targets=malformed_targets,
+    )
+
+    sanitize_log_file_paths_for_retry(job_record, storage_mock)
+
+    assert job_record.log_file_paths == ["/collector/out-a1_42.log"]
 
 
 # ============================================================================
